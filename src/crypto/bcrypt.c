@@ -415,7 +415,7 @@ csilk_bcrypt_hash(const char* password, size_t len, int cost, char hash[CSILK_BC
 int
 csilk_bcrypt_verify(const char* password, size_t len, const char* hash)
 {
-    if (!hash || hash[0] != '$' || hash[1] != '2') {
+    if (!password || !hash || strlen(hash) < 60 || hash[0] != '$' || hash[1] != '2') {
         return -1;
     }
 

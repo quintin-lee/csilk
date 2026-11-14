@@ -8,6 +8,7 @@
 #include "csilk/core/json/json.h"
 
 #include <ctype.h>
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
@@ -173,7 +174,7 @@ csilk_totp_verify_code(const char* base32_secret, const char* code)
         uint64_t t = (int64_t)now + (step * 30);
         char     expected[8];
         if (csilk_totp_generate_code(base32_secret, t, expected, sizeof(expected)) == 0) {
-            if (strcmp(expected, code) == 0) {
+            if (CRYPTO_memcmp(expected, code, 6) == 0) {
                 return true;
             }
         }
@@ -208,9 +209,7 @@ csilk_totp_generate_backup_codes(char out_codes[8][16])
     const char charset[] = "0123456789abcdefghijklmnopqrstuvwxyz";
     uint8_t    raw[64];
     if (RAND_bytes(raw, sizeof(raw)) != 1) {
-        for (size_t i = 0; i < sizeof(raw); i++) {
-            raw[i] = (uint8_t)rand();
-        }
+        return -1;
     }
 
     int raw_idx = 0;
@@ -250,11 +249,16 @@ csilk_totp_verify_and_consume_backup_code(const char* backup_codes_json,
     size_t count = csilk_json_array_size(arr);
     int    match_idx = -1;
 
+    size_t in_len = strlen(input_code);
     for (size_t i = 0; i < count; i++) {
         const char* c = csilk_json_string_value(csilk_json_array_get(arr, i));
-        if (c && (strcmp(c, input_code) == 0 ||
-                  (strlen(c) == 9 && strlen(input_code) == 8 && strncmp(c, input_code, 4) == 0 &&
-                   strcmp(c + 5, input_code + 4) == 0))) {
+        if (!c) {
+            continue;
+        }
+        size_t c_len = strlen(c);
+        if ((c_len == in_len && CRYPTO_memcmp(c, input_code, c_len) == 0) ||
+            (c_len == 9 && in_len == 8 && CRYPTO_memcmp(c, input_code, 4) == 0 &&
+             CRYPTO_memcmp(c + 5, input_code + 4, 4) == 0)) {
             match_idx = (int)i;
             break;
         }
