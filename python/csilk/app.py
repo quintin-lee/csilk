@@ -99,7 +99,7 @@ class App:
             except RuntimeError:
                 pass
         for g in list(self._groups):
-            g._group = None
+            g.free()
         self._groups.clear()
         if self._app:
             self._lib.csilk_app_free(self._app)
