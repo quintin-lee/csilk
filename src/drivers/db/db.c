@@ -37,6 +37,7 @@
 #include "db_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
+#include "csilk/core/internal.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -750,6 +751,10 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
         return NULL;
     }
 
+    char span_name[128];
+    snprintf(span_name, sizeof(span_name), "DB:query %s", sql ? sql : "");
+    void* span = csilk_trace_span_start(span_name);
+
     uint64_t start = csilk_io_hrtime();
     CSILK_LOG_D("Database query initiated: %s", sql);
 
@@ -760,6 +765,8 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
     atomic_fetch_add(&db_duration_us_total, duration);
+
+    csilk_trace_span_end(span, result ? 1 : 2);
 
     if (!result) {
         atomic_fetch_add(&db_errors_total, 1);
@@ -989,6 +996,10 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
         return -1;
     }
 
+    char span_name[128];
+    snprintf(span_name, sizeof(span_name), "DB:exec %s", sql ? sql : "");
+    void* span = csilk_trace_span_start(span_name);
+
     uint64_t start = csilk_io_hrtime();
     CSILK_LOG_D("Database exec initiated: %s", sql);
 
@@ -999,6 +1010,8 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
     atomic_fetch_add(&db_duration_us_total, duration);
+
+    csilk_trace_span_end(span, rc == 0 ? 1 : 2);
 
     if (rc != 0) {
         atomic_fetch_add(&db_errors_total, 1);

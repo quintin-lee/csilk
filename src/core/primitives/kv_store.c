@@ -224,3 +224,33 @@ csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
 {
     return csilk_incr_with_ttl(c, key, ttl_sec, NULL);
 }
+
+/* --- Cross-module lightweight trace hooks --- */
+static csilk_tracer_hooks_t g_tracer_hooks = {0};
+
+void
+csilk_tracer_set_hooks(const csilk_tracer_hooks_t* hooks)
+{
+    if (hooks) {
+        g_tracer_hooks = *hooks;
+    } else {
+        memset(&g_tracer_hooks, 0, sizeof(g_tracer_hooks));
+    }
+}
+
+void*
+csilk_trace_span_start(const char* name)
+{
+    if (g_tracer_hooks.start_span) {
+        return g_tracer_hooks.start_span(name, NULL);
+    }
+    return NULL;
+}
+
+void
+csilk_trace_span_end(void* span, int status_code)
+{
+    if (span && g_tracer_hooks.end_span) {
+        g_tracer_hooks.end_span(span, status_code);
+    }
+}

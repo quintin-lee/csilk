@@ -755,3 +755,204 @@ csilk_hnsw_search(csilk_hnsw_index_t* index,
     csilk_mutex_unlock(&index->mutex);
     return 0;
 }
+
+#define CSILK_HNSW_MAGIC 0x57534E48U /* "HNSW" */
+#define CSILK_HNSW_VERSION 1U
+
+int
+csilk_hnsw_save(const csilk_hnsw_index_t* index, const char* filepath)
+{
+    if (!index || !filepath) {
+        return -1;
+    }
+    FILE* fp = fopen(filepath, "wb");
+    if (!fp) {
+        return -1;
+    }
+
+    uint32_t magic = CSILK_HNSW_MAGIC;
+    uint32_t version = CSILK_HNSW_VERSION;
+    uint32_t dim = (uint32_t)index->dim;
+    int32_t  metric = (int32_t)index->metric;
+    uint32_t m = (uint32_t)index->M;
+    uint32_t ef_c = (uint32_t)index->ef_construction;
+    uint32_t ef_s = (uint32_t)index->ef_search;
+    uint32_t enter_id = index->enter_node_id;
+    int32_t  max_level = index->max_level;
+    uint32_t node_count = (uint32_t)index->node_count;
+
+    if (fwrite(&magic, sizeof(magic), 1, fp) != 1 ||
+        fwrite(&version, sizeof(version), 1, fp) != 1 || fwrite(&dim, sizeof(dim), 1, fp) != 1 ||
+        fwrite(&metric, sizeof(metric), 1, fp) != 1 || fwrite(&m, sizeof(m), 1, fp) != 1 ||
+        fwrite(&ef_c, sizeof(ef_c), 1, fp) != 1 || fwrite(&ef_s, sizeof(ef_s), 1, fp) != 1 ||
+        fwrite(&enter_id, sizeof(enter_id), 1, fp) != 1 ||
+        fwrite(&max_level, sizeof(max_level), 1, fp) != 1 ||
+        fwrite(&node_count, sizeof(node_count), 1, fp) != 1) {
+        fclose(fp);
+        return -1;
+    }
+
+    for (uint32_t i = 0; i < node_count; i++) {
+        const csilk_hnsw_node_t* node = index->nodes[i];
+        uint32_t                 id = node->id;
+        int32_t                  level = node->level;
+        uint32_t                 doc_len = (uint32_t)strlen(node->doc_id);
+
+        if (fwrite(&id, sizeof(id), 1, fp) != 1 || fwrite(&level, sizeof(level), 1, fp) != 1 ||
+            fwrite(&doc_len, sizeof(doc_len), 1, fp) != 1 ||
+            fwrite(node->doc_id, 1, doc_len, fp) != doc_len ||
+            fwrite(node->vector, sizeof(float), dim, fp) != dim) {
+            fclose(fp);
+            return -1;
+        }
+
+        for (int l = 0; l <= level; l++) {
+            uint16_t deg = node->neighbor_count[l];
+            if (fwrite(&deg, sizeof(deg), 1, fp) != 1) {
+                fclose(fp);
+                return -1;
+            }
+            if (deg > 0) {
+                if (fwrite(node->neighbors[l], sizeof(uint32_t), deg, fp) != deg) {
+                    fclose(fp);
+                    return -1;
+                }
+            }
+        }
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+csilk_hnsw_index_t*
+csilk_hnsw_load(const char* filepath)
+{
+    if (!filepath) {
+        return NULL;
+    }
+    FILE* fp = fopen(filepath, "rb");
+    if (!fp) {
+        return NULL;
+    }
+
+    uint32_t magic = 0, version = 0, dim = 0, m = 0, ef_c = 0, ef_s = 0;
+    uint32_t enter_id = 0, node_count = 0;
+    int32_t  metric = 0, max_level = 0;
+
+    if (fread(&magic, sizeof(magic), 1, fp) != 1 || magic != CSILK_HNSW_MAGIC ||
+        fread(&version, sizeof(version), 1, fp) != 1 || version != CSILK_HNSW_VERSION ||
+        fread(&dim, sizeof(dim), 1, fp) != 1 || fread(&metric, sizeof(metric), 1, fp) != 1 ||
+        fread(&m, sizeof(m), 1, fp) != 1 || fread(&ef_c, sizeof(ef_c), 1, fp) != 1 ||
+        fread(&ef_s, sizeof(ef_s), 1, fp) != 1 || fread(&enter_id, sizeof(enter_id), 1, fp) != 1 ||
+        fread(&max_level, sizeof(max_level), 1, fp) != 1 ||
+        fread(&node_count, sizeof(node_count), 1, fp) != 1) {
+        fclose(fp);
+        return NULL;
+    }
+
+    csilk_hnsw_index_t* index = csilk_hnsw_index_new((size_t)dim, (int)metric);
+    if (!index) {
+        fclose(fp);
+        return NULL;
+    }
+
+    index->M = m;
+    index->ef_construction = ef_c;
+    index->ef_search = ef_s;
+    index->enter_node_id = enter_id;
+    index->max_level = max_level;
+
+    if (node_count > index->node_capacity) {
+        size_t              new_cap = node_count + 64;
+        csilk_hnsw_node_t** new_nodes = realloc(index->nodes, new_cap * sizeof(csilk_hnsw_node_t*));
+        if (!new_nodes) {
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+        index->nodes = new_nodes;
+        index->node_capacity = new_cap;
+    }
+
+    for (uint32_t i = 0; i < node_count; i++) {
+        uint32_t id = 0, doc_len = 0;
+        int32_t  level = 0;
+        if (fread(&id, sizeof(id), 1, fp) != 1 || fread(&level, sizeof(level), 1, fp) != 1 ||
+            fread(&doc_len, sizeof(doc_len), 1, fp) != 1) {
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+
+        csilk_hnsw_node_t* node = calloc(1, sizeof(csilk_hnsw_node_t));
+        if (!node) {
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+
+        node->id = id;
+        node->level = level;
+        node->doc_id = malloc((size_t)doc_len + 1);
+        if (!node->doc_id || fread(node->doc_id, 1, doc_len, fp) != doc_len) {
+            free(node->doc_id);
+            free(node);
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+        node->doc_id[doc_len] = '\0';
+
+        node->vector = csilk_aligned_alloc(32, (size_t)dim * sizeof(float));
+        if (!node->vector || fread(node->vector, sizeof(float), dim, fp) != dim) {
+            csilk_aligned_free(node->vector);
+            free(node->doc_id);
+            free(node);
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+
+        node->neighbors = calloc((size_t)level + 1, sizeof(uint32_t*));
+        node->neighbor_count = calloc((size_t)level + 1, sizeof(uint16_t));
+        if (!node->neighbors || !node->neighbor_count) {
+            hnsw_free_node(node);
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+
+        for (int l = 0; l <= level; l++) {
+            uint16_t deg = 0;
+            if (fread(&deg, sizeof(deg), 1, fp) != 1) {
+                hnsw_free_node(node);
+                csilk_hnsw_index_free(index);
+                fclose(fp);
+                return NULL;
+            }
+            node->neighbor_count[l] = deg;
+            size_t cap = hnsw_layer_cap(index, l);
+            node->neighbors[l] = malloc(cap * sizeof(uint32_t));
+            if (!node->neighbors[l]) {
+                hnsw_free_node(node);
+                csilk_hnsw_index_free(index);
+                fclose(fp);
+                return NULL;
+            }
+            if (deg > 0) {
+                if (fread(node->neighbors[l], sizeof(uint32_t), deg, fp) != deg) {
+                    hnsw_free_node(node);
+                    csilk_hnsw_index_free(index);
+                    fclose(fp);
+                    return NULL;
+                }
+            }
+        }
+
+        index->nodes[index->node_count++] = node;
+    }
+
+    fclose(fp);
+    return index;
+}

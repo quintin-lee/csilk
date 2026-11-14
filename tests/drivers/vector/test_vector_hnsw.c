@@ -15,6 +15,8 @@ int csilk_hnsw_search(csilk_hnsw_index_t* index,
                       char***             out_doc_ids,
                       float**             out_scores,
                       size_t*             out_count);
+int csilk_hnsw_save(const csilk_hnsw_index_t* index, const char* filepath);
+csilk_hnsw_index_t* csilk_hnsw_load(const char* filepath);
 
 static void
 test_hnsw_index_insertion_and_search(void)
@@ -163,11 +165,67 @@ test_hnsw_multilayer_recall_and_l2(void)
         "test_hnsw_multilayer_recall_and_l2 passed (top-1 in top-%d: %d/%d)\n", K, hits, queries);
 }
 
+static void
+test_hnsw_save_load_persistence(void)
+{
+    size_t              dim = 16;
+    csilk_hnsw_index_t* idx = csilk_hnsw_index_new(dim, 0);
+    assert(idx != nullptr);
+
+    float* vectors = calloc(20 * dim, sizeof(float));
+    for (int i = 0; i < 20; i++) {
+        char doc[32];
+        snprintf(doc, sizeof(doc), "doc_%d", i);
+        for (size_t d = 0; d < dim; d++) {
+            vectors[i * dim + d] = (float)(i * 10 + d);
+        }
+        assert(csilk_hnsw_insert(idx, doc, &vectors[i * dim]) == 0);
+    }
+
+    char** orig_ids = nullptr;
+    float* orig_scores = nullptr;
+    size_t orig_count = 0;
+    assert(csilk_hnsw_search(idx, &vectors[0], 3, &orig_ids, &orig_scores, &orig_count) == 0);
+    assert(orig_count == 3);
+
+    const char* snap_path = "/tmp/test_hnsw_snapshot.bin";
+    remove(snap_path);
+    assert(csilk_hnsw_save(idx, snap_path) == 0);
+    csilk_hnsw_index_free(idx);
+
+    csilk_hnsw_index_t* loaded = csilk_hnsw_load(snap_path);
+    assert(loaded != nullptr);
+
+    char** loaded_ids = nullptr;
+    float* loaded_scores = nullptr;
+    size_t loaded_count = 0;
+    assert(csilk_hnsw_search(loaded, &vectors[0], 3, &loaded_ids, &loaded_scores, &loaded_count) ==
+           0);
+    assert(loaded_count == orig_count);
+
+    for (size_t i = 0; i < loaded_count; i++) {
+        assert(strcmp(loaded_ids[i], orig_ids[i]) == 0);
+        assert(loaded_scores[i] == orig_scores[i]);
+        free(orig_ids[i]);
+        free(loaded_ids[i]);
+    }
+    free(orig_ids);
+    free(orig_scores);
+    free(loaded_ids);
+    free(loaded_scores);
+    free(vectors);
+
+    csilk_hnsw_index_free(loaded);
+    remove(snap_path);
+    printf("test_hnsw_save_load_persistence passed\n");
+}
+
 int
 main(void)
 {
     test_hnsw_index_insertion_and_search();
     test_hnsw_multilayer_recall_and_l2();
+    test_hnsw_save_load_persistence();
     printf("All test_vector_hnsw tests passed successfully!\n");
     return 0;
 }

@@ -65,4 +65,15 @@ int csilk_hnsw_search(csilk_hnsw_index_t* index,
                       float**             out_scores,
                       size_t*             out_count);
 
+/** @brief Save HNSW index to a binary snapshot file.
+ * @param index Pointer to index to serialize.
+ * @param filepath Path to destination file.
+ * @return 0 on success, -1 on I/O or parameter error. */
+int csilk_hnsw_save(const csilk_hnsw_index_t* index, const char* filepath);
+
+/** @brief Load HNSW index from a binary snapshot file.
+ * @param filepath Path to snapshot file.
+ * @return Allocated index instance, or NULL on error. */
+csilk_hnsw_index_t* csilk_hnsw_load(const char* filepath);
+
 #endif /* CSILK_VECTOR_INTERNAL_H */

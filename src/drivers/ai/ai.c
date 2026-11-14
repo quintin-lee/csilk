@@ -32,6 +32,7 @@
 #include "csilk/core/json/json.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
+#include "csilk/core/internal.h"
 
 /* --- Global AI Metrics --- */
 static atomic_uint_fast64_t ai_requests_total = 0;
@@ -352,6 +353,10 @@ csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_
         return -1;
     }
 
+    char span_name[128];
+    snprintf(span_name, sizeof(span_name), "AI:chat %s", req->model ? req->model : "default");
+    void* span = csilk_trace_span_start(span_name);
+
     uint64_t start = csilk_io_hrtime();
     atomic_fetch_add(&ai_requests_total, 1);
 
@@ -426,6 +431,7 @@ csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_
                   duration,
                   res->error_message);
 
+    csilk_trace_span_end(span, status == 0 ? 1 : 2);
     return status;
 }
 
