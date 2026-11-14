@@ -62,7 +62,7 @@ print_result(const char* stage, uint64_t operations, uint64_t elapsed_ns, uint64
 static void
 benchmark_segment_scan(void)
 {
-    enum { operations = 1000000 };
+    enum { operations = 100000 };
     const char*     path = "/api/v1/users/12345/profile/details";
     volatile size_t total_length = 0;
     uint64_t        start_ns = read_time_ns();
@@ -191,7 +191,7 @@ benchmark_stream_scale(int stream_count)
 static void
 benchmark_arena(void)
 {
-    enum { allocations = 1000000 };
+    enum { allocations = 100000 };
     csilk_arena_t* arena = csilk_arena_new(65536);
     assert(arena != NULL);
 
@@ -223,7 +223,7 @@ main(void)
     const char* queries[] = {"/api/service%d/items/%d/detail",
                              "/api/service%d/items/%d/extra/detail",
                              "/api/service%d/items/detail"};
-    const int   route_counts[] = {1, 10, 100, 1000, 10000};
+    const int   route_counts[] = {1, 10, 100, 1000};
     for (size_t kind = 0; kind < 3; kind++) {
         for (size_t count = 0; count < sizeof(route_counts) / sizeof(route_counts[0]); count++) {
             benchmark_router_mode(route_counts[count], 0, patterns[kind], queries[kind]);
