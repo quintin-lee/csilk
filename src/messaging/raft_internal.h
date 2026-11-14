@@ -216,7 +216,7 @@ int  _raft_wal_open_and_recover(csilk_raft_node_t* node);
 void _raft_wal_close(csilk_raft_node_t* node);
 int  _raft_wal_save_meta_locked(csilk_raft_node_t* node);
 int  _raft_wal_append_locked(
-    csilk_raft_node_t* node, uint64_t term, const uint8_t* data, size_t len, uint64_t* out_index);
+     csilk_raft_node_t* node, uint64_t term, const uint8_t* data, size_t len, uint64_t* out_index);
 int      _raft_wal_truncate_from_locked(csilk_raft_node_t* node, uint64_t from_index);
 int      _raft_wal_compact_prefix_locked(csilk_raft_node_t* node,
                                          uint64_t           last_included_index,

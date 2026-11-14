@@ -552,6 +552,9 @@ csilk_json_t* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
 /** @brief Callback type for async database query execution. */
 typedef void (*csilk_db_async_cb)(csilk_json_t* result, void* user_data);
 
+/** @brief Callback type for async database non-query (DML/DDL) execution. */
+typedef void (*csilk_db_exec_async_cb)(int rc, void* user_data);
+
 /**
  * @brief Execute a SQL query asynchronously without blocking the event loop.
  *
@@ -568,6 +571,63 @@ int csilk_db_query_json_async(csilk_db_pool_t*  pool,
                               const char*       sql,
                               csilk_db_async_cb cb,
                               void*             user_data);
+
+/**
+ * @brief Execute a SQL statement (INSERT/UPDATE/DELETE/DDL) asynchronously.
+ *
+ * Offloads csilk_db_exec() to the I/O thread pool and invokes @p cb on the
+ * event loop thread with the return code (0 on success, -1 on error).
+ *
+ * @param pool      Connection pool.
+ * @param sql       SQL statement string.
+ * @param cb        Callback to invoke upon completion.
+ * @param user_data Opaque user data pointer.
+ * @return 0 if offloaded successfully, -1 on failure.
+ */
+int csilk_db_exec_async(csilk_db_pool_t*       pool,
+                        const char*            sql,
+                        csilk_db_exec_async_cb cb,
+                        void*                  user_data);
+
+/**
+ * @brief Execute a parameterised SELECT query asynchronously.
+ *
+ * Deep-copies @p sql and the NULL-terminated @p params array, runs
+ * csilk_db_query_param_json() on the I/O thread pool, and delivers the
+ * type-preserving JSON array on the event loop thread.
+ *
+ * @param pool      Connection pool.
+ * @param sql       SQL query with ? placeholders.
+ * @param params    NULL-terminated array of string values (may be NULL if no params).
+ * @param cb        Callback to invoke with the query result (csilk_json_t*).
+ * @param user_data Opaque user data pointer.
+ * @return 0 if offloaded successfully, -1 on failure.
+ */
+int csilk_db_query_param_json_async(csilk_db_pool_t*  pool,
+                                    const char*       sql,
+                                    const char**      params,
+                                    csilk_db_async_cb cb,
+                                    void*             user_data);
+
+/**
+ * @brief Execute a parameterised DML statement asynchronously.
+ *
+ * Deep-copies @p sql and the NULL-terminated @p params array, runs
+ * csilk_db_exec_param() on the I/O thread pool, and invokes @p cb on the
+ * event loop thread with the return code (0 on success, -1 on error).
+ *
+ * @param pool      Connection pool.
+ * @param sql       SQL statement with ? placeholders.
+ * @param params    NULL-terminated array of string values (may be NULL if no params).
+ * @param cb        Callback to invoke upon completion.
+ * @param user_data Opaque user data pointer.
+ * @return 0 if offloaded successfully, -1 on failure.
+ */
+int csilk_db_exec_param_async(csilk_db_pool_t*       pool,
+                              const char*            sql,
+                              const char**           params,
+                              csilk_db_exec_async_cb cb,
+                              void*                  user_data);
 
 /**
  * @brief Execute a statement that produces no result rows.
