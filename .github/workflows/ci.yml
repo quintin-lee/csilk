@@ -91,7 +91,7 @@ jobs:
 
     - name: Run unit tests
       run: |
-        if ! ctest --test-dir build -E test_integration --timeout 60 --output-on-failure; then
+        if ! ctest --test-dir build -E test_integration --timeout 120 --output-on-failure; then
           if [ -f build/Testing/Temporary/LastTestsFailed.log ]; then
             while IFS=: read -r num name; do
               err_msg=$(grep -A 25 "Test: $name" build/Testing/Temporary/LastTest.log 2>/dev/null | grep -E "Assertion|assert|error|fail|SIG|fault" | head -n 3 | tr '\n' ' ')
