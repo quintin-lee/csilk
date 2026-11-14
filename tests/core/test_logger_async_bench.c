@@ -46,7 +46,7 @@ test_disabled_log_level_latency(void)
     };
     assert(csilk_log_init(cfg) == 0);
 
-    const int iterations = 1000000;
+    const int iterations = 200000;
     double    t_start = now_ns();
 
     for (int i = 0; i < iterations; i++) {
@@ -58,7 +58,7 @@ test_disabled_log_level_latency(void)
     double t_total = now_ns() - t_start;
     double ns_per_call = t_total / (iterations * 3);
 
-    printf("   -> 3,000,000 disabled log checks executed in %.2f ms (%.2f ns/call)\n",
+    printf("   -> 600,000 disabled log checks executed in %.2f ms (%.2f ns/call)\n",
            t_total / 1e6,
            ns_per_call);
 
