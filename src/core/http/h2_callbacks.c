@@ -56,6 +56,11 @@ on_header_callback(nghttp2_session*     session,
             if (namelen == 7 && memcmp(name, ":method", 7) == 0) {
                 c->request.method = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
             } else if (namelen == 5 && memcmp(name, ":path", 5) == 0) {
+                if (c->request.path &&
+                    (!c->arena || !csilk_arena_contains(c->arena, c->request.path))) {
+                    free(c->request.path);
+                    c->request.path = NULL;
+                }
                 char* full_path = csilk_arena_strndup(c->arena, (const char*)value, valuelen);
                 char* path = NULL;
                 char* query = NULL;

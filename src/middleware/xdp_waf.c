@@ -81,10 +81,11 @@ csilk_xdp_waf_add_ip_rule(csilk_xdp_waf_t* waf, const char* ip_cidr, uint8_t act
 
     if (slash) {
         *slash = '\0';
-        long parsed = atol(slash + 1);
-        if (parsed < 0 || parsed > 128) {
+        char* endptr = NULL;
+        long  parsed = strtol(slash + 1, &endptr, 10);
+        if (endptr == slash + 1 || *endptr != '\0' || parsed < 0 || parsed > 32) {
             csilk_mutex_unlock(&waf->mutex);
-            CSILK_LOG_E("XDP WAF: Invalid prefix length: %ld (must be 0-128)", parsed);
+            CSILK_LOG_E("XDP WAF: Invalid IPv4 prefix length: %ld (must be 0-32)", parsed);
             return -1;
         }
         prefix_len = (uint32_t)parsed;
@@ -197,7 +198,10 @@ csilk_xdp_waf_inspect(csilk_xdp_waf_t* waf, uint32_t src_ip, const uint8_t* payl
     csilk_mutex_lock(&waf->mutex);
 
     for (size_t i = 0; i < waf->rule_count; i++) {
-        if (waf->rules[i].ip == src_ip && waf->rules[i].action == CSILK_XDP_ACTION_DROP) {
+        uint32_t plen = waf->rules[i].prefix_len;
+        uint32_t mask = (plen == 0) ? 0U : (plen >= 32U ? 0xFFFFFFFFU : (~0U << (32U - plen)));
+        if ((src_ip & mask) == (waf->rules[i].ip & mask) &&
+            waf->rules[i].action == CSILK_XDP_ACTION_DROP) {
             csilk_mutex_unlock(&waf->mutex);
             return CSILK_XDP_ACTION_DROP;
         }

@@ -249,11 +249,11 @@ default_generate_keypair(char* public_key, size_t* pub_len, char* private_key, s
     size_t pub_key_len = (size_t)BIO_pending(pub_bio);
     size_t priv_key_len = (size_t)BIO_pending(priv_bio);
 
-    if (pub_key_len > *pub_len || priv_key_len > *priv_len) {
+    if (pub_key_len + 1 > *pub_len || priv_key_len + 1 > *priv_len) {
         BIO_free(pub_bio);
         BIO_free(priv_bio);
-        *pub_len = pub_key_len;
-        *priv_len = priv_key_len;
+        *pub_len = pub_key_len + 1;
+        *priv_len = priv_key_len + 1;
         goto out;
     }
 
