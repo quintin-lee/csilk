@@ -1,0 +1,1 @@
+INSERT INTO products (title, price, category, tag) VALUES (?, ?, ?, 'special?tag');

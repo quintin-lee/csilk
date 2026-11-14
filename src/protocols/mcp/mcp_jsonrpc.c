@@ -214,3 +214,34 @@ csilk_mcp_msg_create_response(csilk_json_t* id, csilk_json_t* result)
 
     return msg;
 }
+
+void
+csilk_mcp_msg_destroy(csilk_mcp_msg_t* msg, csilk_arena_t* arena)
+{
+    if (!msg) {
+        return;
+    }
+    if (msg->id) {
+        csilk_json_free(msg->id);
+        msg->id = NULL;
+    }
+    if (msg->params) {
+        csilk_json_free(msg->params);
+        msg->params = NULL;
+    }
+    if (msg->result) {
+        csilk_json_free(msg->result);
+        msg->result = NULL;
+    }
+    if (msg->error) {
+        csilk_json_free(msg->error);
+        msg->error = NULL;
+    }
+    if (!arena) {
+        if (msg->method) {
+            free(msg->method);
+            msg->method = NULL;
+        }
+        free(msg);
+    }
+}

@@ -1,0 +1,1 @@
+SELECT id, name, email FROM users WHERE id = ? AND status = ? AND note != 'is this ?' LIMIT 1;

@@ -26,11 +26,42 @@
     </div>
     <table class="table">
         <thead>
-            <tr><th>Trace ID</th><th>Operation Name</th><th>Duration (ms)</th><th>Status</th></tr>
+            <tr><th>Trace ID</th><th>Span ID</th><th>Parent Span ID</th><th>Operation Name</th><th>Duration (ms)</th><th>Status</th></tr>
         </thead>
         <tbody id="spanList">
-            <tr><td>4bf92f3577b34da6</td><td>WorkflowNode:ai_prompt_1</td><td>0.18 ms</td><td><span style="color:#4ade80">OK</span></td></tr>
+            <tr><td>-</td><td>-</td><td>-</td><td>Loading spans...</td><td>0.00 ms</td><td><span>INIT</span></td></tr>
         </tbody>
     </table>
+    <script>
+        async function refreshSpans() {
+            try {
+                const base = window.location.pathname.replace(/\/+$/, '');
+                const res = await fetch(base + '/spans');
+                if (!res.ok) return;
+                const spans = await res.json();
+                document.getElementById('spanCount').textContent = spans.length;
+                const tbody = document.getElementById('spanList');
+                if (spans.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8">No spans recorded yet</td></tr>';
+                    return;
+                }
+                let durations = [];
+                let rows = '';
+                for (let i = spans.length - 1; i >= 0; i--) {
+                    const s = spans[i];
+                    durations.push(s.durationMs || 0);
+                    const stColor = s.statusCode === 1 ? '#4ade80' : (s.statusCode === 2 ? '#ef4444' : '#94a3b8');
+                    const stText = s.statusCode === 1 ? 'OK' : (s.statusCode === 2 ? 'ERROR' : 'UNSET');
+                    rows += `<tr><td>${s.traceId.slice(0, 16)}...</td><td>${s.spanId}</td><td>${s.parentSpanId || '-'}</td><td>${s.name}</td><td>${(s.durationMs || 0).toFixed(2)} ms</td><td><span style="color:${stColor}">${stText}</span></td></tr>`;
+                }
+                tbody.innerHTML = rows;
+                durations.sort((a, b) => a - b);
+                const p95 = durations.length > 0 ? durations[Math.floor(durations.length * 0.95)] : 0;
+                document.getElementById('p95Latency').textContent = p95.toFixed(2) + ' ms';
+            } catch (e) {}
+        }
+        refreshSpans();
+        setInterval(refreshSpans, 2000);
+    </script>
 </body>
 </html>

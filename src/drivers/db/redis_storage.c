@@ -177,17 +177,23 @@ redis_storage_get_string(csilk_ctx_t* c, const char* key)
     return result;
 }
 
-/** @brief Atomically increment a key (INCR) and optionally set a TTL.
+/** @brief Atomically increment a key (INCR) with exact remaining TTL via Lua script.
  *
- * If the key did not exist before the increment (value becomes 1) and
- * ttl_sec > 0, an EXPIRE command is issued so the counter auto-evicts.
+ * Executes an atomic Lua script:
+ *   local v = redis.call('INCR', KEYS[1])
+ *   if v == 1 and tonumber(ARGV[1]) > 0 then
+ *       redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1]))
+ *   end
+ *   local p = redis.call('PTTL', KEYS[1])
+ *   return {v, p}
  *
- * @param c       Request context.
- * @param key     Null-terminated key.
- * @param ttl_sec TTL to set on a newly-created counter (≤ 0 means none).
+ * @param c          Request context.
+ * @param key        Null-terminated key.
+ * @param ttl_sec    TTL in seconds for newly created key (≤ 0 means none).
+ * @param out_ttl_ms Optional pointer to store remaining window TTL in ms.
  * @return The incremented value, or -1 on error. */
 static long long
-redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
+redis_storage_incr_with_ttl(csilk_ctx_t* c, const char* key, int ttl_sec, long long* out_ttl_ms)
 {
     if (!c || !key) {
         return -1;
@@ -202,22 +208,67 @@ redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
         return -1;
     }
 
-    long long   val = -1;
-    redisReply* reply = redisCommand(conn->c, "INCR %s", key);
+    static const char lua_incr_ttl[] = "local v = redis.call('INCR', KEYS[1]); "
+                                       "if v == 1 and tonumber(ARGV[1]) > 0 then "
+                                       "redis.call('EXPIRE', KEYS[1], tonumber(ARGV[1])); "
+                                       "end; "
+                                       "local p = redis.call('PTTL', KEYS[1]); "
+                                       "return {v, p};";
+
+    long long val = -1;
+    long long ttl_ms = (long long)ttl_sec * 1000;
+
+    redisReply* reply = redisCommand(conn->c, "EVAL %s 1 %s %d", lua_incr_ttl, key, ttl_sec);
     if (reply) {
-        if (reply->type == REDIS_REPLY_INTEGER) {
-            val = reply->integer;
-            /* If the value is 1, it's a new key, so set the TTL */
-            if (val == 1 && ttl_sec > 0) {
-                redisReply* exp_reply = redisCommand(conn->c, "EXPIRE %s %d", key, ttl_sec);
-                if (exp_reply) {
-                    freeReplyObject(exp_reply);
+        if (reply->type == REDIS_REPLY_ARRAY && reply->elements >= 2) {
+            if (reply->element[0]->type == REDIS_REPLY_INTEGER) {
+                val = reply->element[0]->integer;
+            }
+            if (reply->element[1]->type == REDIS_REPLY_INTEGER) {
+                long long pttl = reply->element[1]->integer;
+                if (pttl > 0) {
+                    ttl_ms = pttl;
                 }
             }
+        } else if (reply->type == REDIS_REPLY_INTEGER) {
+            val = reply->integer;
         }
         freeReplyObject(reply);
     }
+
+    /* Fallback if EVAL failed (e.g. redis permissions or older server) */
+    if (val < 0) {
+        reply = redisCommand(conn->c, "INCR %s", key);
+        if (reply) {
+            if (reply->type == REDIS_REPLY_INTEGER) {
+                val = reply->integer;
+                if (val == 1 && ttl_sec > 0) {
+                    redisReply* exp_reply = redisCommand(conn->c, "EXPIRE %s %d", key, ttl_sec);
+                    if (exp_reply) {
+                        freeReplyObject(exp_reply);
+                    }
+                }
+            }
+            freeReplyObject(reply);
+        }
+    }
+
+    if (out_ttl_ms) {
+        *out_ttl_ms = ttl_ms;
+    }
     return val;
+}
+
+/** @brief Atomically increment a key (INCR) and optionally set a TTL.
+ *
+ * @param c       Request context.
+ * @param key     Null-terminated key.
+ * @param ttl_sec TTL to set on a newly-created counter (≤ 0 means none).
+ * @return The incremented value, or -1 on error. */
+static long long
+redis_storage_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
+{
+    return redis_storage_incr_with_ttl(c, key, ttl_sec, NULL);
 }
 
 /** @brief Persist an integer state value for a key (SET, optional TTL).
@@ -280,6 +331,7 @@ csilk_redis_storage_driver_new(csilk_db_pool_t* pool)
     drv->base.set_string = redis_storage_set_string;
     drv->base.get_string = redis_storage_get_string;
     drv->base.incr = redis_storage_incr;
+    drv->base.incr_with_ttl = redis_storage_incr_with_ttl;
     drv->base.sync_state = redis_storage_sync_state;
     drv->pool = pool;
 

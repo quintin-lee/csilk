@@ -5,6 +5,37 @@
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
+#include "drivers/db/db_internal.h"
+
+static void
+test_sql_rewrite_placeholders_unit(void)
+{
+    int   count = 0;
+    char* res =
+        csilk_sql_rewrite_placeholders("SELECT * FROM users WHERE id = ? AND name = ?", &count);
+    assert(res != nullptr);
+    assert(count == 2);
+    assert(strcmp(res, "SELECT * FROM users WHERE id = $1 AND name = $2") == 0);
+    free(res);
+
+    /* Test literal quote skipping */
+    count = 0;
+    res = csilk_sql_rewrite_placeholders("SELECT 'what?is?this' FROM users WHERE id = ?", &count);
+    assert(res != nullptr);
+    assert(count == 1);
+    assert(strcmp(res, "SELECT 'what?is?this' FROM users WHERE id = $1") == 0);
+    free(res);
+
+    /* Test escaped quotes in string literal */
+    count = 0;
+    res = csilk_sql_rewrite_placeholders("SELECT 'O''Reilly?test' WHERE x = ? AND y = ?", &count);
+    assert(res != nullptr);
+    assert(count == 2);
+    assert(strcmp(res, "SELECT 'O''Reilly?test' WHERE x = $1 AND y = $2") == 0);
+    free(res);
+
+    printf("test_sql_rewrite_placeholders_unit: PASS\n");
+}
 
 void
 test_postgres_real_connection(void)
@@ -104,6 +135,7 @@ test_postgres_real_connection(void)
 int
 main(void)
 {
+    test_sql_rewrite_placeholders_unit();
     test_postgres_real_connection();
     return 0;
 }

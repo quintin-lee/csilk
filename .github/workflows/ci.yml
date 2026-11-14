@@ -209,7 +209,7 @@ jobs:
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-19 -DUSE_ASAN=ON -DUSE_FUZZER=ON
 
     - name: Build Fuzzers
-      run: cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc -j$(nproc)
+      run: cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc fuzz_mcp fuzz_sql_rewrite -j$(nproc)
 
     - name: Fuzz — fuzz_test (HTTP routing + query parsing)
       run: cd build && ./fuzz_test -max_total_time=120 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_test
@@ -231,6 +231,12 @@ jobs:
 
     - name: Fuzz — fuzz_raft_rpc (Raft RPC header + payload codecs)
       run: cd build && ./fuzz_raft_rpc -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_raft_rpc
+
+    - name: Fuzz — fuzz_mcp (MCP JSON-RPC messages + frames)
+      run: cd build && ./fuzz_mcp -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_mcp
+
+    - name: Fuzz — fuzz_sql_rewrite (SQL placeholder rewriting)
+      run: cd build && ./fuzz_sql_rewrite -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_sql_rewrite
 
   arm64:
     name: ARM64 Cross-Compile

@@ -212,12 +212,49 @@ test_ratelimit_retry_after_precise()
     printf("Rate limit precise Retry-After test passed!\n");
 }
 
+static long long
+_mock_storage_incr_with_ttl(csilk_ctx_t* c, const char* key, int ttl_sec, long long* out_ttl_ms)
+{
+    (void)c;
+    (void)key;
+    (void)ttl_sec;
+    if (out_ttl_ms) {
+        *out_ttl_ms = 14200; /* 14.2s remaining */
+    }
+    return 5;                /* Current count > limit (3) */
+}
+
+static void
+test_ratelimit_distributed_storage_exact_ttl(void)
+{
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    assert(ctx != nullptr);
+    csilk_test_ctx_set_request(ctx, "GET", "/api/test");
+    csilk_set_request_header(ctx, "X-Forwarded-For", "192.168.100.1");
+
+    csilk_storage_driver_t driver = {0};
+    driver.incr_with_ttl = _mock_storage_incr_with_ttl;
+    csilk_ctx_set_storage_driver(ctx, &driver);
+
+    csilk_rate_limit_middleware(ctx, 3);
+
+    assert(csilk_is_aborted(ctx) == 1);
+    assert(csilk_get_status(ctx) == CSILK_STATUS_TOO_MANY_REQUESTS);
+    const char* retry_hdr = csilk_get_response_header(ctx, "Retry-After");
+    assert(retry_hdr != nullptr);
+    assert(strcmp(retry_hdr, "15") == 0); /* 14200ms ceil -> 15s */
+
+    csilk_test_ctx_free(ctx);
+    printf("Rate limit distributed storage exact TTL passed!\n");
+}
+
 int
 main()
 {
     /* Order matters: the fail-open test fills (and never empties) the shared
      * 65536-slot IP table, so any counting test that needs real slots must run
      * before it. Run the precise Retry-After (counting) test first. */
+    test_ratelimit_distributed_storage_exact_ttl();
     test_ratelimit_basic();
     test_ratelimit_retry_after_precise();
     test_ratelimit_fail_open_on_saturated_table();

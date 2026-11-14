@@ -200,6 +200,16 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         target_compile_options(fuzz_raft_rpc PRIVATE -fsanitize=fuzzer -std=c23)
         target_link_options(fuzz_raft_rpc PRIVATE -fsanitize=fuzzer)
         target_link_libraries(fuzz_raft_rpc csilk)
+
+        add_executable(fuzz_mcp fuzz/fuzz_mcp.c)
+        target_compile_options(fuzz_mcp PRIVATE -fsanitize=fuzzer -std=c23)
+        target_link_options(fuzz_mcp PRIVATE -fsanitize=fuzzer)
+        target_link_libraries(fuzz_mcp csilk)
+
+        add_executable(fuzz_sql_rewrite fuzz/fuzz_sql_rewrite.c)
+        target_compile_options(fuzz_sql_rewrite PRIVATE -fsanitize=fuzzer -std=c23)
+        target_link_options(fuzz_sql_rewrite PRIVATE -fsanitize=fuzzer)
+        target_link_libraries(fuzz_sql_rewrite csilk)
     endif()
   endif()
 

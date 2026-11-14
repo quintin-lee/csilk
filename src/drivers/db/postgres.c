@@ -59,34 +59,47 @@ typedef struct {
  * Returns a heap-allocated string (caller must free), or NULL on OOM.
  * Also writes the number of placeholders found to *out_param_count.
  * ----------------------------------------------------------------------- */
-static char*
-pg_rewrite_placeholders(const char* sql, int* out_param_count)
+char*
+csilk_sql_rewrite_placeholders(const char* sql, int* out_param_count)
 {
     if (!sql || !out_param_count) {
         return NULL;
     }
 
-    /* First pass: count ? occurrences to size the output buffer. */
-    int    param_count = 0;
-    size_t extra = 0; /* extra bytes needed for $N vs ? */
+    /* First pass: count unquoted ? occurrences to size the output buffer. */
+    int  param_count = 0;
+    bool in_quote = false;
     for (const char* p = sql; *p; p++) {
-        if (*p == '?') {
+        if (*p == '\'') {
+            if (in_quote && *(p + 1) == '\'') {
+                p++;
+            } else {
+                in_quote = !in_quote;
+            }
+        } else if (*p == '?' && !in_quote) {
             param_count++;
-            /* $N takes 2 + digits chars; ? takes 1.  Worst case: $64 (3 digits). */
-            extra += 3; /* over-estimate; we'll trim with realloc if needed */
         }
     }
 
     size_t src_len = strlen(sql);
-    char*  out = malloc(src_len + extra * 3 + 1);
+    size_t extra = (size_t)param_count * 12;
+    char*  out = malloc(src_len + extra + 1);
     if (!out) {
         return NULL;
     }
 
     char* dst = out;
     int   idx = 1;
+    in_quote = false;
     for (const char* p = sql; *p; p++) {
-        if (*p == '?') {
+        if (*p == '\'') {
+            *dst++ = *p;
+            if (in_quote && *(p + 1) == '\'') {
+                *dst++ = *(++p);
+            } else {
+                in_quote = !in_quote;
+            }
+        } else if (*p == '?' && !in_quote) {
             dst += sprintf(dst, "$%d", idx++);
         } else {
             *dst++ = *p;
@@ -96,6 +109,12 @@ pg_rewrite_placeholders(const char* sql, int* out_param_count)
 
     *out_param_count = param_count;
     return out;
+}
+
+static char*
+pg_rewrite_placeholders(const char* sql, int* out_param_count)
+{
+    return csilk_sql_rewrite_placeholders(sql, out_param_count);
 }
 
 /* -----------------------------------------------------------------------

@@ -26,6 +26,99 @@ typedef struct {
 static csilk_otlp_buffer_t g_otlp_buffer;
 static int                 g_otlp_init = 0;
 
+typedef struct {
+    char trace_id[33];
+    char span_id[17];
+} csilk_trace_ctx_node_t;
+
+#define CSILK_MAX_TRACE_DEPTH 16
+static _Thread_local csilk_trace_ctx_node_t tls_trace_stack[CSILK_MAX_TRACE_DEPTH];
+static _Thread_local int                    tls_trace_depth = 0;
+
+static void
+_csilk_generate_hex_id(char* out, size_t num_bytes)
+{
+    uint8_t bytes[16];
+    if (num_bytes > sizeof(bytes)) {
+        num_bytes = sizeof(bytes);
+    }
+    if (RAND_bytes(bytes, (int)num_bytes) != 1) {
+        FILE* fp = fopen("/dev/urandom", "rb");
+        if (fp && fread(bytes, 1, num_bytes, fp) == num_bytes) {
+            fclose(fp);
+        } else {
+            if (fp) {
+                fclose(fp);
+            }
+            char uuid_buf[CSILK_UUID_BUF_SIZE];
+            csilk_generate_uuid(uuid_buf);
+            size_t idx = 0;
+            for (size_t i = 0; i < strlen(uuid_buf) && idx < num_bytes; i++) {
+                if (uuid_buf[i] != '-') {
+                    bytes[idx++] = (uint8_t)uuid_buf[i];
+                }
+            }
+            while (idx < num_bytes) {
+                bytes[idx++] = (uint8_t)rand();
+            }
+        }
+    }
+    for (size_t i = 0; i < num_bytes; i++) {
+        sprintf(out + (i * 2), "%02x", bytes[i]);
+    }
+    out[num_bytes * 2] = '\0';
+}
+
+void
+csilk_otlp_push_trace_context(const char* trace_id, const char* span_id)
+{
+    if (tls_trace_depth < CSILK_MAX_TRACE_DEPTH) {
+        if (trace_id && trace_id[0] != '\0') {
+            snprintf(tls_trace_stack[tls_trace_depth].trace_id,
+                     sizeof(tls_trace_stack[tls_trace_depth].trace_id),
+                     "%s",
+                     trace_id);
+        } else {
+            tls_trace_stack[tls_trace_depth].trace_id[0] = '\0';
+        }
+        if (span_id && span_id[0] != '\0') {
+            snprintf(tls_trace_stack[tls_trace_depth].span_id,
+                     sizeof(tls_trace_stack[tls_trace_depth].span_id),
+                     "%s",
+                     span_id);
+        } else {
+            tls_trace_stack[tls_trace_depth].span_id[0] = '\0';
+        }
+        tls_trace_depth++;
+    }
+}
+
+void
+csilk_otlp_pop_trace_context(void)
+{
+    if (tls_trace_depth > 0) {
+        tls_trace_depth--;
+    }
+}
+
+int
+csilk_otlp_get_current_trace_context(char*  out_trace_id,
+                                     size_t tid_sz,
+                                     char*  out_span_id,
+                                     size_t sid_sz)
+{
+    if (tls_trace_depth <= 0) {
+        return -1;
+    }
+    if (out_trace_id && tid_sz > 0) {
+        snprintf(out_trace_id, tid_sz, "%s", tls_trace_stack[tls_trace_depth - 1].trace_id);
+    }
+    if (out_span_id && sid_sz > 0) {
+        snprintf(out_span_id, sid_sz, "%s", tls_trace_stack[tls_trace_depth - 1].span_id);
+    }
+    return 0;
+}
+
 /** @brief Return the current monotonic clock time in nanoseconds. */
 static uint64_t
 get_current_time_ns(void)
@@ -62,30 +155,10 @@ csilk_trace_middleware(csilk_ctx_t* c)
         memcpy(trace_id_buf, tp + 3, 32);
         memcpy(parent_span_id, tp + 36, 16);
     } else {
-        char uuid_buf[CSILK_UUID_BUF_SIZE];
-        csilk_generate_uuid(uuid_buf);
-        size_t idx = 0;
-        for (size_t i = 0; i < strlen(uuid_buf) && idx < 32; i++) {
-            if (uuid_buf[i] != '-') {
-                trace_id_buf[idx++] = uuid_buf[i];
-            }
-        }
-        while (idx < 32) {
-            trace_id_buf[idx++] = '0';
-        }
+        _csilk_generate_hex_id(trace_id_buf, 16);
     }
 
-    char span_uuid[CSILK_UUID_BUF_SIZE];
-    csilk_generate_uuid(span_uuid);
-    size_t s_idx = 0;
-    for (size_t i = 0; i < strlen(span_uuid) && s_idx < 16; i++) {
-        if (span_uuid[i] != '-') {
-            span_id_buf[s_idx++] = span_uuid[i];
-        }
-    }
-    while (s_idx < 16) {
-        span_id_buf[s_idx++] = '0';
-    }
+    _csilk_generate_hex_id(span_id_buf, 8);
 
     char new_tp[64];
     snprintf(new_tp, sizeof(new_tp), "00-%s-%s-01", trace_id_buf, span_id_buf);
@@ -104,7 +177,18 @@ csilk_trace_middleware(csilk_ctx_t* c)
         csilk_set(c, "otlp_span_id", (void*)span_id_buf);
     }
 
+    /* Push request trace context so child spans automatically inherit trace ID */
+    csilk_otlp_push_trace_context(trace_id_buf, parent_span_id[0] ? parent_span_id : NULL);
+    const char*        req_path = csilk_get_path(c);
+    csilk_otlp_span_t* root_span = csilk_otlp_tracer_start_span(
+        req_path ? req_path : "HTTP Request", parent_span_id[0] ? parent_span_id : NULL);
+
     csilk_next(c);
+
+    int status = csilk_get_status(c);
+    int status_code = (status >= 400 || status == 0) ? 2 : 1;
+    csilk_otlp_tracer_end_span(root_span, status_code);
+    csilk_otlp_pop_trace_context();
 }
 
 /**
@@ -171,38 +255,54 @@ csilk_otlp_tracer_start_span(const char* name, const char* parent_span_id)
     }
 
     snprintf(span->name, sizeof(span->name), "%s", name ? name : "unnamed_span");
-    snprintf(span->trace_id, sizeof(span->trace_id), "4bf92f3577b34da6a3ce929d0e0e4736");
-    uint8_t span_id_bytes[8];
-    if (RAND_bytes(span_id_bytes, sizeof(span_id_bytes)) != 1) {
-        /* Fallback to urandom if OpenSSL fails */
-        FILE* fp = fopen("/dev/urandom", "rb");
-        if (fp && fread(span_id_bytes, 1, sizeof(span_id_bytes), fp) == sizeof(span_id_bytes)) {
-            fclose(fp);
-        } else {
-            if (fp) {
-                fclose(fp);
-            }
-            memset(span_id_bytes, 0, sizeof(span_id_bytes));
+
+    /* Determine trace_id and parent_span_id */
+    if (tls_trace_depth > 0 && tls_trace_stack[tls_trace_depth - 1].trace_id[0] != '\0') {
+        snprintf(span->trace_id,
+                 sizeof(span->trace_id),
+                 "%s",
+                 tls_trace_stack[tls_trace_depth - 1].trace_id);
+        if (parent_span_id && parent_span_id[0] != '\0') {
+            snprintf(span->parent_span_id, sizeof(span->parent_span_id), "%s", parent_span_id);
+        } else if (tls_trace_stack[tls_trace_depth - 1].span_id[0] != '\0') {
+            snprintf(span->parent_span_id,
+                     sizeof(span->parent_span_id),
+                     "%s",
+                     tls_trace_stack[tls_trace_depth - 1].span_id);
+        }
+    } else {
+        _csilk_generate_hex_id(span->trace_id, 16);
+        if (parent_span_id && parent_span_id[0] != '\0') {
+            snprintf(span->parent_span_id, sizeof(span->parent_span_id), "%s", parent_span_id);
         }
     }
-    snprintf(span->span_id,
-             sizeof(span->span_id),
-             "%02x%02x%02x%02x%02x%02x%02x%02x",
-             span_id_bytes[0],
-             span_id_bytes[1],
-             span_id_bytes[2],
-             span_id_bytes[3],
-             span_id_bytes[4],
-             span_id_bytes[5],
-             span_id_bytes[6],
-             span_id_bytes[7]);
 
-    if (parent_span_id) {
-        snprintf(span->parent_span_id, sizeof(span->parent_span_id), "%s", parent_span_id);
-    }
+    _csilk_generate_hex_id(span->span_id, 8);
+
+    /* Push this span onto thread trace stack so downstream sub-spans nest automatically */
+    csilk_otlp_push_trace_context(span->trace_id, span->span_id);
 
     span->start_time_ns = get_current_time_ns();
     return span;
+}
+
+csilk_otlp_span_t*
+csilk_otlp_tracer_start_span_ctx(csilk_ctx_t* c, const char* name)
+{
+    if (c) {
+        const char* tid = csilk_ctx_get_trace_id(c);
+        const char* sid = csilk_ctx_get_span_id(c);
+        if (tid && tid[0] != '\0') {
+            csilk_otlp_push_trace_context(tid, sid);
+            csilk_otlp_span_t* s = csilk_otlp_tracer_start_span(name, sid);
+            if (tls_trace_depth >= 2) {
+                tls_trace_stack[tls_trace_depth - 2] = tls_trace_stack[tls_trace_depth - 1];
+                tls_trace_depth--;
+            }
+            return s;
+        }
+    }
+    return csilk_otlp_tracer_start_span(name, NULL);
 }
 
 /**
@@ -227,6 +327,11 @@ csilk_otlp_tracer_end_span(csilk_otlp_span_t* span, int status_code)
     span->end_time_ns = get_current_time_ns();
     span->status_code = status_code;
 
+    if (tls_trace_depth > 0 &&
+        strcmp(tls_trace_stack[tls_trace_depth - 1].span_id, span->span_id) == 0) {
+        tls_trace_depth--;
+    }
+
     csilk_mutex_lock(&g_otlp_buffer.mutex);
     g_otlp_buffer.spans[g_otlp_buffer.head] = *span;
     g_otlp_buffer.head = (g_otlp_buffer.head + 1) % 2048;
@@ -236,6 +341,49 @@ csilk_otlp_tracer_end_span(csilk_otlp_span_t* span, int status_code)
     csilk_mutex_unlock(&g_otlp_buffer.mutex);
 
     free(span);
+}
+
+void
+csilk_otlp_apm_spans_handler(csilk_ctx_t* c)
+{
+    if (!c) {
+        return;
+    }
+
+    csilk_mutex_lock(&g_otlp_buffer.mutex);
+    csilk_json_t* arr = csilk_json_array();
+    size_t        count = g_otlp_buffer.count;
+    size_t        start = (g_otlp_buffer.head + 2048 - count) % 2048;
+    for (size_t i = 0; i < count; i++) {
+        size_t                   idx = (start + i) % 2048;
+        const csilk_otlp_span_t* s = &g_otlp_buffer.spans[idx];
+        csilk_json_t*            obj = csilk_json_object();
+        csilk_json_add_string(obj, "traceId", s->trace_id);
+        csilk_json_add_string(obj, "spanId", s->span_id);
+        if (s->parent_span_id[0] != '\0') {
+            csilk_json_add_string(obj, "parentSpanId", s->parent_span_id);
+        }
+        csilk_json_add_string(obj, "name", s->name);
+        csilk_json_add_number(obj, "startTimeUnixNano", (double)s->start_time_ns);
+        csilk_json_add_number(obj, "endTimeUnixNano", (double)s->end_time_ns);
+        double dur_ms = (s->end_time_ns >= s->start_time_ns)
+                            ? (double)(s->end_time_ns - s->start_time_ns) / 1000000.0
+                            : 0.0;
+        csilk_json_add_number(obj, "durationMs", dur_ms);
+        csilk_json_add_number(obj, "statusCode", s->status_code);
+        csilk_json_array_append(arr, obj);
+    }
+    csilk_mutex_unlock(&g_otlp_buffer.mutex);
+
+    char* json_str = csilk_json_serialize(arr, NULL);
+    csilk_json_free(arr);
+    if (!json_str) {
+        csilk_json_error(c, 500, "failed to serialize telemetry spans");
+        return;
+    }
+    csilk_set_header(c, "Content-Type", "application/json");
+    csilk_string(c, 200, json_str);
+    free(json_str);
 }
 
 void
@@ -295,4 +443,13 @@ csilk_otlp_serve_apm_ui(csilk_app_t* app, const char* path)
         return;
     }
     csilk_app_add_route(app, "GET", path, csilk_otlp_apm_ui_handler);
+
+    char   spans_path[256];
+    size_t path_len = strlen(path);
+    while (path_len > 0 && path[path_len - 1] == '/') {
+        path_len--;
+    }
+    snprintf(spans_path, sizeof(spans_path), "%.*s/spans", (int)path_len, path);
+    csilk_app_add_route(app, "GET", spans_path, csilk_otlp_apm_spans_handler);
+    csilk_app_add_route(app, "GET", "/admin/api/telemetry/spans", csilk_otlp_apm_spans_handler);
 }

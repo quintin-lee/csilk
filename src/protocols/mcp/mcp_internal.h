@@ -90,5 +90,6 @@ csilk_mcp_msg_t* csilk_mcp_msg_parse(const char* buf, size_t len, csilk_arena_t*
 char*            csilk_mcp_msg_serialize(const csilk_mcp_msg_t* msg, csilk_arena_t* arena);
 csilk_mcp_msg_t* csilk_mcp_msg_create_error(csilk_json_t* id, int code, const char* message);
 csilk_mcp_msg_t* csilk_mcp_msg_create_response(csilk_json_t* id, csilk_json_t* result);
+void             csilk_mcp_msg_destroy(csilk_mcp_msg_t* msg, csilk_arena_t* arena);
 
 #endif /* CSILK_MCP_INTERNAL_H */

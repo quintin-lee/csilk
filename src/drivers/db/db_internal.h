@@ -62,4 +62,13 @@ struct csilk_stmt_s {
     void*            handle;
 };
 
+/**
+ * @brief Rewrite standard ? SQL placeholders to PostgreSQL $1, $2, ... format.
+ * Skips ? characters contained within single-quoted string literals.
+ * @param sql Input SQL query string.
+ * @param out_param_count Receives count of placeholders rewritten.
+ * @return Heap-allocated rewritten SQL string (caller frees), or NULL on OOM.
+ */
+char* csilk_sql_rewrite_placeholders(const char* sql, int* out_param_count);
+
 #endif
