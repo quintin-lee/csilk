@@ -168,6 +168,7 @@ set(CSILK_CORE_TESTS
     test_io_backend
     test_secret
     test_python_abi
+    test_mvcc_cache_snapshot
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
@@ -180,8 +181,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core
-    core
+    core;core;core;core;core;core
 )
 
 
@@ -304,9 +304,10 @@ set(CSILK_PROTOCOL_TESTS
     test_mcp_server_core
     test_mcp_stdio
     test_mcp_stdio_pool
+    test_mcp_sse_ext
 )
 set(CSILK_PROTOCOL_TEST_DIRS
-    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
+    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
 )
 
 # -- Security tests --
@@ -340,9 +341,10 @@ set(CSILK_DATA_TESTS
     test_db_postgres
     test_db_mysql
     test_db_redis
+    test_db_abstraction
 )
 set(CSILK_DATA_TEST_DIRS
-    drivers;drivers;drivers/db;drivers/db;drivers/db;drivers;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db
+    drivers;drivers;drivers/db;drivers/db;drivers/db;drivers;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db
 )
 
 # -- AI / driver tests --
