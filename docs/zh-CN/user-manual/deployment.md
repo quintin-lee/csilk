@@ -1,6 +1,6 @@
 # 部署运维指南
 
-> **Version**: 0.8.0 | **Last updated**: 2026-11-14
+> **Version**: 0.9.0 | **Last updated**: 2026-11-14
 
 本指南描述如何将 csilk 应用部署到生产环境，涵盖 Docker 容器化、systemd 服务管理、多 worker 调优、TLS 配置、Prometheus 监控、健康检查及日志管理。
 
