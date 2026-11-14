@@ -19,26 +19,14 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
         return 0;
     }
 
-    char filename[] = "/tmp/fuzz_yaml_XXXXXX";
-    int  fd = mkstemp(filename);
-    if (fd == -1) {
-        return 0;
-    }
-
-    if (write(fd, data, size) != (ssize_t)size) {
-        close(fd);
-        unlink(filename);
-        return 0;
-    }
-    close(fd);
-
     csilk_config_t config;
-    if (csilk_load_config(filename, &config) == 0) {
+    if (csilk_load_config_memory(data, size, &config) == 0) {
         const char* error_msg = nullptr;
         csilk_config_validate(&config, &error_msg);
         csilk_config_free(&config);
+    } else {
+        csilk_config_free(&config);
     }
 
-    unlink(filename);
     return 0;
 }
