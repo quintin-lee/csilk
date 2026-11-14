@@ -5,8 +5,13 @@
  */
 
 #include "csilk/core/io/af_xdp.h"
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
+#define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
+#endif
 
 struct csilk_xdp_socket_s {
     csilk_xdp_config_t config;
@@ -29,6 +34,11 @@ struct csilk_xdp_socket_s {
 csilk_xdp_socket_t*
 csilk_xdp_socket_new(const csilk_xdp_config_t* config)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)config;
+    errno = ENOTSUP;
+    return NULL;
+#else
     if (!config) {
         return NULL;
     }
@@ -59,6 +69,7 @@ csilk_xdp_socket_new(const csilk_xdp_config_t* config)
     xsk->tx_head = 0;
 
     return xsk;
+#endif
 }
 
 /**
@@ -90,6 +101,13 @@ csilk_xdp_socket_free(csilk_xdp_socket_t* xsk)
 int
 csilk_xdp_rx_burst(csilk_xdp_socket_t* xsk, const uint8_t** frame_data, size_t* frame_len)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)xsk;
+    (void)frame_data;
+    (void)frame_len;
+    errno = ENOTSUP;
+    return -ENOTSUP;
+#else
     if (!xsk || !frame_data || !frame_len) {
         return -1;
     }
@@ -102,6 +120,7 @@ csilk_xdp_rx_burst(csilk_xdp_socket_t* xsk, const uint8_t** frame_data, size_t* 
     xsk->rx_head++;
 
     return 0;
+#endif
 }
 
 /**
@@ -115,6 +134,13 @@ csilk_xdp_rx_burst(csilk_xdp_socket_t* xsk, const uint8_t** frame_data, size_t* 
 int
 csilk_xdp_tx_burst(csilk_xdp_socket_t* xsk, const uint8_t* frame_data, size_t frame_len)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)xsk;
+    (void)frame_data;
+    (void)frame_len;
+    errno = ENOTSUP;
+    return -ENOTSUP;
+#else
     if (!xsk || !frame_data || frame_len == 0) {
         return -1;
     }
@@ -130,4 +156,5 @@ csilk_xdp_tx_burst(csilk_xdp_socket_t* xsk, const uint8_t* frame_data, size_t fr
     xsk->tx_head++;
 
     return 0;
+#endif
 }

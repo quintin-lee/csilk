@@ -1,6 +1,14 @@
 /**
  * @file wasm.h
  * @brief Native WASM/WASI plugin sandbox and execution engine.
+ *
+ * @warning EXPERIMENTAL / SIMULATED RUNTIME: Current implementation validates the
+ *          8-byte WASM magic/version header, allocates bounded linear memory, and
+ *          enforces fuel accounting, but does NOT decode or execute WebAssembly
+ *          bytecode instructions (csilk_wasm_plugin_exec() returns a simulated
+ *          JSON response). Disable simulation mode at configure time with
+ *          -DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF.
+ *
  * @copyright MIT License
  */
 

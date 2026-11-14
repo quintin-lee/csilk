@@ -10,11 +10,16 @@
  * @copyright MIT License
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "af_xdp_internal.h"
+
+#ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
+#define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
+#endif
 
 /**
  * @brief Create a page-aligned AF_XDP UMEM frame pool.
@@ -28,6 +33,12 @@
 csilk_xdp_umem_pool_t*
 csilk_xdp_umem_pool_create(size_t total_size, uint32_t frame_size)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)total_size;
+    (void)frame_size;
+    errno = ENOTSUP;
+    return NULL;
+#else
     if (total_size == 0 || frame_size == 0) {
         return NULL;
     }
@@ -50,6 +61,7 @@ csilk_xdp_umem_pool_create(size_t total_size, uint32_t frame_size)
     memset(pool->buffer, 0, total_size);
 
     return pool;
+#endif
 }
 
 /**

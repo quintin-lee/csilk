@@ -207,9 +207,11 @@ Redis 在 csilk 中扮演两个角色：
 
 ### 6.2 事务支持
 
-SQLite、MySQL、PostgreSQL 和 MongoDB 驱动实现完整的事务 vtable (`begin` / `commit` / `rollback`)。事务方法委托到相应的 SQL 命令 (`BEGIN`、`COMMIT`、`ROLLBACK`) 通过驱动的 `exec` 函数。MongoDB 使用 `mongoc_client_session_start/commit/abort_transaction`。
+SQLite、MySQL 和 PostgreSQL 驱动实现了 SQL 事务 vtable (`begin` / `commit` / `rollback`)，通过驱动的 `exec` 执行 `BEGIN`、`COMMIT`、`ROLLBACK`，并支持基于保存点的嵌套事务作用域 (`csilk_db_tx_scope_*`)。
 
-Redis 事务使用 `MULTI/EXEC/DISCARD` 在其事务回调中（与 db_driver_t vtable 分离；在 `redis_drv_transaction_begin/commit/rollback` 处理）。
+Redis 事务在 `redis_drv_transaction_begin/commit/rollback` 中使用 `MULTI` / `EXEC` / `DISCARD`。
+
+MongoDB 驱动**未**实现多文档 ACID 事务（未接入 `mongoc_client_session_*`）；`mongodb_transaction_begin/commit/rollback` 按失败关闭（fail-closed）语义返回 `-1`（仅具备 MongoDB 原生单文档原子性），且 `csilk_db_tx_scope_*` 仅适用于 SQL 驱动。
 
 ---
 

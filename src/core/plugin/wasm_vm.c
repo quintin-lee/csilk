@@ -10,11 +10,16 @@
  * @copyright MIT License
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "wasm_internal.h"
+
+#ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
+#define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
+#endif
 
 /**
  * @brief Resolve a slice of plugin linear memory.
@@ -52,6 +57,12 @@ csilk_wasm_get_memory_slice(csilk_wasm_memory_t* mem, uint32_t offset, uint32_t 
 csilk_wasm_plugin_t*
 csilk_wasm_plugin_load_file(const char* filepath, const csilk_wasm_config_t* config)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)filepath;
+    (void)config;
+    errno = ENOTSUP;
+    return NULL;
+#else
     if (!filepath) {
         return NULL;
     }
@@ -117,6 +128,7 @@ csilk_wasm_plugin_load_file(const char* filepath, const csilk_wasm_config_t* con
     fclose(f);
     snprintf(plugin->entry_point, sizeof(plugin->entry_point), "run");
     return plugin;
+#endif
 }
 
 /**

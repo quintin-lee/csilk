@@ -3,6 +3,12 @@
  * @file dpdk_pmd.h
  * @brief DPDK (Data Plane Development Kit) Poll Mode Driver user-space network engine.
  *
+ * @warning EXPERIMENTAL / SIMULATED STUB: Current implementation allocates an
+ *          in-process 64-byte aligned mbuf ring buffer and copies packets in
+ *          memory for API prototyping and unit testing. It does NOT link
+ *          against DPDK EAL/PMD or drive physical NIC ports. Disable simulation
+ *          mode at configure time with -DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF.
+ *
  * @version 0.5.2
  * @copyright MIT License
  */

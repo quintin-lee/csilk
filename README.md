@@ -243,11 +243,12 @@ make
 # cmake .. -DCSILK_USE_URING=ON
 
 # Available CMake options:
-#   -DCSILK_BUILD_SHARED=ON   Build dynamic libraries in addition to static (default ON)
-#   -DCSILK_USE_URING=ON      Use io_uring backend instead of libuv (Linux-only, default OFF)
-#   -DUSE_ASAN=ON             Enable AddressSanitizer (default OFF)
-#   -DUSE_TSAN=ON             Enable ThreadSanitizer (default OFF)
-#   -DUSE_FUZZER=ON           Enable libFuzzer (default OFF)
+#   -DCSILK_BUILD_SHARED=ON              Build dynamic libraries in addition to static (default ON)
+#   -DCSILK_USE_URING=ON                 Use io_uring backend instead of libuv (Linux-only, default OFF)
+#   -DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF Fail-close experimental/simulated stubs (AF_XDP, DPDK, WASM VM, H3 listener)
+#   -DUSE_ASAN=ON                        Enable AddressSanitizer (default OFF)
+#   -DUSE_TSAN=ON                        Enable ThreadSanitizer (default OFF)
+#   -DUSE_FUZZER=ON                      Enable libFuzzer (default OFF)
 
 # Run tests (excludes integration, ~28s)
 ctest -E test_integration --output-on-failure
@@ -260,6 +261,8 @@ gcovr -r build_cov --filter src/  # 69% line coverage
 ```
 
 ## Modular Sub-Libraries & Integration
+
+> **Experimental / Simulated Module Boundaries**: The core HTTP/1.1, HTTP/2 (`nghttp2`), TLS 1.3 (`OpenSSL`), Router, Arena, MQ/Raft, SQLite/MySQL/PostgreSQL/Redis, and HNSW modules are production implementations. By contrast, `csilk_bypass` (**AF_XDP** / **DPDK** in-memory ring simulations + root-check `io_perf_probe`), `csilk_wasm` (**WASM/WASI** header-check + fuel-only stub runtime), **HTTP/3** `csilk_h3_listener_*` (UDP/ConnID skeleton without QUIC/TLS/QPACK; full HTTP/3 deferred to v1.1+), and **MongoDB multi-document transactions** (`transaction_*` fail closed with `-1`) are experimental or partial boundaries. Pass `-DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF` to fail-close simulated stub entrypoints (`ENOTSUP`/`NULL`) in hardened builds.
 
 csilk is decomposed into modular targets available as both static (`.a`) and dynamic (`.so`) libraries:
 

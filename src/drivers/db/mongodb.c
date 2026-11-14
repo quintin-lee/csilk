@@ -298,32 +298,36 @@ mongodb_exec(csilk_db_pool_t* pool, const char* sql)
     return success ? 0 : -1;
 }
 
-/** @brief Begin a transaction — no-op for MongoDB single-document atomicity.
+/** @brief Begin a transaction — unsupported for MongoDB in csilk.
  *
- * MongoDB operations on a single document are already atomic, so explicit
- * multi-document transactions are not implemented.  This stub exists for
- * API compatibility with the driver vtable. */
+ * Explicit multi-document transactions (mongoc_client_session_*) are not
+ * implemented in this driver; only MongoDB's native single-document atomicity
+ * applies.  Fails closed with -1 rather than silently pretending to start an
+ * ACID transaction. */
 static int
 mongodb_transaction_begin(csilk_db_pool_t* pool)
 {
     (void)pool;
-    return 0;
+    CSILK_LOG_W("csilk_db_mongodb: explicit multi-document transactions are not supported");
+    return -1;
 }
 
-/** @brief Commit a transaction — no-op (see mongodb_transaction_begin). */
+/** @brief Commit a transaction — unsupported (see mongodb_transaction_begin). */
 static int
 mongodb_transaction_commit(csilk_db_pool_t* pool)
 {
     (void)pool;
-    return 0;
+    CSILK_LOG_W("csilk_db_mongodb: explicit multi-document transactions are not supported");
+    return -1;
 }
 
-/** @brief Rollback a transaction — no-op (see mongodb_transaction_begin). */
+/** @brief Rollback a transaction — unsupported (see mongodb_transaction_begin). */
 static int
 mongodb_transaction_rollback(csilk_db_pool_t* pool)
 {
     (void)pool;
-    return 0;
+    CSILK_LOG_W("csilk_db_mongodb: explicit multi-document transactions are not supported");
+    return -1;
 }
 
 csilk_db_driver_t csilk_db_mongodb_driver = {

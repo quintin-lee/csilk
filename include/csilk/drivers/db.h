@@ -276,18 +276,20 @@ struct csilk_db_driver_s {
     int (*exec)(csilk_db_pool_t* pool, const char* sql);
 
     /** @brief Begin a database transaction.
+   *  @note Implemented by SQL drivers (sqlite, mysql, postgres) and Redis (MULTI).
+   *        MongoDB does not implement multi-document transactions and returns -1.
    *  @param pool  Connection pool (mutex is held by the caller).
-   *  @return 0 on success, -1 on failure. */
+   *  @return 0 on success, -1 on failure or unsupported driver. */
     int (*transaction_begin)(csilk_db_pool_t* pool);
 
     /** @brief Commit the current transaction.
    *  @param pool  Connection pool (mutex is held by the caller).
-   *  @return 0 on success, -1 on failure. */
+   *  @return 0 on success, -1 on failure or unsupported driver. */
     int (*transaction_commit)(csilk_db_pool_t* pool);
 
     /** @brief Roll back the current transaction.
    *  @param pool  Connection pool (mutex is held by the caller).
-   *  @return 0 on success, -1 on failure. */
+   *  @return 0 on success, -1 on failure or unsupported driver. */
     int (*transaction_rollback)(csilk_db_pool_t* pool);
 
     /** @brief Check if the connection is currently inside an active transaction.
@@ -350,10 +352,12 @@ typedef struct {
 int csilk_db_in_transaction(csilk_db_pool_t* pool);
 
 /**
- * @brief Begin a transaction or savepoint scope.
+ * @brief Begin a transaction or savepoint scope (SQL drivers only).
  *
  * If the connection is not yet in a transaction, starts a top-level transaction.
  * If already in a transaction, creates a nested SAVEPOINT with a unique name.
+ * Requires a SQL driver supporting BEGIN TRANSACTION / SAVEPOINT (sqlite,
+ * mysql, postgres); non-SQL drivers such as mongodb and redis return -1.
  *
  * @param pool  Connection pool.
  * @param name  Base identifier name for the scope or savepoint.

@@ -44,6 +44,14 @@ option(ENABLE_OOM_TEST "Enable OOM (Out Of Memory) testing" OFF)
 option(DEBUG_ARENA "Enable arena redzone guards for buffer overflow detection" OFF)
 option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" ON)
 option(CSILK_DEPRECATE_CTX_TYPES "Enable compiler deprecation warnings for direct internal context struct access" ON)
+option(CSILK_ENABLE_EXPERIMENTAL_STUBS
+       "Enable experimental/simulated stub modules (AF_XDP/DPDK memory-ring simulations, WASM stub VM, HTTP/3 UDP listener placeholder)"
+       ON)
+if(CSILK_ENABLE_EXPERIMENTAL_STUBS)
+    message(STATUS "Experimental/simulated stubs ENABLED (AF_XDP/DPDK in-memory rings, WASM fuel-only stub VM, HTTP/3 UDP listener skeleton)")
+else()
+    message(STATUS "Experimental/simulated stubs DISABLED (fail-closed stubs for AF_XDP, DPDK, WASM VM, HTTP/3 listener)")
+endif()
 
 # ── Configurable compile-time constants ──────────────────────────────────
 set(CSILK_HEADER_BUCKETS 16  CACHE STRING "Header hash-table bucket count")

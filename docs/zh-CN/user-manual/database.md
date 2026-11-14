@@ -68,6 +68,8 @@ csilk_db_pool_t* pool = csilk_db_pool_new("mongodb",
 
 DSN 格式：标准 MongoDB URI
 
+> **能力边界提示**：MongoDB 驱动支持单文档命令与集合查询（`csilk_db_exec` / `csilk_db_query_json`），具备 MongoDB 单文档原子性；**不支持**跨文档 ACID 事务（`transaction_begin/commit/rollback` 返回 `-1`，`csilk_db_tx_scope_*` 仅支持 SQL 驱动）。
+
 ### 2.5 Redis
 
 ```c

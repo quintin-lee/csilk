@@ -10,12 +10,17 @@
  * @copyright MIT License
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "csilk/core/uring/io_perf.h"
+
+#ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
+#define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
+#endif
 
 /**
  * @brief Probe the active I/O mode and available fast-I/O features.
@@ -38,10 +43,12 @@ csilk_io_perf_probe(void)
     info.has_iopoll = 1;
 #endif
 
-    /* Check CAP_SYS_ADMIN / CAP_NET_RAW root privilege for AF_XDP zero-copy */
+#if CSILK_ENABLE_EXPERIMENTAL_STUBS
+    /* Simulated capability probe: checks euid root only (no real NIC XSK probe) */
     if (geteuid() == 0) {
         info.has_xdp_zerocopy = 1;
     }
+#endif
 
     snprintf(info.nic_name, sizeof(info.nic_name), "eth0");
     return info;
@@ -58,6 +65,13 @@ csilk_io_perf_probe(void)
 int
 csilk_io_perf_enable_xdp(csilk_app_t* app, const char* ifname, uint32_t queue_id)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)app;
+    (void)ifname;
+    (void)queue_id;
+    errno = ENOTSUP;
+    return -1;
+#else
     if (!app || !ifname) {
         return -1;
     }
@@ -70,6 +84,7 @@ csilk_io_perf_enable_xdp(csilk_app_t* app, const char* ifname, uint32_t queue_id
 
     (void)queue_id;
     return 0;
+#endif
 }
 
 /**

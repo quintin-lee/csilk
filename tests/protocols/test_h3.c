@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -89,6 +90,12 @@ test_h3_listener()
     printf("Testing HTTP/3 UDP Socket Listener & Connection ID extraction...\n");
 
     csilk_h3_listener_t* listener = csilk_h3_listener_bind(4433);
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    assert(listener == NULL);
+    assert(errno == ENOTSUP);
+    printf("test_h3_listener (fail-closed): PASS\n");
+    return;
+#else
     assert(listener != NULL);
 
     /* Construct mock QUIC packet header with 64-bit Connection ID: 0x1122334455667788 */
@@ -101,6 +108,7 @@ test_h3_listener()
 
     csilk_h3_listener_close(listener);
     printf("test_h3_listener: PASS\n");
+#endif
 }
 
 int

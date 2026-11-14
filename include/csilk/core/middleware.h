@@ -12,6 +12,8 @@
  * @copyright MIT License
  */
 
+#include <time.h>
+
 #include "csilk/core/types.h"
 #include "csilk/core/ctx/context.h"
 #include "csilk/core/ctx/response.h"

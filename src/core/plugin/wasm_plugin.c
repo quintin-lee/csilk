@@ -10,6 +10,7 @@
  * @copyright MIT License
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,10 @@
 #include "csilk/core/plugin/wasm.h"
 #include "csilk/core/plugin/wasm_plugin.h"
 #include "wasm_internal.h"
+
+#ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
+#define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
+#endif
 
 /**
  * @brief Load a WASM plugin from an in-memory byte buffer.
@@ -30,6 +35,12 @@
 csilk_wasm_plugin_t*
 csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
 {
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    (void)wasm_bytes;
+    (void)size;
+    errno = ENOTSUP;
+    return NULL;
+#else
     if (!wasm_bytes || size < 8) {
         return NULL;
     }
@@ -68,6 +79,7 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
         return NULL;
     }
     return plugin;
+#endif
 }
 
 /**

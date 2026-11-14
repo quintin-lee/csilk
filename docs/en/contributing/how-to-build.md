@@ -154,6 +154,7 @@ cmake .. -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_SHARED=ON
 | `CSILK_USE_MYSQL` | OFF | 启用 MySQL 驱动 | 需要时 |
 | `CSILK_USE_POSTGRES` | OFF | 启用 PostgreSQL 驱动 | 需要时 |
 | `CSILK_USE_MONGODB` | OFF | 启用 MongoDB 驱动 | 需要时 |
+| `CSILK_ENABLE_EXPERIMENTAL_STUBS` | ON | 启用实验性/模拟桩模块（AF_XDP/DPDK 内存环模拟、WASM 桩 VM、HTTP/3 UDP 占位监听）；设为 `OFF` 可在生产构建中按 `ENOTSUP` 失败关闭 | 严格生产构建建议 `OFF` |
 | `DEBUG_ARENA` | OFF | Arena 调试模式（检测溢出） | 调试时 |
 
 ---
