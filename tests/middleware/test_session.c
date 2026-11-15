@@ -214,6 +214,8 @@ test_session_cleanup_expired_sweep(void)
         char   id[37];
         void*  data;
         time_t expires_at;
+        time_t last_access;
+        void*  next;
     } mock_session_t;
 
     mock_session_t* s = (mock_session_t*)csilk_get(c, "_session");

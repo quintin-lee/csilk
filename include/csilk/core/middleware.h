@@ -411,6 +411,11 @@ void csilk_session_destroy(csilk_ctx_t* c);
  */
 const char* csilk_session_get_id(csilk_ctx_t* c);
 
+/** @brief Set the maximum number of active sessions.
+ *  Sessions beyond this limit are evicted using an LRU policy.
+ *  @param max Maximum session count (0 = unlimited). */
+void csilk_session_set_max(size_t max);
+
 /** @brief Get security-related request statistics.
  *  @param[out] stats Pointer to receive the current security stats. */
 void csilk_security_get_stats(csilk_security_stats_t* stats);
