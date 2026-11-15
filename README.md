@@ -182,7 +182,7 @@ libuv (default), liburing (optional, `-DCSILK_USE_URING=ON`), nghttp2, and cJSON
 For global package management support, `csilk` has been integrated with major C/C++ dependency managers:
 
 * **vcpkg (CMake)**: `vcpkg install csilk`
-* **Conan 2.0+**: `conan create . --version 0.9.0`
+* **Conan 2.0+**: `conan create . --version 1.0.0`
 * **Homebrew (macOS)**: `brew install quintin-lee/tap/csilk`
 
 ### Installation (Debian/Ubuntu)
