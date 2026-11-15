@@ -58,6 +58,9 @@ else()
     message(STATUS "Experimental/simulated stubs DISABLED (fail-closed stubs for AF_XDP, DPDK, WASM VM, HTTP/3 listener)")
 endif()
 
+# HTTP/3 (QUIC) groundwork — ngtcp2/nghttp3 FetchContent
+option(CSILK_ENABLE_HTTP3 "Enable ngtcp2/nghttp3 FetchContent for HTTP/3 QUIC groundwork (v1.1 architectural only)" OFF)
+
 # ── Configurable compile-time constants ────────────────────────────────────
 set(CSILK_HEADER_BUCKETS 16  CACHE STRING "Header hash-table bucket count")
 set(CSILK_MAX_PARAMS      20  CACHE STRING "Max URL path parameters per request")
