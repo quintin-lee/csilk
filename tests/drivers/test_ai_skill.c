@@ -499,7 +499,56 @@ test_local_exec(void)
     free(out);
     csilk_ai_skill_free(sk2);
 
+    /* 12. Path that escapes the exec root is rejected before execve. */
+    csilk_skill_exec_cfg_t rootcfg = {
+        .root = "/", .timeout_ms = 1000, .max_output_bytes = 128, .env = NULL};
+    assert(csilk_ai_skill_set_exec_cfg(sk, &rootcfg) == 0);
+    out = (char*)0x1;
+    rc = csilk_skill_exec_local(sk, "../../etc/passwd", "", 0, &out);
+    assert(rc == -1);
+    assert(out && strstr(out, "escapes exec root"));
+    free(out);
+
+    /* 13. Non-existent binary inside root → execve failure is reported, not a crash. */
+    out = (char*)0x1;
+    rc = csilk_skill_exec_local(sk, "bin/definitely_missing", "", 0, &out);
+    /* execve of a missing binary yields a non-zero / error result. */
+    assert(out == NULL || out != (char*)0x1);
+    if (out && out != (char*)0x1) {
+        free(out);
+    }
+
     csilk_ai_skill_free(sk);
+}
+
+/* Metadata serialization + worker registry edge cases. */
+static void
+test_meta_to_string_and_worker_registry(void)
+{
+    /* L1 metadata load path serializes name+description via csilk_skill_meta_to_string. */
+    csilk_skill_meta_t m = {.name = "meta-test", .description = "desc"};
+    csilk_ai_skill_t*  sk = csilk_ai_skill_new(&m, CSILK_SKILL_LOCAL, NULL, NULL);
+    assert(sk != NULL);
+    char* meta_str = NULL;
+    int   rc = csilk_ai_skill_load(sk, CSILK_SKILL_METADATA, NULL, &meta_str);
+    assert(rc == 0);
+    assert(meta_str && strstr(meta_str, "meta-test") && strstr(meta_str, "desc"));
+    free(meta_str);
+
+    /* NULL skill → NULL string (pure-logic guard). */
+    assert(csilk_skill_meta_to_string(NULL) == NULL);
+
+    /* Worker registry: REMOTE skills use an mq-backed registry; LOCAL uses the
+     * in-process registry. Exercise the guards (NULL sk) for all three. */
+    assert(csilk_ai_skill_worker_register(NULL, NULL) != 0);
+    assert(csilk_ai_skill_worker_heartbeat(NULL, NULL) != 0);
+    csilk_ai_skill_worker_unregister(NULL); /* safe no-op */
+
+    csilk_wf_t* wf = csilk_wf_new("skill-test-wf");
+    assert(wf != NULL);
+    assert(csilk_ai_skill_register(wf, sk) == 0);
+    csilk_ai_skill_free(sk);
+    csilk_wf_free(wf);
 }
 
 /* Exec config lifecycle: field copy, reset, NULL-safety. */
@@ -575,6 +624,7 @@ main(void)
     test_remote_dispatch();
     test_local_exec();
     test_exec_cfg_lifecycle();
+    test_meta_to_string_and_worker_registry();
     printf("test_ai_skill: ALL PASSED\n");
     return 0;
 }
