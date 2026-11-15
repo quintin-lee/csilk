@@ -331,6 +331,7 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     if (strncmp(state->base_url, "http://", 7) != 0 &&
         strncmp(state->base_url, "https://", 8) != 0) {
         CSILK_LOG_E("AI Ollama: Invalid URL scheme: %.50s...", state->base_url);
+        free(json_body);
         curl_easy_cleanup(curl);
         return -1;
     }
