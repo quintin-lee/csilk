@@ -77,7 +77,8 @@ class CsilkAiConfig(ctypes.Structure):
         ("temperature", ctypes.c_double),
         ("max_tokens", ctypes.c_int),
         ("stream", ctypes.c_int),
-        ("max_history_messages", ctypes.c_int)
+        ("max_history_messages", ctypes.c_int),
+        ("driver", ctypes.c_char_p),
     ]
 CsilkAiConfigPtr = ctypes.POINTER(CsilkAiConfig)
 
