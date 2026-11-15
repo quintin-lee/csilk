@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-15
+
 ### 1.0.0 LTS Highlights
 
 - **First Long-Term Support release.** The public C API (opaque handles), the shared-library ABI (`libcsilk.so.1` via `SOVERSION "1"`), and the request/response lifecycle are now considered stable. SemVer applies from this point forward: breaking ABI or public-API changes require a major bump.
