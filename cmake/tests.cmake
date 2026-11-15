@@ -55,7 +55,7 @@ function(add_csilk_test name source)
     set_tests_properties(${name} PROPERTIES TIMEOUT 600)
   elseif(name STREQUAL "test_logger_async_bench")
     set_tests_properties(${name} PROPERTIES TIMEOUT 120)
-  elseif(name STREQUAL "test_openai_mock" OR name STREQUAL "test_ai_anthropic" OR name STREQUAL "test_ollama_mock" OR name STREQUAL "test_vector_milvus_qdrant_mock")
+  elseif(name STREQUAL "test_openai_mock" OR name STREQUAL "test_ai_anthropic" OR name STREQUAL "test_ollama_mock" OR name STREQUAL "test_vector_milvus_qdrant_mock" OR name STREQUAL "test_agent_memory")
     set_tests_properties(${name} PROPERTIES TIMEOUT 60)
   endif()
 endfunction()
@@ -236,11 +236,13 @@ set(CSILK_WORKFLOW_TESTS
     test_wf_cluster_sm
     test_wf_wasm_node
     test_ai_react_loop
+    test_agent_memory
 )
 set(CSILK_WORKFLOW_TEST_DIRS
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
+    workflow
     workflow
 )
 

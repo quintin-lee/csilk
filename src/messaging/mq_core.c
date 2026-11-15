@@ -38,7 +38,13 @@ extern void on_mq_async(csilk_io_async_t* handle);
 void
 csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats)
 {
+    /* The contract is that `stats` is always populated. When there is no MQ
+     * (e.g. the readiness probe runs on a context with no server), zero it so
+     * callers never observe uninitialised counters. */
     if (!mq || !stats) {
+        if (stats) {
+            memset(stats, 0, sizeof(*stats));
+        }
         return;
     }
     csilk_mutex_lock(&mq->queue_mutex);

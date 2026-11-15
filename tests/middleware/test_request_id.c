@@ -94,6 +94,27 @@ test_ready_check_handler_null()
     printf("ready check nullptr passed!\n");
 }
 
+static void
+test_ready_check_handler()
+{
+    printf("Testing ready check handler (healthy path, no server attached)...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+
+    /* csilk_ctx_get_server() is NULL, so the MQ depth and connection counts
+     * read as 0 -> the probe reports ready. */
+    csilk_ready_check_handler(ctx);
+
+    assert(csilk_get_status(ctx) == CSILK_STATUS_OK);
+    size_t      body_len = 0;
+    const char* body = csilk_get_response_body(ctx, &body_len);
+    assert(body != nullptr);
+    assert(strstr(body, "ready") != nullptr);
+    assert(strstr(body, "unavailable") == nullptr);
+
+    csilk_test_ctx_free(ctx);
+    printf("ready check handler passed!\n");
+}
+
 int
 main()
 {
@@ -103,6 +124,7 @@ main()
     test_health_check_handler_null();
     test_health_check_handler();
     test_ready_check_handler_null();
+    test_ready_check_handler();
     printf("test_request_id: ALL PASSED\n");
     return 0;
 }
