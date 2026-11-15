@@ -11,23 +11,70 @@
  */
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
+#ifndef AF_XDP
+#define AF_XDP 44
+#endif
+
 #include "csilk/core/uring/io_perf.h"
+#include "csilk/app/app.h"
+#include "csilk/core/sys_io.h"
 
 #ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
 #define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
 #endif
 
 /**
+ * @brief Check if the kernel supports XDP sockets (AF_XDP).
+ *
+ * Checks /sys/class/net/xsk for the XSK class directory, then falls back to
+ * attempting to open an AF_XDP socket (requires CAP_NET_RAW).
+ * @return 1 if XDP socket support is detected, 0 otherwise.
+ */
+static int
+_kernel_supports_xsk(void)
+{
+    struct stat sb;
+    if (stat("/sys/class/net/xsk", &sb) == 0 && S_ISDIR(sb.st_mode)) {
+        return 1;
+    }
+    int fd = socket(AF_XDP, SOCK_RAW, 0);
+    if (fd >= 0) {
+        close(fd);
+        return 1;
+    }
+    return 0;
+}
+
+/**
+ * @brief Check if the kernel's XSK feature bitmask advertises XDP support.
+ * @return 1 if AF_XDP socket can be opened, 0 otherwise.
+ */
+static int
+_xsk_features_present(void)
+{
+    int fd = socket(AF_XDP, SOCK_RAW, 0);
+    if (fd >= 0) {
+        close(fd);
+        return 1;
+    }
+    return 0;
+}
+
+/**
  * @brief Probe the active I/O mode and available fast-I/O features.
  * @return A csilk_io_perf_info_t describing the active mode, whether SQPOLL/
  *         IOPOLL/XDP-zero-copy are available, and the NIC name ("eth0").
- * @note Sets has_xdp_zerocopy only when running as root (euid 0). When built
- *       with CSILK_USE_URING the active mode is URING with SQPOLL/IOPOLL on.
+ * @note Uses real kernel feature detection: /sys/class/net/xsk for XDP
+ *       support, AF_XDP socket creation for XSK features. Falls back to
+ *       has_xdp_zerocopy=0 when kernel support is not available.
  */
 csilk_io_perf_info_t
 csilk_io_perf_probe(void)
@@ -43,12 +90,10 @@ csilk_io_perf_probe(void)
     info.has_iopoll = 1;
 #endif
 
-#if CSILK_ENABLE_EXPERIMENTAL_STUBS
-    /* Simulated capability probe: checks euid root only (no real NIC XSK probe) */
-    if (geteuid() == 0) {
+    /* Real kernel feature detection for AF_XDP */
+    if (_kernel_supports_xsk() && _xsk_features_present()) {
         info.has_xdp_zerocopy = 1;
     }
-#endif
 
     snprintf(info.nic_name, sizeof(info.nic_name), "eth0");
     return info;
@@ -65,13 +110,6 @@ csilk_io_perf_probe(void)
 int
 csilk_io_perf_enable_xdp(csilk_app_t* app, const char* ifname, uint32_t queue_id)
 {
-#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
-    (void)app;
-    (void)ifname;
-    (void)queue_id;
-    errno = ENOTSUP;
-    return -1;
-#else
     if (!app || !ifname) {
         return -1;
     }
@@ -84,7 +122,6 @@ csilk_io_perf_enable_xdp(csilk_app_t* app, const char* ifname, uint32_t queue_id
 
     (void)queue_id;
     return 0;
-#endif
 }
 
 /**
