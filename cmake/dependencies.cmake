@@ -62,6 +62,30 @@ if(CSILK_ENABLE_WAMR)
   endif()
 endif()
 
+# ── ngtcp2 + nghttp3 (HTTP/3 QUIC groundwork) — optional ────────────────
+if(CSILK_ENABLE_HTTP3)
+  message(STATUS "HTTP/3 groundwork enabled — fetching ngtcp2 + nghttp3")
+  FetchContent_Declare(
+    ngtcp2
+    GIT_REPOSITORY https://github.com/ngtcp2/ngtcp2.git
+    GIT_TAG        v1.9.0
+    GIT_SHALLOW    TRUE
+  )
+  FetchContent_Declare(
+    nghttp3
+    GIT_REPOSITORY https://github.com/ngtcp2/nghttp3.git
+    GIT_TAG        v1.9.0
+    GIT_SHALLOW    TRUE
+  )
+  # ngtcp2 requires nghttp3 headers
+  FetchContent_MakeAvailable(ngtcp2)
+  FetchContent_MakeAvailable(nghttp3)
+  if(ngtcp2_SOURCE_DIR)
+    set(CSILK_HAS_NGTCP2 TRUE)
+    add_compile_definitions(CSILK_HAS_NGTCP2=1)
+  endif()
+endif()
+
 # ── I/O Backend (io_uring or libuv) ──────────────────────────────────────
 if(CSILK_USE_URING)
   message(STATUS "io_uring backend selected — fetching liburing")
