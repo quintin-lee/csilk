@@ -9,6 +9,50 @@ on:
 jobs:
   coverage:
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: csilk_user
+          POSTGRES_PASSWORD: csilk_password
+          POSTGRES_DB: csilk_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root_password
+          MYSQL_DATABASE: csilk_test
+          MYSQL_USER: csilk_user
+          MYSQL_PASSWORD: csilk_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot_password"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
     steps:
     - uses: actions/checkout@v5
 
@@ -28,7 +72,8 @@ jobs:
           cmake build-essential gcc \
           libyaml-dev zlib1g-dev \
           libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev libuv1-dev \
+          libpq-dev default-libmysqlclient-dev libhiredis-dev libmongoc-dev libbson-dev \
+          libsqlite3-dev libuv1-dev \
           lcov gcovr
 
     - name: Configure CMake with coverage
@@ -39,6 +84,28 @@ jobs:
 
     - name: Run tests
       run: ctest --test-dir build --output-on-failure
+
+    # Real database services (postgres / mysql / redis / mongodb above) let the
+    # driver sources (HAS_MYSQL / HAS_POSTGRES / HAS_REDIS / HAS_MONGODB) compile
+    # in, and these real-connection runs feed genuine .gcov counters into the
+    # driver layer so it is reflected in the coverage gate baseline.
+    - name: Run driver real-connection tests (DB coverage)
+      env:
+        CSILK_TEST_POSTGRES_DSN: "host=127.0.0.1 port=5432 user=csilk_user password=csilk_password dbname=csilk_test"
+        CSILK_TEST_POSTGRES_REQUIRED: "1"
+        CSILK_TEST_MYSQL_DSN: "host=127.0.0.1;port=3306;user=csilk_user;password=csilk_password;dbname=csilk_test"
+        CSILK_TEST_MYSQL_REQUIRED: "1"
+        CSILK_TEST_REDIS_DSN: "127.0.0.1:6379"
+        CSILK_TEST_REDIS_REQUIRED: "1"
+        CSILK_TEST_MONGODB_URI: "mongodb://127.0.0.1:27017/csilk_test"
+        CSILK_TEST_MONGODB_REQUIRED: "1"
+      run: |
+        build/test_db_postgres
+        build/test_db_mysql
+        build/test_db_redis
+        build/test_mongodb
+        build/test_db_abstraction
+        build/test_db_sqlite
 
     - name: Generate coverage report
       run: |
