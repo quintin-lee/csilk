@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <pthread.h>
 
@@ -255,19 +256,27 @@ test_dynamic_library_reload(void)
     fclose(f1);
 
     /* Compile plugin v1 */
-    char        compile_cmd[1024];
-    char        cwd_buf[512];
-    const char* cwd = getcwd(cwd_buf, sizeof(cwd_buf));
-    if (!cwd) {
-        cwd = ".";
+    /* ctest runs with cwd = the build dir. The umbrella header csilk.h pulls
+     * in the generated csilk/version.h, which lives under ./include (built
+     * generated headers); the public headers are under ../include. Add both.
+     * The plugin must locate libcsilk at load time, so embed an absolute
+     * rpath to the build dir (getcwd) rather than relying on the host's
+     * already-loaded copy (the .so records a DT_NEEDED for libcsilk). */
+    int         have_src_include = (access("../include/csilk/csilk.h", R_OK) == 0);
+    int         have_gen_include = (access("./include/csilk/version.h", R_OK) == 0);
+    char        build_dir[512];
+    const char* bd = getcwd(build_dir, sizeof(build_dir));
+    if (!bd) {
+        bd = ".";
     }
+    char compile_cmd[1400];
     snprintf(compile_cmd,
              sizeof(compile_cmd),
-             "cc -shared -fPIC -Iinclude -Ibuild/include -Ibuild_uring/include -Isrc/core %s "
-             "-Lbuild -Lbuild_uring -lcsilk -Wl,-rpath,%s/build -Wl,-rpath,%s/build_uring -o %s",
+             "cc -shared -fPIC -I%s %s -L. -lcsilk -Wl,-rpath,'%s' %s -o %s",
+             have_src_include ? "../include" : "include",
+             have_gen_include ? "-I./include" : "",
+             bd,
              src_file,
-             cwd,
-             cwd,
              so_file);
     int rc = system(compile_cmd);
     if (rc != 0) {

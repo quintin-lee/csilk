@@ -324,19 +324,38 @@ parse_yaml_file(const char* path)
                 break;
             }
             csilk_json_t* obj = csilk_json_object();
+            if (!obj) {
+                done = 1;
+                break;
+            }
             if (!root) {
                 root = obj;
+                /* Root container owns its doc; keep it on the stack so the
+                 * parent walk never reads an uninitialised slot. */
+                stack[stack_ptr++] = obj;
             } else {
                 csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : NULL;
+                /* A nested container is absorbed into the parent's yyjson doc
+                 * (the standalone handle is freed by the add/append call). We
+                 * must push the live in-doc view back, not the freed handle. */
                 if (parent && csilk_json_is_array(parent)) {
                     csilk_json_array_append(parent, obj);
+                    obj = csilk_json_array_get(parent, csilk_json_array_size(parent) - 1);
                 } else if (parent && csilk_json_is_object(parent) && current_key) {
-                    csilk_json_add_object(parent, current_key, obj);
-                    free(current_key);
+                    char* key = current_key;
+                    csilk_json_add_object(parent, key, obj);
+                    obj = csilk_json_get_object(parent, key);
+                    free(key);
                     current_key = NULL;
+                } else {
+                    /* Orphan container with no valid parent: drop it. */
+                    csilk_json_free(obj);
+                    obj = NULL;
+                }
+                if (obj) {
+                    stack[stack_ptr++] = obj;
                 }
             }
-            stack[stack_ptr++] = obj;
             break;
         }
         case YAML_SEQUENCE_START_EVENT: {
@@ -346,19 +365,32 @@ parse_yaml_file(const char* path)
                 break;
             }
             csilk_json_t* arr = csilk_json_array();
+            if (!arr) {
+                done = 1;
+                break;
+            }
             if (!root) {
                 root = arr;
+                stack[stack_ptr++] = arr;
             } else {
                 csilk_json_t* parent = stack_ptr > 0 ? stack[stack_ptr - 1] : NULL;
                 if (parent && csilk_json_is_array(parent)) {
                     csilk_json_array_append(parent, arr);
+                    arr = csilk_json_array_get(parent, csilk_json_array_size(parent) - 1);
                 } else if (parent && csilk_json_is_object(parent) && current_key) {
-                    csilk_json_add_object(parent, current_key, arr);
-                    free(current_key);
+                    char* key = current_key;
+                    csilk_json_add_object(parent, key, arr);
+                    arr = csilk_json_get_array(parent, key);
+                    free(key);
                     current_key = NULL;
+                } else {
+                    csilk_json_free(arr);
+                    arr = NULL;
+                }
+                if (arr) {
+                    stack[stack_ptr++] = arr;
                 }
             }
-            stack[stack_ptr++] = arr;
             break;
         }
         case YAML_SCALAR_EVENT: {
