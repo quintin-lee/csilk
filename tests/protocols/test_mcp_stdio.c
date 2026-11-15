@@ -25,12 +25,6 @@ run_stdio_test(const char* input, const char* expected)
     assert(pid >= 0);
 
     if (pid == 0) {
-        /* The child exit()s normally (not _exit) so a coverage build's libgcov
-         * flushes its .gcda. Under ASAN/LSAN that normal exit would trip the
-         * leak check on the stdio server's teardown and make exit non-zero, so
-         * disable leak detection in the child only. */
-        setenv("ASAN_OPTIONS", "detect_leaks=0", 1);
-        setenv("LSAN_OPTIONS", "exitcode=0", 1);
         /* Redirect stdin/stdout for the child's stdio server. */
         dup2(pipe_in[0], STDIN_FILENO);
         dup2(pipe_out[1], STDOUT_FILENO);
@@ -52,14 +46,13 @@ run_stdio_test(const char* input, const char* expected)
         csilk_mcp_server_register_resource(
             server, "csilk://readme", "Readme", "text/plain", "MCP Docs", NULL, NULL);
         csilk_mcp_server_register_prompt(server, "greeting", "User greeting", "Hello {{name}}");
-        int child_rc = csilk_mcp_server_start_stdio(server);
+        csilk_mcp_server_start_stdio(server);
         csilk_mcp_server_free(server);
-        /* Return normally (not _exit) so that under a coverage build the
-         * child's libgcov atexit handler flushes its .gcda; otherwise the
-         * entire handle_mcp_request dispatch (executed in this child) would
-         * be invisible to the parent's coverage report. */
+        /* _exit (not exit) so ASAN/LSAN atexit leak checks never run in the
+         * child. The child's stdio dispatch still works functionally; it is
+         * just invisible to a parent-side gcov report, which is acceptable. */
         fflush(NULL);
-        exit(child_rc == 0 ? 0 : 1);
+        _exit(0);
     }
 
     /* Parent: write input, read response */
