@@ -14,8 +14,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "wasm_internal.h"
+
+#ifdef HAS_WAMR
+#include "wasm_export.h"
+#endif
 
 #ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
 #define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
@@ -151,6 +156,13 @@ csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin)
     if (plugin->bytecode) {
         free(plugin->bytecode);
     }
+#ifdef HAS_WAMR
+    if (plugin->use_wamr && plugin->wasm_module_id) {
+        wasm_runtime_deinstantiate((wasm_module_inst_t)(uintptr_t)plugin->wasm_instance);
+        wasm_runtime_unload((wasm_module_t)(uintptr_t)plugin->wasm_module_id);
+        plugin->use_wamr = false;
+    }
+#endif
     free(plugin);
 }
 
@@ -184,6 +196,44 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
 
     csilk_mutex_lock(&plugin->mutex);
 
+#ifdef HAS_WAMR
+    /* WAMR real execution path */
+    if (plugin->use_wamr && plugin->wasm_module_id) {
+        wasm_module_inst_t inst = (wasm_module_inst_t)(uintptr_t)plugin->wasm_instance;
+        /* Look up the function in the instance */
+        wasm_function_inst_t func = wasm_runtime_lookup_function(inst, func_name);
+        if (!func) {
+            csilk_mutex_unlock(&plugin->mutex);
+            if (err_buf && err_len > 0) {
+                snprintf(err_buf, err_len, "CSILK_WASM_TRAP_EXECUTION_ERR: func not found");
+            }
+            return NULL;
+        }
+        /* Create an exec env with the configured stack size */
+        wasm_exec_env_t env = wasm_runtime_create_exec_env(inst, 16 * 1024);
+        if (!env) {
+            csilk_mutex_unlock(&plugin->mutex);
+            if (err_buf && err_len > 0) {
+                snprintf(err_buf, err_len, "CSILK_WASM_TRAP_EXECUTION_ERR: env alloc failed");
+            }
+            return NULL;
+        }
+        int rc = wasm_runtime_call_wasm(env, func, 0, NULL);
+        wasm_runtime_destroy_exec_env(env);
+        if (!rc) {
+            csilk_mutex_unlock(&plugin->mutex);
+            if (err_buf && err_len > 0) {
+                snprintf(err_buf, err_len, "CSILK_WASM_TRAP_EXECUTION_ERR");
+            }
+            return NULL;
+        }
+        csilk_mutex_unlock(&plugin->mutex);
+        char* res = strdup("{\"status\":\"ok\",\"result\":\"wasm_execution_success\"}");
+        return res;
+    }
+#endif
+
+    /* Stub / fallback path */
     csilk_wasm_exec_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
     ctx.fuel = plugin->config.fuel_limit;

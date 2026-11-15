@@ -45,6 +45,11 @@ struct csilk_wasm_plugin_s {
     uint8_t*            bytecode;
     size_t              bytecode_size;
     char                entry_point[64];
+#ifdef HAS_WAMR
+    uint32_t wasm_module_id; /* WAMR module descriptor */
+    uint32_t wasm_instance;  /* WAMR instance descriptor */
+    bool     use_wamr;
+#endif
 };
 
 void* csilk_wasm_get_memory_slice(csilk_wasm_memory_t* mem, uint32_t offset, uint32_t len);

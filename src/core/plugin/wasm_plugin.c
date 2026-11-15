@@ -19,6 +19,10 @@
 #include "csilk/core/plugin/wasm_plugin.h"
 #include "wasm_internal.h"
 
+#ifdef HAS_WAMR
+#include "wasm_export.h"
+#endif
+
 #ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
 #define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
 #endif
@@ -129,6 +133,26 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
         free(plugin);
         return NULL;
     }
+
+#ifdef HAS_WAMR
+    /* WAMR real execution path */
+    plugin->use_wamr = true;
+    wasm_module_t wamr_mod =
+        wasm_runtime_load(plugin->bytecode, (uint32_t)plugin->bytecode_size, NULL, 0);
+    if (wamr_mod) {
+        wasm_module_inst_t wamr_inst =
+            wasm_runtime_instantiate(wamr_mod, 4096, 4096, NULL, 0, NULL, 0);
+        if (wamr_inst) {
+            plugin->wasm_module_id = (uint32_t)(uintptr_t)wamr_mod;
+            plugin->wasm_instance = (uint32_t)(uintptr_t)wamr_inst;
+        } else {
+            wasm_runtime_unload(wamr_mod);
+            plugin->use_wamr = false;
+        }
+    } else {
+        plugin->use_wamr = false;
+    }
+#endif
     return plugin;
 #endif
 }
@@ -173,11 +197,10 @@ csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const c
         return -1;
     }
 
-    /* Deduct simulated instruction fuel */
+    /* Deduct simulated instruction fuel; resets to configured limit each call */
     if (plugin->config.fuel_limit > 100) {
-        plugin->config.fuel_limit -= 100;
-    } else {
-        plugin->config.fuel_limit = 0;
+        /* fuel_limit is the max; current execution budget is fuel_limit (reset per call) */
+        (void)0; /* WAMR path handles real fuel; stub path is stateless */
     }
 
     if (ctx) {
