@@ -140,11 +140,10 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
     wasm_module_t wamr_mod =
         wasm_runtime_load(plugin->bytecode, (uint32_t)plugin->bytecode_size, NULL, 0);
     if (wamr_mod) {
-        wasm_module_inst_t wamr_inst =
-            wasm_runtime_instantiate(wamr_mod, 4096, 4096, NULL, 0, NULL, 0);
+        wasm_module_inst_t wamr_inst = wasm_runtime_instantiate(wamr_mod, 4096, 4096, NULL, 0);
         if (wamr_inst) {
-            plugin->wasm_module_id = (uint32_t)(uintptr_t)wamr_mod;
-            plugin->wasm_instance = (uint32_t)(uintptr_t)wamr_inst;
+            plugin->wasm_module_id = (uintptr_t)wamr_mod;
+            plugin->wasm_instance = (uintptr_t)wamr_inst;
         } else {
             wasm_runtime_unload(wamr_mod);
             plugin->use_wamr = false;

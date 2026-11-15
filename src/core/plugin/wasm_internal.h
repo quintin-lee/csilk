@@ -46,9 +46,9 @@ struct csilk_wasm_plugin_s {
     size_t              bytecode_size;
     char                entry_point[64];
 #ifdef HAS_WAMR
-    uint32_t wasm_module_id; /* WAMR module descriptor */
-    uint32_t wasm_instance;  /* WAMR instance descriptor */
-    bool     use_wamr;
+    uintptr_t wasm_module_id; /* WAMR module descriptor */
+    uintptr_t wasm_instance;  /* WAMR instance descriptor */
+    bool      use_wamr;
 #endif
 };
 

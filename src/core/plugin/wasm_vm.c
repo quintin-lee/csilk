@@ -153,16 +153,21 @@ csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin)
     if (plugin->memory.data && !plugin->memory.is_mapped) {
         free(plugin->memory.data);
     }
-    if (plugin->bytecode) {
-        free(plugin->bytecode);
-    }
 #ifdef HAS_WAMR
+    /* WAMR owns the bytecode buffer after wasm_runtime_load — must unload
+     * before freeing the bytecode to avoid use-after-free */
     if (plugin->use_wamr && plugin->wasm_module_id) {
-        wasm_runtime_deinstantiate((wasm_module_inst_t)(uintptr_t)plugin->wasm_instance);
+        /* WAMR owns the bytecode buffer after wasm_runtime_load — must unload
+         * before freeing the bytecode to avoid use-after-free */
         wasm_runtime_unload((wasm_module_t)(uintptr_t)plugin->wasm_module_id);
+        plugin->wasm_module_id = 0;
+        plugin->wasm_instance = 0;
         plugin->use_wamr = false;
     }
 #endif
+    if (plugin->bytecode) {
+        free(plugin->bytecode);
+    }
     free(plugin);
 }
 
@@ -199,8 +204,7 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
 #ifdef HAS_WAMR
     /* WAMR real execution path */
     if (plugin->use_wamr && plugin->wasm_module_id) {
-        wasm_module_inst_t inst = (wasm_module_inst_t)(uintptr_t)plugin->wasm_instance;
-        /* Look up the function in the instance */
+        wasm_module_inst_t   inst = (wasm_module_inst_t)(uintptr_t)plugin->wasm_instance;
         wasm_function_inst_t func = wasm_runtime_lookup_function(inst, func_name);
         if (!func) {
             csilk_mutex_unlock(&plugin->mutex);
