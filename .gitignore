@@ -21,6 +21,12 @@ cmake_install.cmake
 config.yaml
 Makefile
 
+# Code coverage data (gcov/gcovr build artifacts)
+*.gcda
+*.gcno
+*.gcov
+*.gcov.json.gz
+
 # Test/example binaries produced in project root
 /test_*
 /example_*
