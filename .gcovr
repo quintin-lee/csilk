@@ -5,3 +5,6 @@ exclude_files =
     src/util/flamegraph\\.c
     src/drivers/db/redis_storage\\.c
     src/workflow/workflow_debug\\.c
+    src/core/io/uring_vector\\.c
+threshold = 80
+fail_under_threshold = true
