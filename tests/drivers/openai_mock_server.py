@@ -42,7 +42,15 @@ class OpenAIMockHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-        if self.path.endswith('/chat/completions'):
+        # Ollama endpoints are checked first: /api/embeddings would otherwise be
+        # swallowed by the OpenAI /embeddings prefix match (endswith).
+        if self.path.endswith('/api/chat'):
+            self.handle_ollama_chat(body)
+        elif self.path.endswith('/api/embeddings'):
+            self.handle_ollama_embeddings(body)
+        elif self.path.endswith('/api/generate'):
+            self.handle_ollama_generate(body)
+        elif self.path.endswith('/chat/completions'):
             self.handle_chat_completions(body)
         elif self.path.endswith('/embeddings'):
             self.handle_embeddings(body)
@@ -277,6 +285,65 @@ class OpenAIMockHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(out_bytes)))
         self.end_headers()
         self.wfile.write(out_bytes)
+
+    def _send_json(self, resp):
+        out_bytes = json.dumps(resp).encode('utf-8')
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(out_bytes)))
+        self.end_headers()
+        self.wfile.write(out_bytes)
+
+    def handle_ollama_chat(self, body):
+        is_stream = body.get('stream', False)
+        tools = body.get('tools', [])
+        if is_stream:
+            # Ollama streaming returns NDJSON lines (one JSON object per line).
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/x-ndjson')
+            self.send_header('Connection', 'close')
+            self.end_headers()
+            if tools or 'weather' in json.dumps(body).lower():
+                lines = [
+                    {"model": body.get('model', 'llama3'), "message": {"role": "assistant", "content": ""}, "done": False},
+                    {"model": body.get('model', 'llama3'),
+                     "message": {"role": "assistant",
+                                 "content": "",
+                                 "tool_calls": [{"function": {"name": "get_weather", "arguments": {"city": "Paris"}}}]},
+                     "done": True, "prompt_eval_count": 10, "eval_count": 4},
+                ]
+            else:
+                lines = [
+                    {"model": body.get('model', 'llama3'), "message": {"role": "assistant", "content": "Hello"}, "done": False},
+                    {"model": body.get('model', 'llama3'), "message": {"role": "assistant", "content": " from Ollama mock"}, "done": True, "prompt_eval_count": 5, "eval_count": 7},
+                ]
+            for ln in lines:
+                self.wfile.write((json.dumps(ln) + "\n").encode('utf-8'))
+            return
+        # Non-streaming: Ollama returns {model, message:{role,content}, done, prompt_eval_count, eval_count}
+        if tools:
+            msg = {
+                "role": "assistant", "content": "",
+                "tool_calls": [{"function": {"name": "get_weather", "arguments": {"city": "Berlin"}}}],
+            }
+        else:
+            msg = {"role": "assistant", "content": "Ollama mock reply"}
+        self._send_json({
+            "model": body.get('model', 'llama3'),
+            "message": msg,
+            "done": True,
+            "prompt_eval_count": 6,
+            "eval_count": 8,
+            "total_duration": 1.0,
+        })
+
+    def handle_ollama_embeddings(self, body):
+        # Ollama /api/embeddings returns a single embedding array for one prompt.
+        self._send_json({"model": body.get('model', 'llama3'), "embedding": [0.1, 0.2, 0.3, 0.4]})
+
+    def handle_ollama_generate(self, body):
+        self._send_json({"model": body.get('model', 'llama3'), "response": "generated", "done": True,
+                         "prompt_eval_count": 2, "eval_count": 3})
 
     def handle_anthropic_messages(self, body):
         is_stream = body.get('stream', False)
