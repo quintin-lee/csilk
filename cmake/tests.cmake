@@ -237,11 +237,13 @@ set(CSILK_WORKFLOW_TESTS
     test_wf_wasm_node
     test_ai_react_loop
     test_agent_memory
+    test_wf_tools_monitor
 )
 set(CSILK_WORKFLOW_TEST_DIRS
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
+    workflow
     workflow
     workflow
 )
