@@ -139,7 +139,11 @@ main(void)
     assert(csilk_mvcc_cache_get_view(NULL, "key", NULL) == -1);
     assert(csilk_mvcc_cache_set(NULL, "key", "val", 4) == -1);
     assert(csilk_mvcc_cache_delete(NULL, "key") == -1);
-    assert(csilk_mvcc_cache_new(0) != NULL);
+    /* new(0) must still return a valid object even with a zero bucket count;
+     * keep the handle so we can release it and avoid a leak under LSAN. */
+    csilk_mvcc_cache_t* edge = csilk_mvcc_cache_new(0);
+    assert(edge != NULL);
+    csilk_mvcc_cache_free(edge);
 
     printf(" passed\n");
     printf("test_mvcc_cache_snapshot: ALL PASSED\n");

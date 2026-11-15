@@ -277,6 +277,11 @@ test_hnsw_1000dim_recall_95pct(void)
                 found = 1;
                 break;
             }
+        }
+        /* Free every doc_id string regardless of where (or whether) the hit
+         * occurred — the early break above leaves the remaining entries
+         * un-freed, which LSAN detects as a leak. */
+        for (size_t i = 0; i < count; i++) {
             free(res_ids[i]);
         }
         free(res_ids);
