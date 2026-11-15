@@ -182,7 +182,7 @@ libuv（默认）、liburing（可选，`-DCSILK_USE_URING=ON`）、nghttp2 和 
 在 C/C++ 依赖管理中，`csilk` 已提供主流的全球包管理生态支持：
 
 * **vcpkg (CMake)**: `vcpkg install csilk`
-* **Conan 2.0+**: `conan create . --version 0.9.0`
+* **Conan 2.0+**: `conan create . --version 1.0.0`
 * **Homebrew (macOS)**: `brew install quintin-lee/tap/csilk`
 
 ### 安装（Debian/Ubuntu）

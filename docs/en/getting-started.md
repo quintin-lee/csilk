@@ -224,7 +224,7 @@ make
 `csilk` can be installed via several global package managers:
 
 * **vcpkg**: `vcpkg install csilk`
-* **Conan 2.0+**: `conan create . --version 0.9.0`
+* **Conan 2.0+**: `conan create . --version 1.0.0`
 * **Homebrew (macOS)**: `brew install quintin-lee/tap/csilk`
 
 2. Install the python package in development mode:
