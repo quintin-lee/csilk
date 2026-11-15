@@ -44,6 +44,11 @@ option(ENABLE_OOM_TEST "Enable OOM (Out Of Memory) testing" OFF)
 option(DEBUG_ARENA "Enable arena redzone guards for buffer overflow detection" OFF)
 option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" ON)
 option(CSILK_DEPRECATE_CTX_TYPES "Enable compiler deprecation warnings for direct internal context struct access" ON)
+option(CSILK_ENABLE_WAMR "Integrate WAMR (WebAssembly Micro Runtime) for real WASM plugin execution" OFF)
+if(CSILK_ENABLE_WAMR)
+    set(CSILK_ENABLE_EXPERIMENTAL_STUBS OFF CACHE BOOL "" FORCE)
+    message(STATUS "WAMR enabled — CSILK_ENABLE_EXPERIMENTAL_STUBS forced OFF")
+endif()
 option(CSILK_ENABLE_EXPERIMENTAL_STUBS
        "Enable experimental/simulated stub modules (AF_XDP/DPDK memory-ring simulations, WASM stub VM, HTTP/3 UDP listener placeholder)"
        OFF)
