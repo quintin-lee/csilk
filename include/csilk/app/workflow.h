@@ -107,6 +107,10 @@ typedef struct {
     int         stream;               /**< Enable token streaming to monitors. */
     int         max_history_messages; /**< Max messages to keep in history (0 =
                                unlimited). */
+    /* Optional AI driver name (e.g. "openai", "ollama"). When NULL the built-in
+     * "openai" driver is used.  Tests can inject a registered mock driver here to
+     * exercise the AI node handler without a live API. */
+    const char* driver;
 } csilk_ai_config_t;
 
 /**
