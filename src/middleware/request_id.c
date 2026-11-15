@@ -128,7 +128,7 @@ csilk_ready_check_handler(csilk_ctx_t* c)
     const char* reason = NULL;
 
     /* 1. Check MQ Health */
-    csilk_mq_stats_t mq;
+    csilk_mq_stats_t mq = {0};
     csilk_mq_get_stats(csilk_server_get_mq(csilk_ctx_get_server(c)), &mq);
     if (mq.queue_depth > 1000) { /* Arbitrary threshold for saturation */
         is_healthy = 0;
