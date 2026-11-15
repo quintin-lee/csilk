@@ -53,10 +53,11 @@ else()
     message(STATUS "Experimental/simulated stubs DISABLED (fail-closed stubs for AF_XDP, DPDK, WASM VM, HTTP/3 listener)")
 endif()
 
-# ── Configurable compile-time constants ──────────────────────────────────
+# ── Configurable compile-time constants ────────────────────────────────────
 set(CSILK_HEADER_BUCKETS 16  CACHE STRING "Header hash-table bucket count")
 set(CSILK_MAX_PARAMS      20  CACHE STRING "Max URL path parameters per request")
 set(CSILK_MAX_STORAGE    64  CACHE STRING "Max context key-value storage entries")
 set(CSILK_DEFAULT_ARENA_SIZE 4096 CACHE STRING "Default arena chunk size in bytes")
 set(CSILK_ARENA_TIER_COUNT 3   CACHE STRING "Number of arena chunk size tiers")
 set(CSILK_MAX_TLS_CHUNKS  8   CACHE STRING "Max cached arena chunks per tier")
+set(CSILK_WF_CLUSTER_MAX_BINDINGS 128 CACHE STRING "Max workflow-to-Raft cluster bindings")

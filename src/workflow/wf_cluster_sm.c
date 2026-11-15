@@ -6,6 +6,7 @@
  * @copyright MIT License
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,7 +16,10 @@
 #include "csilk/messaging/raft.h"
 #include "workflow_internal.h"
 
-#define WF_CLUSTER_MAX_BINDINGS 32
+#ifndef CSILK_WF_CLUSTER_MAX_BINDINGS
+#define CSILK_WF_CLUSTER_MAX_BINDINGS 128
+#endif
+#define WF_CLUSTER_MAX_BINDINGS CSILK_WF_CLUSTER_MAX_BINDINGS
 #define WF_CLUSTER_PAYLOAD_CAP 1024
 
 typedef struct {
@@ -177,7 +181,7 @@ csilk_wf_cluster_bind_raft(csilk_wf_manager_t* mgr, csilk_raft_node_t* raft_node
         } else {
             if (s_binding_count >= WF_CLUSTER_MAX_BINDINGS) {
                 csilk_mutex_unlock(&s_binding_mutex);
-                return -1;
+                return -E2BIG;
             }
             slot = &s_bindings[s_binding_count++];
         }
