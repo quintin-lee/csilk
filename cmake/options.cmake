@@ -46,7 +46,7 @@ option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" ON)
 option(CSILK_DEPRECATE_CTX_TYPES "Enable compiler deprecation warnings for direct internal context struct access" ON)
 option(CSILK_ENABLE_EXPERIMENTAL_STUBS
        "Enable experimental/simulated stub modules (AF_XDP/DPDK memory-ring simulations, WASM stub VM, HTTP/3 UDP listener placeholder)"
-       ON)
+       OFF)
 if(CSILK_ENABLE_EXPERIMENTAL_STUBS)
     message(STATUS "Experimental/simulated stubs ENABLED (AF_XDP/DPDK in-memory rings, WASM fuel-only stub VM, HTTP/3 UDP listener skeleton)")
 else()
