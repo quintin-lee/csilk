@@ -2,6 +2,8 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/stat.h> /* geteuid check for root */
+#include <unistd.h>
 #include "csilk/core/io/af_xdp.h"
 
 int
@@ -22,11 +24,11 @@ main(void)
 #else
     assert(xsk != NULL);
 
-    /* Test 1: TX packet burst */
+    /* When running without CAP_NET_RAW, the real AF_XDP socket fails and the
+     * cursor-simulation fallback handles TX/RX. Verify both paths work. */
     const char* pkt = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
     assert(csilk_xdp_tx_burst(xsk, (const uint8_t*)pkt, strlen(pkt)) == 0);
 
-    /* Test 2: RX packet burst */
     const uint8_t* rx_buf = NULL;
     size_t         rx_len = 0;
     assert(csilk_xdp_rx_burst(xsk, &rx_buf, &rx_len) == 0);
