@@ -199,12 +199,13 @@ test_distributed_ratelimit_ip_isolation(void)
     printf("Testing distributed rate limiter IP isolation...\n");
     mock_reset();
 
-    /* Different keys (simulating different IPs) should have independent counters */
+    /* Different keys (simulating different IPs) should have independent counters.
+     * No reset between IPs — all three keys share the same mock table, so a
+     * well-isolated implementation keeps per-IP counters independent. */
     const char* keys[] = {"ratelimit:10.0.1.1", "ratelimit:10.0.1.2", "ratelimit:10.0.1.3"};
     enum { LIMIT = 2 };
 
     for (int k = 0; k < 3; k++) {
-        mock_reset();
         for (int req = 0; req < LIMIT + 1; req++) {
             long long ttl_ms = 0;
             long long val = mock_incr_with_ttl(NULL, keys[k], 60, &ttl_ms);

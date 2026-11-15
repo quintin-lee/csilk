@@ -21,14 +21,9 @@
 #include <sys/socket.h>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <net/if.h> /* provides if_nametoindex */
 /* AF_XDP definitions (kernel >= 4.18) */
 #ifndef AF_XDP
 #define AF_XDP 44
-#endif
-/* XDP UMEM / ring ioctl commands */
-#ifndef XDP_API_VERSION_UMEM_AREA
-#define XDP_API_VERSION_UMEM_AREA 1
 #endif
 /* XDP ioctl structs */
 struct xdp_umem_reg {
@@ -39,10 +34,6 @@ struct xdp_umem_reg {
 };
 struct xdp_ring {
     uint32_t size; /* number of descriptors */
-};
-struct xdp_rx_info {
-    uint32_t len;
-    uint32_t heads;
 };
 /* ioctl command numbers */
 #ifndef XDP_SET_UMEM
@@ -55,10 +46,6 @@ struct xdp_rx_info {
 #define XDP_SET_TX_RING _IOW('X', 3, struct xdp_ring)
 #endif
 #endif /* __linux__ */
-
-#ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
-#define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
-#endif
 
 struct csilk_xdp_socket_s {
     csilk_xdp_config_t config;
@@ -89,11 +76,6 @@ struct csilk_xdp_socket_s {
 csilk_xdp_socket_t*
 csilk_xdp_socket_new(const csilk_xdp_config_t* config)
 {
-#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
-    (void)config;
-    errno = ENOTSUP;
-    return NULL;
-#else
     if (!config) {
         return NULL;
     }
@@ -169,7 +151,6 @@ csilk_xdp_socket_new(const csilk_xdp_config_t* config)
 #endif
 
     return xsk;
-#endif
 }
 
 /**
@@ -212,13 +193,6 @@ csilk_xdp_socket_free(csilk_xdp_socket_t* xsk)
 int
 csilk_xdp_rx_burst(csilk_xdp_socket_t* xsk, const uint8_t** frame_data, size_t* frame_len)
 {
-#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
-    (void)xsk;
-    (void)frame_data;
-    (void)frame_len;
-    errno = ENOTSUP;
-    return -ENOTSUP;
-#else
     if (!xsk || !frame_data || !frame_len) {
         return -1;
     }
@@ -231,7 +205,6 @@ csilk_xdp_rx_burst(csilk_xdp_socket_t* xsk, const uint8_t** frame_data, size_t* 
     xsk->rx_head++;
 
     return 0;
-#endif
 }
 
 /**
@@ -245,13 +218,6 @@ csilk_xdp_rx_burst(csilk_xdp_socket_t* xsk, const uint8_t** frame_data, size_t* 
 int
 csilk_xdp_tx_burst(csilk_xdp_socket_t* xsk, const uint8_t* frame_data, size_t frame_len)
 {
-#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
-    (void)xsk;
-    (void)frame_data;
-    (void)frame_len;
-    errno = ENOTSUP;
-    return -ENOTSUP;
-#else
     if (!xsk || !frame_data || frame_len == 0) {
         return -1;
     }
@@ -267,5 +233,4 @@ csilk_xdp_tx_burst(csilk_xdp_socket_t* xsk, const uint8_t* frame_data, size_t fr
     xsk->tx_head++;
 
     return 0;
-#endif
 }

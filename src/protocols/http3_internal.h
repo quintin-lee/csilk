@@ -77,10 +77,12 @@ typedef struct {
     void (*destroy)(void* transport);
 } csilk_quic_transport_t;
 
-#ifdef CSILK_HAS_NGTCP2
-#include <ngtcp2/ngtcp2.h>
-#include <nghttp3/nghttp3.h>
-#endif
+/*
+ * NOTE: ngtcp2/nghttp3 types are intentionally NOT included here.
+ * The v1.1 header defines only the transport vtable (architectural groundwork).
+ * Concrete ngtcp2/nghttp3 integration types and state machines are added
+ * in the v1.2 implementation file (src/protocols/http3.c).
+ */
 
 #ifdef __cplusplus
 }

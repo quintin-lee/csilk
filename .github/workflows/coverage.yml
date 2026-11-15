@@ -114,7 +114,7 @@ jobs:
 
     - name: Check coverage threshold (80%)
       run: |
-        gcovr -r . build/ --filter src/ --gcov-ignore-parse-errors=negative_hits.warn --threshold 80 --fail-under-threshold
+        gcovr -r . build/ --filter src/ --gcov-ignore-parse-errors=negative_hits.warn --threshold 80 --fail-under-threshold --omit-empty
       if: always()
 
     - name: Upload coverage report
