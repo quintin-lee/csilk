@@ -135,8 +135,9 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
     }
 
 #ifdef HAS_WAMR
-    /* WAMR real execution path */
-    plugin->use_wamr = true;
+    /* WAMR real execution path: only set use_wamr=true after both load and
+     * instantiate succeed, avoiding a fragile intermediate state where
+     * use_wamr=true but wasm_module_id=0. */
     wasm_module_t wamr_mod =
         wasm_runtime_load(plugin->bytecode, (uint32_t)plugin->bytecode_size, NULL, 0);
     if (wamr_mod) {
@@ -144,13 +145,12 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
         if (wamr_inst) {
             plugin->wasm_module_id = (uintptr_t)wamr_mod;
             plugin->wasm_instance = (uintptr_t)wamr_inst;
+            plugin->use_wamr = true;
         } else {
             wasm_runtime_unload(wamr_mod);
-            plugin->use_wamr = false;
         }
-    } else {
-        plugin->use_wamr = false;
     }
+    /* use_wamr remains false (calloc zero-init) if WAMR load/instantiate failed */
 #endif
     return plugin;
 #endif

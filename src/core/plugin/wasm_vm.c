@@ -154,11 +154,11 @@ csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin)
         free(plugin->memory.data);
     }
 #ifdef HAS_WAMR
-    /* WAMR owns the bytecode buffer after wasm_runtime_load — must unload
-     * before freeing the bytecode to avoid use-after-free */
+    /* Unload the WAMR module before freeing the struct. WAMR copies the
+     * bytecode internally (wasm_runtime_load sets wasm_binary_freeable=false),
+     * so free(plugin->bytecode) below is always safe regardless of WAMR state.
+     * The unload here is for orderly WAMR-internal resource cleanup. */
     if (plugin->use_wamr && plugin->wasm_module_id) {
-        /* WAMR owns the bytecode buffer after wasm_runtime_load — must unload
-         * before freeing the bytecode to avoid use-after-free */
         wasm_runtime_unload((wasm_module_t)(uintptr_t)plugin->wasm_module_id);
         plugin->wasm_module_id = 0;
         plugin->wasm_instance = 0;

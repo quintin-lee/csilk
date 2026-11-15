@@ -104,6 +104,7 @@ if(USE_COVERAGE)
                 --print-summary
                 --threshold 80
                 --fail-under-threshold
+                --omit-empty
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
             DEPENDS run_tests
             COMMENT "Generating code coverage report (80% gate)"

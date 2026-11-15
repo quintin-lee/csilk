@@ -39,11 +39,13 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
      */
 #ifdef CSILK_HAS_NGTCP2
     /*
-     * ngtcp2 integration: initialize a client-side connection and feed
-     * the fuzz data. This exercises the ngtcp2 state machine against
-     * arbitrary input.
+     * TODO(v1.2): wire ngtcp2 state machine.
+     * When ngtcp2 is available, initialize a client-side QUIC connection
+     * and feed the fuzz data through the connection state machine to
+     * exercise ngtcp2 against arbitrary input. The groundwork (FetchContent,
+     * QUIC transport vtable) is in place for v1.1; the actual wiring
+     * arrives with the full HTTP/3 implementation in v1.2.
      */
-    /* Stub: actual ngtcp2 state machine integration arrives in v1.2 */
     (void)data;
     (void)size;
 #else

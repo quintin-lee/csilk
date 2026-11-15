@@ -32,39 +32,32 @@
 #endif
 
 /**
- * @brief Check if the kernel supports XDP sockets (AF_XDP).
+ * @brief Check if the kernel supports AF_XDP (XSK) sockets.
  *
  * Checks /sys/class/net/xsk for the XSK class directory, then falls back to
- * attempting to open an AF_XDP socket (requires CAP_NET_RAW).
+ * attempting to open an AF_XDP socket (requires CAP_NET_RAW). Result is
+ * cached after the first call to avoid repeated syscalls on hot paths.
  * @return 1 if XDP socket support is detected, 0 otherwise.
  */
 static int
 _kernel_supports_xsk(void)
 {
+    static int cached = -1; /* -1 = not yet probed */
+    if (cached >= 0) {
+        return cached;
+    }
     struct stat sb;
     if (stat("/sys/class/net/xsk", &sb) == 0 && S_ISDIR(sb.st_mode)) {
+        cached = 1;
         return 1;
     }
     int fd = socket(AF_XDP, SOCK_RAW, 0);
     if (fd >= 0) {
         close(fd);
+        cached = 1;
         return 1;
     }
-    return 0;
-}
-
-/**
- * @brief Check if the kernel's XSK feature bitmask advertises XDP support.
- * @return 1 if AF_XDP socket can be opened, 0 otherwise.
- */
-static int
-_xsk_features_present(void)
-{
-    int fd = socket(AF_XDP, SOCK_RAW, 0);
-    if (fd >= 0) {
-        close(fd);
-        return 1;
-    }
+    cached = 0;
     return 0;
 }
 
@@ -90,8 +83,8 @@ csilk_io_perf_probe(void)
     info.has_iopoll = 1;
 #endif
 
-    /* Real kernel feature detection for AF_XDP */
-    if (_kernel_supports_xsk() && _xsk_features_present()) {
+    /* Real kernel feature detection for AF_XDP (cached after first call) */
+    if (_kernel_supports_xsk()) {
         info.has_xdp_zerocopy = 1;
     }
 
