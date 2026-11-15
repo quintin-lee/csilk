@@ -114,12 +114,35 @@ test_mcp_client_bridge_to_registry(void)
     printf("test_mcp_client_bridge_to_registry passed\n");
 }
 
+/* NULL / uninitialized-client boundary guards in the MCP client layer.
+ * connect_sse returns a handle even when the endpoint is unreachable, so we
+ * can exercise the "not initialized" failure paths without a live server. */
+static void
+test_mcp_client_boundary_guards(void)
+{
+    /* NULL-client / NULL-tool-name guards. */
+    assert(csilk_mcp_client_call_tool(nullptr, "tool", "{}") == nullptr);
+    assert(csilk_mcp_client_call_tool(nullptr, nullptr, "{}") == nullptr);
+    assert(csilk_mcp_client_import_to_registry(nullptr, nullptr) != 0);
+    csilk_mcp_client_free(nullptr); /* safe no-op */
+
+    /* A client whose initialize round-trip cannot complete (no live server)
+     * must have call_tool fail cleanly and return NULL. */
+    csilk_mcp_client_t* dead = csilk_mcp_client_connect_sse("http://127.0.0.1:1/mcp/sse");
+    assert(dead != nullptr);
+    char* out = csilk_mcp_client_call_tool(dead, "ping", "{}");
+    assert(out == nullptr);
+    csilk_mcp_client_free(dead);
+    printf("test_mcp_client_boundary_guards passed\n");
+}
+
 int
 main(void)
 {
     test_mcp_server_creation_and_registration();
     test_mcp_client_import();
     test_mcp_client_bridge_to_registry();
+    test_mcp_client_boundary_guards();
     printf("All test_mcp_server_client tests passed!\n");
     return 0;
 }
