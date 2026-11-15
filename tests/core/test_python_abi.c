@@ -70,6 +70,7 @@ static const abi_field_desc_t f_ai_config[] = {
     ABI_FIELD(csilk_ai_config_t, max_tokens),
     ABI_FIELD(csilk_ai_config_t, stream),
     ABI_FIELD(csilk_ai_config_t, max_history_messages),
+    ABI_FIELD(csilk_ai_config_t, driver),
 };
 
 static const abi_field_desc_t f_vector_search_config[] = {
