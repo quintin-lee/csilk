@@ -18,6 +18,7 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
       "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
       "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
       "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
+      "$<$<BOOL:${CSILK_HAS_WAMR}>:HAS_WAMR>"
       "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
       "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
   )
@@ -27,6 +28,7 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
       "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
       "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
       "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
+      "$<$<BOOL:${CSILK_HAS_WAMR}>:HAS_WAMR>"
       "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
       "$<$<BOOL:${CSILK_ENABLE_EXPERIMENTAL_STUBS}>:CSILK_ENABLE_EXPERIMENTAL_STUBS=1>"
       "$<$<NOT:$<BOOL:${CSILK_ENABLE_EXPERIMENTAL_STUBS}>>:CSILK_ENABLE_EXPERIMENTAL_STUBS=0>"
@@ -125,6 +127,7 @@ function(csilk_object_setup TARGET)
       "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
       "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
       "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
+      "$<$<BOOL:${CSILK_HAS_WAMR}>:HAS_WAMR>"
       "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
       "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
   )
@@ -134,6 +137,7 @@ function(csilk_object_setup TARGET)
       "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
       "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
       "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
+      "$<$<BOOL:${CSILK_HAS_WAMR}>:HAS_WAMR>"
       "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
       "$<$<BOOL:${CSILK_ENABLE_EXPERIMENTAL_STUBS}>:CSILK_ENABLE_EXPERIMENTAL_STUBS=1>"
       "$<$<NOT:$<BOOL:${CSILK_ENABLE_EXPERIMENTAL_STUBS}>>:CSILK_ENABLE_EXPERIMENTAL_STUBS=0>"
@@ -327,6 +331,9 @@ if(NOT APPLE AND NOT WIN32)
 endif()
 
 csilk_link_module(csilk_wasm csilk_runtime)
+if(CSILK_HAS_WAMR)
+  csilk_link_module(csilk_wasm vmlib)
+endif()
 csilk_link_module(csilk_bypass csilk_runtime)
 # csilk_io_* wrappers in <csilk/core/sys_io.h> and <csilk/core/sync.h> are
 # static inline in the libuv backend, so every module whose objects reference
