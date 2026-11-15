@@ -421,6 +421,7 @@ set(CSILK_EXTRA_TEST_DIRS
 set(CSILK_ALL_TEST_NAMES
     ${CSILK_CORE_TESTS}
     test_wasm_real
+    test_ratelimit_distributed
     ${CSILK_APP_TESTS}
     ${CSILK_WORKFLOW_TESTS}
     ${CSILK_MIDDLEWARE_TESTS}
@@ -444,6 +445,7 @@ endforeach()
 
 # Standalone core tests registered outside the ZIP_LISTS loop
 add_csilk_test(test_wasm_real "${CMAKE_CURRENT_SOURCE_DIR}/tests/core/test_wasm_real.c")
+add_csilk_test(test_ratelimit_distributed "${CMAKE_CURRENT_SOURCE_DIR}/tests/middleware/test_ratelimit_distributed.c")
 
 foreach(_name _dir IN ZIP_LISTS CSILK_APP_TESTS CSILK_APP_TEST_DIRS)
     add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
