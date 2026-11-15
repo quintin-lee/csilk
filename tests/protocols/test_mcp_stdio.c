@@ -25,6 +25,12 @@ run_stdio_test(const char* input, const char* expected)
     assert(pid >= 0);
 
     if (pid == 0) {
+        /* The child exit()s normally (not _exit) so a coverage build's libgcov
+         * flushes its .gcda. Under ASAN/LSAN that normal exit would trip the
+         * leak check on the stdio server's teardown and make exit non-zero, so
+         * disable leak detection in the child only. */
+        setenv("ASAN_OPTIONS", "detect_leaks=0", 1);
+        setenv("LSAN_OPTIONS", "exitcode=0", 1);
         /* Redirect stdin/stdout for the child's stdio server. */
         dup2(pipe_in[0], STDIN_FILENO);
         dup2(pipe_out[1], STDOUT_FILENO);
