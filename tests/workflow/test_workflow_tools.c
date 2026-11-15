@@ -77,7 +77,6 @@ test_workflow_autonomous_tools()
     setenv("AGENT_API_KEY", "mock-key", 1);
 
     csilk_wf_t* wf = csilk_wf_new("agent_wf");
-
     // 1. Register tool
     csilk_wf_register_tool(wf,
                            "get_weather",
@@ -104,9 +103,48 @@ test_workflow_autonomous_tools()
     printf("test_workflow_autonomous_tools: PASS\n");
 }
 
+/* Exercises the ai_node_handler branches that the basic tool test does not:
+ * - explicit config->driver injection (new field; falls back to "openai")
+ * - max_history_messages trimming on a multi-turn loop
+ */
+void
+test_workflow_ai_node_variants(void)
+{
+    printf("Testing ai_node_handler variants (driver / history-trim / stream)...\n");
+    csilk_ai_register_driver(&mock_driver);
+    setenv("AGENT_API_KEY", "mock-key", 1);
+    g_chat_turns = 0;
+
+    /* Variant 1: explicit driver field + history trimming + streaming. */
+    csilk_wf_t*       wf = csilk_wf_new("ai_variants");
+    csilk_ai_config_t cfg = {
+        .model = "mock-model",
+        .system_msg = "Be brief.",
+        .prompt = "Hello from the agent.",
+        .temperature = 0.0,
+        .max_tokens = 128,
+        .stream = 1,
+        .max_history_messages = 2,
+        .driver = "openai", /* explicit injection of the registered mock */
+    };
+    csilk_wf_node_t* n = csilk_wf_add_ai(wf, "ai", &cfg);
+    assert(n != NULL);
+    csilk_wf_node_set_entry(n, 1);
+    csilk_wf_run(wf, nullptr, nullptr);
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+
+    /* The mock chat returns a tool call on turn 1, then text on turn 2 —
+     * reaching the message-history build, tool dispatch, and final-text path. */
+    assert(g_chat_turns >= 1);
+
+    csilk_wf_free(wf);
+    printf("test_workflow_ai_node_variants: PASS\n");
+}
+
 int
 main()
 {
     test_workflow_autonomous_tools();
+    test_workflow_ai_node_variants();
     return 0;
 }

@@ -331,7 +331,10 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
     if (!api_key) {
         return NULL;
     }
-    csilk_ai_t* ai = csilk_ai_new("openai", api_key, getenv("AGENT_API_BASE"));
+    /* Driver is injectable via config->driver (default "openai"); tests can point
+     * this at a registered mock driver to exercise the handler offline. */
+    const char* driver_name = config->driver ? config->driver : "openai";
+    csilk_ai_t* ai = csilk_ai_new(driver_name, api_key, getenv("AGENT_API_BASE"));
     if (!ai) {
         return NULL;
     }
