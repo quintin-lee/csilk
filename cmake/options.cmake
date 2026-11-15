@@ -3,8 +3,8 @@
 # Version — single source of truth.
 # FORCE: always re-derive from this file on every configure, so a stale
 # CMakeCache.txt can never pin an old version after a release bump.
-set(CSILK_VERSION_MAJOR 0 CACHE STRING "Major version" FORCE)
-set(CSILK_VERSION_MINOR 9 CACHE STRING "Minor version" FORCE)
+set(CSILK_VERSION_MAJOR 1 CACHE STRING "Major version" FORCE)
+set(CSILK_VERSION_MINOR 0 CACHE STRING "Minor version" FORCE)
 set(CSILK_VERSION_PATCH 0 CACHE STRING "Patch version" FORCE)
 set(CSILK_VERSION "${CSILK_VERSION_MAJOR}.${CSILK_VERSION_MINOR}.${CSILK_VERSION_PATCH}" CACHE STRING "Full version" FORCE)
 
