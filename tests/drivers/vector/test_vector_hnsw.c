@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -220,12 +221,86 @@ test_hnsw_save_load_persistence(void)
     printf("test_hnsw_save_load_persistence passed\n");
 }
 
+static void
+test_hnsw_1000dim_recall_95pct(void)
+{
+    printf("Testing HNSW 1000x128 recall >95%%...\n");
+    enum {
+        N = 1000,
+        DIM = 128,
+        K = 10,
+        Q = 20                                              /* queries to verify */
+    };
+    csilk_hnsw_index_t* idx = csilk_hnsw_index_new(DIM, 0); /* cosine */
+    assert(idx != nullptr);
+
+    float*   vectors = calloc((size_t)N * DIM, sizeof(float));
+    char     id_buf[32];
+    uint64_t seed = 0xDEADBEEFCAFEBABEULL;
+
+    for (int i = 0; i < N; i++) {
+        for (int d = 0; d < DIM; d++) {
+            seed ^= seed >> 12;
+            seed ^= seed << 25;
+            seed ^= seed >> 27;
+            float val = (float)((seed * 2685821657736338717ULL) & 0xFFFF) / 65535.0f;
+            vectors[(size_t)i * DIM + (size_t)d] = val * 2.0f - 1.0f;
+        }
+        /* Normalize for cosine */
+        float norm = 0.0f;
+        for (int d = 0; d < DIM; d++) {
+            norm += vectors[(size_t)i * DIM + (size_t)d] * vectors[(size_t)i * DIM + (size_t)d];
+        }
+        norm = 1.0f / (float)sqrt((double)norm + 1e-9);
+        for (int d = 0; d < DIM; d++) {
+            vectors[(size_t)i * DIM + (size_t)d] *= norm;
+        }
+        snprintf(id_buf, sizeof(id_buf), "v_%04d", i);
+        assert(csilk_hnsw_insert(idx, id_buf, &vectors[(size_t)i * DIM]) == 0);
+    }
+
+    /* Query with each of the N vectors and verify the vector itself is in top-K */
+    int total_hits = 0;
+    int total_checks = 0;
+    for (int q = 0; q < Q; q++) {
+        int    qi = (q * N) / Q; /* spread queries across the dataset */
+        char** res_ids = nullptr;
+        float* res_scores = nullptr;
+        size_t count = 0;
+        assert(csilk_hnsw_search(
+                   idx, &vectors[(size_t)qi * DIM], K, &res_ids, &res_scores, &count) == 0);
+        assert(count == K);
+        snprintf(id_buf, sizeof(id_buf), "v_%04d", qi);
+        int found = 0;
+        for (size_t i = 0; i < count; i++) {
+            if (strcmp(res_ids[i], id_buf) == 0) {
+                found = 1;
+                break;
+            }
+            free(res_ids[i]);
+        }
+        free(res_ids);
+        free(res_scores);
+        total_hits += found;
+        total_checks++;
+    }
+
+    float recall = (float)total_hits / (float)total_checks;
+    printf("  HNSW 1000x128 recall: %d/%d (%.1f%%)\n", total_hits, total_checks, recall * 100.0f);
+    assert(recall >= 0.95f); /* >95% recall requirement */
+
+    free(vectors);
+    csilk_hnsw_index_free(idx);
+    printf("test_hnsw_1000dim_recall_95pct passed\n");
+}
+
 int
 main(void)
 {
     test_hnsw_index_insertion_and_search();
     test_hnsw_multilayer_recall_and_l2();
     test_hnsw_save_load_persistence();
+    test_hnsw_1000dim_recall_95pct();
     printf("All test_vector_hnsw tests passed successfully!\n");
     return 0;
 }
