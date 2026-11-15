@@ -1,9 +1,16 @@
 /**
  * @file session.c
- * @brief Cookie-based session management middleware with thread-safe
- * protection.
+ * @brief Cookie-based session management middleware with sharded hash table
+ * storage and background expiry sweep.
+ *
+ * The session store is a 1024-bucket sharded hash table; each bucket has its
+ * own mutex so concurrent lookups on different session IDs do not contend.
+ * A global atomic counter tracks total session count for LRU eviction when
+ * csilk_session_set_max() has been called.
+ *
  * @copyright MIT License
  */
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -14,6 +21,12 @@
 
 /** @brief Default session TTL in seconds. */
 enum { SESSION_TTL = 3600 };
+
+/** @brief Number of hash buckets in the sharded session store. */
+#define SESSION_BUCKET_COUNT 1024
+
+/** @brief Maximum number of active sessions before LRU eviction. */
+#define SESSION_MAX_DEFAULT 10000
 
 /**
  * @brief Session data item (key-value pair).
@@ -32,71 +45,84 @@ typedef struct csilk_session_data_s {
  *
  * Represents an individual session with a UUID-based ID, an expiry timestamp,
  * a linked list of key-value data items, and a pointer to the next session
- * in the global store (singly-linked list).
+ * in the same hash bucket (singly-linked list).
  */
 typedef struct csilk_session_s {
     char                    id[CSILK_UUID_BUF_SIZE];
     csilk_session_data_t*   data;
     time_t                  expires_at;
-    struct csilk_session_s* next;
+    time_t                  last_access; /* LRU tracking */
+    struct csilk_session_s* next;        /* next in same bucket */
 } csilk_session_t;
 
 /**
- * @brief Global session store (singly-linked list of active sessions).
+ * @brief Per-bucket state in the sharded session store.
  *
- * Protected by a mutex. All read/write access to this pointer must
- * occur while session_mutex is held. The linked-list design is chosen
- * over a hash table for simplicity; with typical concurrency levels the
- * O(n) traversal is acceptable for <10K active sessions.
+ * Each bucket holds a mutex protecting its linked list head, so concurrent
+ * lookups on different session IDs do not block each other.
  */
-static csilk_session_t* session_store = NULL;
+typedef struct {
+    csilk_session_t* head;
+    csilk_mutex_t    mutex;
+} session_bucket_t;
+
+/** @brief Global sharded session store (array of SESSION_BUCKET_COUNT buckets). */
+static session_bucket_t session_buckets[SESSION_BUCKET_COUNT];
+
+/** @brief One-time initialization guard for all bucket mutexes. */
+static csilk_once_t session_init_once = CSILK_ONCE_INIT;
+
+/** @brief Total active session count (atomic, for LRU eviction). */
+static atomic_size_t session_count = 0;
+
+/** @brief Maximum session count limit (0 = unlimited). */
+static size_t session_max = SESSION_MAX_DEFAULT;
 
 /**
- * @brief Session store mutex — guards session_store and all linked-list
- *        operations against concurrent access.
- */
-static csilk_mutex_t session_mutex;
-
-/**
- * @brief One-time initialization guard for session_mutex.
- *
- * Ensures csilk_mutex_init is called exactly once across all threads,
- * regardless of which thread triggers the first session operation.
- */
-static csilk_once_t session_mutex_once = CSILK_ONCE_INIT;
-
-/**
- * @brief Initialize the session store mutex (called once via csilk_once).
+ * @brief Initialize all bucket mutexes (called once via csilk_once).
  */
 static void
-init_session_mutex(void)
+init_session_buckets(void)
 {
-    csilk_mutex_init(&session_mutex);
-    CSILK_LOG_I("Session: Mutex initialized");
+    for (size_t i = 0; i < SESSION_BUCKET_COUNT; i++) {
+        session_buckets[i].head = NULL;
+        csilk_mutex_init(&session_buckets[i].mutex);
+    }
+    CSILK_LOG_I("Session: Sharded store initialized (%zu buckets)", (size_t)SESSION_BUCKET_COUNT);
 }
 
 /**
- * @brief Lock the session store mutex.
+ * @brief Compute the FNV-1a hash of a session ID string.
  *
- * Ensures the mutex is initialized (via csilk_once) before acquiring the lock.
- * Blocks until the lock is held.
+ * Maps to a bucket index in [0, SESSION_BUCKET_COUNT).
  */
-static void
-session_lock(void)
+static size_t
+session_hash(const char* id)
 {
-    csilk_once(&session_mutex_once, init_session_mutex);
-    csilk_mutex_lock(&session_mutex);
+    uint64_t h = 14695981039346656037ULL; /* FNV offset basis */
+    for (const char* p = id; *p; p++) {
+        h ^= (uint8_t)*p;
+        h *= 1099511628211ULL;            /* FNV prime */
+    }
+    return (size_t)(h % SESSION_BUCKET_COUNT);
 }
 
 /**
- * @brief Unlock the session store mutex.
- *
- * Releases the lock previously acquired by session_lock().
+ * @brief Lock a specific bucket by index.
  */
-static void
-session_unlock(void)
+static inline void
+session_bucket_lock(size_t idx)
 {
-    csilk_mutex_unlock(&session_mutex);
+    csilk_mutex_lock(&session_buckets[idx].mutex);
+}
+
+/**
+ * @brief Unlock a specific bucket by index.
+ */
+static inline void
+session_bucket_unlock(size_t idx)
+{
+    csilk_mutex_unlock(&session_buckets[idx].mutex);
 }
 
 /** @brief Session cookie name. */
@@ -119,81 +145,117 @@ generate_session_id(csilk_ctx_t* c, char id[CSILK_UUID_BUF_SIZE])
 }
 
 /**
- * @brief Find a session by ID in the global store.
- *
- * Performs a linear search of the singly-linked session list.
+ * @brief Find a session by ID in the sharded store (bucket-locked).
  *
  * @param id  The session ID string to search for.
- *
- * @return Pointer to the csilk_session_t if found, NULL otherwise.
- *
- * @note This function does NOT acquire the mutex. The caller must hold
- *       session_mutex when calling this function.
- */
-static csilk_session_t*
-find_session(const char* id)
-{
-    csilk_session_t* s = session_store;
-    while (s) {
-        if (strcmp(s->id, id) == 0) {
-            return s;
-        }
-        s = s->next;
-    }
-    return NULL;
-}
-
-/**
- * @brief Find a session by ID (acquires and releases the mutex).
- *
- * Convenience wrapper around find_session() that handles locking for
- * single-lookup callers.
- *
- * @param id  The session ID string to search for.
- *
  * @return Pointer to the csilk_session_t if found, NULL otherwise.
  */
 static csilk_session_t*
 find_session_locked(const char* id)
 {
-    session_lock();
-    csilk_session_t* s = find_session(id);
-    session_unlock();
-    return s;
+    size_t idx = session_hash(id);
+    session_bucket_lock(idx);
+    csilk_session_t* s = session_buckets[idx].head;
+    while (s) {
+        if (strcmp(s->id, id) == 0) {
+            s->last_access = time(NULL);
+            session_bucket_unlock(idx);
+            return s;
+        }
+        s = s->next;
+    }
+    session_bucket_unlock(idx);
+    return NULL;
 }
 
 /**
- * @brief Add a session to the store (acquires and releases the mutex).
+ * @brief Free a session's data list and the session struct itself.
+ * @param session  The session to free (not currently in the store).
+ */
+static void
+free_session(csilk_session_t* session)
+{
+    csilk_session_data_t* d = session->data;
+    while (d) {
+        csilk_session_data_t* next = d->next;
+        free(d->key);
+        free(d);
+        d = next;
+    }
+    free(session);
+}
+
+/**
+ * @brief Add a session to the sharded store.
  *
- * Prepends the session to the global singly-linked list of active sessions.
+ * Prepends the session to the head of the appropriate bucket. Increments
+ * the global session count; if the max limit is exceeded the least-recently
+ * accessed session is evicted from all buckets.
  *
  * @param session  The session to add. Must not be NULL.
  */
 static void
 add_session_locked(csilk_session_t* session)
 {
-    session_lock();
-    session->next = session_store;
-    session_store = session;
-    session_unlock();
+    session->last_access = time(NULL);
+    size_t idx = session_hash(session->id);
+    session_bucket_lock(idx);
+    session->next = session_buckets[idx].head;
+    session_buckets[idx].head = session;
+    session_bucket_unlock(idx);
+    atomic_fetch_add_explicit(&session_count, 1, memory_order_relaxed);
+
+    /* LRU eviction: if over limit, find and evict the least-recently-accessed session */
+    if (atomic_load_explicit(&session_count, memory_order_relaxed) > session_max) {
+        /* Find the session with the oldest last_access across all buckets */
+        csilk_session_t* victim = NULL;
+        time_t           victim_ts = 0;
+        for (size_t b = 0; b < SESSION_BUCKET_COUNT; b++) {
+            session_bucket_lock(b);
+            for (csilk_session_t* s = session_buckets[b].head; s; s = s->next) {
+                if (s->last_access < victim_ts || victim == NULL) {
+                    victim_ts = s->last_access;
+                    victim = s;
+                }
+            }
+            session_bucket_unlock(b);
+        }
+        if (victim) {
+            /* Unlink victim from its bucket */
+            size_t vidx = session_hash(victim->id);
+            session_bucket_lock(vidx);
+            csilk_session_t** prev = &session_buckets[vidx].head;
+            csilk_session_t*  s = session_buckets[vidx].head;
+            while (s) {
+                if (s == victim) {
+                    *prev = s->next;
+                    break;
+                }
+                prev = &s->next;
+                s = s->next;
+            }
+            session_bucket_unlock(vidx);
+            atomic_fetch_sub_explicit(&session_count, 1, memory_order_relaxed);
+            free_session(victim);
+            CSILK_LOG_D("Session: LRU-evicted session '%s'", victim->id);
+        }
+    }
 }
 
 /**
- * @brief Remove a session from the store (acquires and releases the mutex).
+ * @brief Remove a session from the sharded store.
  *
- * Unlinks the session from the global singly-linked list of active sessions.
- * Does NOT free the session or its data — the caller must do that after
- * removal.
+ * Unlinks the session from its bucket. Does NOT free the session or its data.
  *
- * @param session  The session to remove. Must be a valid pointer currently
- *                 in the store.
+ * @param session  The session to remove. Must be a valid pointer currently in the store.
  */
 static void
 remove_session_locked(csilk_session_t* session)
 {
-    session_lock();
-    csilk_session_t** prev = &session_store;
-    csilk_session_t*  s = session_store;
+    size_t idx = session_hash(session->id);
+    session_bucket_lock(idx);
+    csilk_session_t** prev = &session_buckets[idx].head;
+    csilk_session_t*  s = session_buckets[idx].head;
     while (s) {
         if (s == session) {
             *prev = s->next;
@@ -202,44 +264,57 @@ remove_session_locked(csilk_session_t* session)
         prev = &s->next;
         s = s->next;
     }
-    session_unlock();
+    session_bucket_unlock(idx);
+    atomic_fetch_sub_explicit(&session_count, 1, memory_order_relaxed);
 }
 
 /**
- * @brief Remove expired sessions from the global store.
+ * @brief Remove expired sessions from all buckets.
  *
- * Iterates over the session list and removes (frees) every session whose
- * expires_at timestamp is <= the current time. Also frees all key-value
- * data items belonging to each expired session.
- *
- * @note Base path locks session_mutex during the sweep.
+ * Iterates every bucket; removes (frees) every session whose expires_at is
+ * in the past. Each bucket is locked individually so the sweep does not
+ * block other buckets.
  */
 static void
 cleanup_expired(void)
 {
     time_t now = time(NULL);
-    session_lock();
-    csilk_session_t** prev = &session_store;
-    csilk_session_t*  s = session_store;
-    while (s) {
-        if (s->expires_at <= now) {
-            CSILK_LOG_D("Session: Cleaning up expired session '%s'", s->id);
-            csilk_session_data_t* d = s->data;
-            while (d) {
-                csilk_session_data_t* next = d->next;
-                free(d->key);
-                free(d);
-                d = next;
+    for (size_t b = 0; b < SESSION_BUCKET_COUNT; b++) {
+        session_bucket_lock(b);
+        csilk_session_t** prev = &session_buckets[b].head;
+        csilk_session_t*  s = session_buckets[b].head;
+        while (s) {
+            if (s->expires_at <= now) {
+                CSILK_LOG_D("Session: Cleaning up expired session '%s'", s->id);
+                *prev = s->next;
+                session_bucket_unlock(b);
+                free_session(s);
+                atomic_fetch_sub_explicit(&session_count, 1, memory_order_relaxed);
+                s = session_buckets[b].head; /* re-read head after unlock */
+                session_bucket_lock(b);
+                /* s may have advanced; continue from current head */
+            } else {
+                prev = &s->next;
+                s = s->next;
             }
-            *prev = s->next;
-            free(s);
-            s = *prev;
-        } else {
-            prev = &s->next;
-            s = s->next;
         }
+        session_bucket_unlock(b);
     }
-    session_unlock();
+}
+
+/**
+ * @brief Set the maximum number of active sessions.
+ *
+ * When the count exceeds this limit the least-recently-accessed session is
+ * evicted. A value of 0 disables the limit (infinite sessions).
+ *
+ * @param max  Maximum session count (0 = unlimited).
+ */
+void
+csilk_session_set_max(size_t max)
+{
+    session_max = max;
+    CSILK_LOG_I("Session: Max sessions set to %zu", max);
 }
 
 /**
@@ -251,6 +326,7 @@ cleanup_expired(void)
 void
 csilk_session_init(void)
 {
+    csilk_once(&session_init_once, init_session_buckets);
     CSILK_LOG_I("Session: Initializing session subsystem");
     cleanup_expired();
 }
