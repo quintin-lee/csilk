@@ -84,6 +84,18 @@ void csilk_otlp_apm_spans_handler(csilk_ctx_t* c);
  */
 void csilk_otlp_serve_apm_ui(csilk_app_t* app, const char* path);
 
+/**
+ * @brief Set the sampling rate applied when the span ring buffer is full.
+ * @param rate Sampling interval (0 = always overwrite, N = 1/N sampling). Default 1000.
+ */
+void csilk_otlp_tracer_set_sample_rate(int rate);
+
+/**
+ * @brief Set the span ring buffer capacity (must be called before first span record).
+ * @param cap New capacity (must be > 0). Default 2048.
+ */
+void csilk_otlp_tracer_set_buffer_size(size_t cap);
+
 #ifdef __cplusplus
 }
 #endif
