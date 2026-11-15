@@ -84,7 +84,7 @@ _csilk_wasm_validate_sections(const uint8_t* bytes, size_t size)
 csilk_wasm_plugin_t*
 csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
 {
-#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS && !defined(HAS_WAMR)
     (void)wasm_bytes;
     (void)size;
     errno = ENOTSUP;
