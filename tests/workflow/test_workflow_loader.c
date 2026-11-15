@@ -144,35 +144,42 @@ test_json_condition_loop_join_onerror()
     printf("  passed\n");
 }
 
-/* Exercise csilk_wf_load_yaml.
- *
- * NOTE: nested container-of-container YAML (a sequence item that is itself a
- * mapping) currently triggers a pre-existing use-after-free in
- * parse_yaml_file (each container is its own yyjson doc and the parser keeps
- * dangling stack pointers after a cross-doc add). To avoid blocking the test
- * suite on that defect, this case loads a *flat* YAML document (no nested
- * mappings/sequences), which is safe, plus the missing-file path. The
- * defect is tracked separately. */
+/* Exercise csilk_wf_load_yaml against a real nested YAML document (a
+ * sequence item that is itself a mapping). This is the case that used to
+ * trigger a heap-use-after-free in parse_yaml_file (nested containers were
+ * absorbed into the parent doc while the freed standalone handle stayed on
+ * the stack). */
 static void
 test_yaml_loader(void)
 {
-    printf("Testing YAML workflow loader (flat + missing)...\n");
+    printf("Testing YAML workflow loader (nested + missing)...\n");
 
     csilk_wf_register_handler("echo", t_handler);
 
-    /* Flat document: top-level keys only, no nested mapping/sequence items. */
     const char* path = "test_wf_loader_sample.yaml";
     FILE*       f = fopen(path, "w");
     assert(f != nullptr);
     fprintf(f,
             "name: YamlWF\n"
-            "entry: s1\n");
+            "steps:\n"
+            "  - id: s1\n"
+            "    handler: echo\n"
+            "    entry: true\n"
+            "  - id: s2\n"
+            "    handler: echo\n"
+            "connections:\n"
+            "  - from: s1\n"
+            "    to: s2\n");
     fclose(f);
 
     csilk_wf_t* wf = csilk_wf_load_yaml(path);
     assert(wf != nullptr);
+    /* Both nested step nodes must survive into the workflow. */
+    assert(csilk_wf_get_node(wf, "s1") != nullptr);
+    assert(csilk_wf_get_node(wf, "s2") != nullptr);
     char* m = csilk_wf_to_mermaid(wf);
     assert(m != nullptr);
+    assert(strstr(m, "\"s1\" --> \"s2\"") != nullptr);
     free(m);
     csilk_wf_free(wf);
     remove(path);

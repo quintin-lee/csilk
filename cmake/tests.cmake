@@ -55,7 +55,7 @@ function(add_csilk_test name source)
     set_tests_properties(${name} PROPERTIES TIMEOUT 600)
   elseif(name STREQUAL "test_logger_async_bench")
     set_tests_properties(${name} PROPERTIES TIMEOUT 120)
-  elseif(name STREQUAL "test_openai_mock" OR name STREQUAL "test_ai_anthropic" OR name STREQUAL "test_ollama_mock")
+  elseif(name STREQUAL "test_openai_mock" OR name STREQUAL "test_ai_anthropic" OR name STREQUAL "test_ollama_mock" OR name STREQUAL "test_vector_milvus_qdrant_mock")
     set_tests_properties(${name} PROPERTIES TIMEOUT 60)
   endif()
 endfunction()
@@ -360,11 +360,12 @@ set(CSILK_AI_TESTS
     test_vector_simd
     test_vector_hnsw
     test_vector_db_embedded
+    test_vector_milvus_qdrant_mock
     test_db
     test_mongodb
 )
 set(CSILK_AI_TEST_DIRS
-    drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector;drivers/db;drivers/db
+    drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector;drivers/vector;drivers/db;drivers/db
 )
 
 # -- Reflection tests --

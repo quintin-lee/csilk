@@ -27,12 +27,24 @@ class FastThreadingHTTPServer(ThreadingHTTPServer):
 
 
 class OpenAIMockHandler(BaseHTTPRequestHandler):
+    # Serve HTTP/1.1 so libcurl-based drivers can reuse keep-alive connections
+    # across upsert+search (the default HTTP/1.0 closes each socket, which
+    # intermittently drops the follow-up request). Every handler must send a
+    # Content-Length (they do, via _send_json / stream responses).
+    protocol_version = 'HTTP/1.1'
     timeout = 10.0
 
     def log_message(self, format, *args):
         pass
 
     def do_POST(self):
+        self._handle()  # shared dispatcher
+
+    def do_PUT(self):
+        # Qdrant point upsert uses PUT /collections/{c}/points.
+        self._handle()
+
+    def _handle(self):
         content_length = int(self.headers.get('Content-Length', 0))
         body_bytes = self.rfile.read(content_length)
         body = {}
@@ -50,6 +62,14 @@ class OpenAIMockHandler(BaseHTTPRequestHandler):
             self.handle_ollama_embeddings(body)
         elif self.path.endswith('/api/generate'):
             self.handle_ollama_generate(body)
+        elif self.path.endswith('/v2/vectordb/entities/search'):
+            self.handle_milvus_search(body)
+        elif self.path.endswith('/v2/vectordb/entities/upsert'):
+            self.handle_milvus_upsert(body)
+        elif self.path.endswith('/points/search'):
+            self.handle_qdrant_search(body)
+        elif self.path.endswith('/points'):
+            self.handle_qdrant_upsert(body)
         elif self.path.endswith('/chat/completions'):
             self.handle_chat_completions(body)
         elif self.path.endswith('/embeddings'):
@@ -293,6 +313,10 @@ class OpenAIMockHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', str(len(out_bytes)))
         self.end_headers()
         self.wfile.write(out_bytes)
+        self.wfile.flush()
+        if self.protocol_version == 'HTTP/1.1':
+            # Tell the client (libcurl) the socket is done after this response.
+            self.close_connection = True
 
     def handle_ollama_chat(self, body):
         is_stream = body.get('stream', False)
@@ -344,6 +368,34 @@ class OpenAIMockHandler(BaseHTTPRequestHandler):
     def handle_ollama_generate(self, body):
         self._send_json({"model": body.get('model', 'llama3'), "response": "generated", "done": True,
                          "prompt_eval_count": 2, "eval_count": 3})
+
+    def handle_milvus_upsert(self, body):
+        self._send_json({"code": 0, "data": {"insertCount": len(body.get('data', []))}})
+
+    def handle_milvus_search(self, body):
+        limit = int(body.get('limit', 2) or 2)
+        data = []
+        for i in range(min(limit, 2)):
+            data.append({
+                "id": f"row-{i}",
+                "distance": 0.12 + 0.01 * i,
+                "label": f"label-{i}",
+            })
+        self._send_json({"code": 0, "data": data})
+
+    def handle_qdrant_upsert(self, body):
+        self._send_json({"result": {"status": "completed", "result": {"points_count": len(body.get('points', []))}}})
+
+    def handle_qdrant_search(self, body):
+        limit = int(body.get('limit', 2) or 2)
+        result = []
+        for i in range(min(limit, 2)):
+            result.append({
+                "id": i,
+                "score": 0.9 - 0.1 * i,
+                "payload": {"category": f"cat-{i}"},
+            })
+        self._send_json({"result": result})
 
     def handle_anthropic_messages(self, body):
         is_stream = body.get('stream', False)
