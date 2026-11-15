@@ -7,7 +7,24 @@
 
 ## [Unreleased]
 
-## [0.9.0] - 2026-11-14
+### 1.0.0 LTS 要点
+
+- **首个长期支持（LTS）版本。** 公共 C API（不透明句柄）、共享库 ABI（`libcsilk.so.1`，`SOVERSION "1"`）以及请求/响应生命周期自本版起视为稳定。从此严格遵循语义化版本（SemVer）：任何破坏性 ABI 或公共 API 变更必须递增主版本号。
+- **TLS/HTTPS**（`src/core/http/tls.c`）：生产级 OpenSSL 集成 —— `SSL_CTX` 创建、每连接 memory-BIO 加密 I/O、ALPN（`h2`/`http/1.1`）、证书链 / CA / 对端校验加载，最低 TLS 1.2。由 `tests/core/test_https.c` 做端到端握手覆盖（真实 csilk TLS 服务器 + OpenSSL 客户端）。
+- **安全中间件套件已成熟并随版本发布**：JWT、CSRF、WAF（含 eBPF XDP 动态 WAF + OTLP APM 环形缓冲）、熔断、限流、会话、分层密钥提供器。
+- **核心 HTTP/1.1 + HTTP/2、WebSocket、SSE、MQ/Raft、向量库、AI 驱动** 具备完整单测 + 集成 + sanitizer（ASAN/TSAN）+ 模糊测试覆盖，CI 矩阵（ubuntu/macos × Debug/Release）全绿。
+
+### 已知限制（1.0.0）
+
+- **实验性/模拟桩默认开启**（`-DCSILK_ENABLE_EXPERIMENTAL_STUBS=ON`，默认值）：AF_XDP 与 DPDK 内存环形模拟、fuel-only WASM 桩 VM、HTTP/3 UDP 监听器骨架、io 性能探针。这些**不纳入 1.0.0 稳定性承诺**。如需 fail-closed 桩，请以 `-DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF` 构建。
+- **HTTP/3 为部分骨架**（`src/protocols/h3.c`）：RFC 9000 QUIC varint 与 RFC 9114 帧编解码及 Alt-Svc 注入是真实工具，但 QUIC 传输 / TLS 1.3 握手 / QPACK / 流多路复用 推迟到 **v1.1+**（ngtcp2/nghttp3 集成）。
+- **TLS 最低协议版本为 1.2**（为向后兼容而保留，未强制 1.3）。如需在部署中强制 1.3，请显式配置。
+
+### 变更
+
+- 0.7.0 → 0.9.0 期间落地的覆盖强化与多处正确性修复（详见各版本条目）：`csilk_mq_get_stats` 空路径契约修复、Ollama SSRF 守卫泄漏修复、热重载压力测试真实 `.so` 路径、Milvus/Qdrant mock 加固、MVCC RCU TSAN 抑制、以及工作流工具注册 / 监控广播覆盖。
+
+
 
 ## [0.8.0] - 2026-11-14
 

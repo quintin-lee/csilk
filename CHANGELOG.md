@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### 1.0.0 LTS Highlights
+
+- **First Long-Term Support release.** The public C API (opaque handles), the shared-library ABI (`libcsilk.so.1` via `SOVERSION "1"`), and the request/response lifecycle are now considered stable. SemVer applies from this point forward: breaking ABI or public-API changes require a major bump.
+- **TLS/HTTPS** (`src/core/http/tls.c`): production OpenSSL integration — `SSL_CTX` creation, per-client memory-BIO encrypted I/O, ALPN (`h2`/`http/1.1`), certificate-chain / CA / peer-verification loading, and TLS 1.2 minimum. End-to-end handshake coverage via `tests/core/test_https.c` (live csilk TLS server + OpenSSL client).
+- **Security middleware suite** is mature and shipped: JWT, CSRF, WAF (incl. eBPF XDP dynamic WAF + OTLP APM ring), circuit-breaker, rate-limiting, session, and tiered secret provider.
+- **Core HTTP/1.1 + HTTP/2, WebSocket, SSE, MQ/Raft, vector DB, and AI drivers** carry full unit + integration + sanitizer (ASAN/TSAN) + fuzz coverage, with the CI matrix green across ubuntu/macos × Debug/Release.
+
+### Known Limitations (1.0.0)
+
+- **Experimental/simulated stubs remain enabled by default** (`-DCSILK_ENABLE_EXPERIMENTAL_STUBS=ON`, the default): AF_XDP and DPDK in-memory ring simulations, the fuel-only WASM stub VM, the HTTP/3 UDP-listener skeleton, and the io-perf probe. These are **not part of the 1.0.0 stability commitment**. Build with `-DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF` for fail-closed stubs.
+- **HTTP/3 is a partial skeleton** (`src/protocols/h3.c`): RFC 9000 QUIC varint and RFC 9114 frame codecs plus Alt-Svc injection are real utilities, but the QUIC transport / TLS 1.3 handshake / QPACK / stream multiplexing are deferred to **v1.1+** (ngtcp2/nghttp3 integration).
+- **TLS minimum protocol is 1.2** (kept for backward compatibility; not forced to 1.3). Enforce 1.3 in deployments where required.
+
+### Changed
+
+- Coverage hardening and several correctness fixes landed across 0.7.0 → 0.9.0 (see those entries): `csilk_mq_get_stats` null-path contract fix, Ollama SSRF guard leak fix, hot-reload stress-test real-`.so` path, Milvus/Qdrant mock hardening, MVCC RCU TSAN suppression, and workflow tool-registry / monitor-broadcast coverage.
+
 ## [0.9.0] - 2026-11-14
 
 ## [0.8.0] - 2026-11-14
