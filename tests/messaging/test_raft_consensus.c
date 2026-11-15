@@ -147,12 +147,72 @@ test_raft_three_node_election_and_replication(void)
     printf("test_raft_three_node_election_and_replication passed\n");
 }
 
+/* Node stop is idempotent; tick drives election/heartbeat timers; apply-cb
+ * + committed replay exercise the snapshot-apply and per-entry callbacks.
+ * All pure state-machine logic, no live transport required. */
+static int g_apply_calls = 0;
+
+static void
+on_raft_entry(uint64_t index, uint64_t term, const uint8_t* data, size_t len, void* user_data)
+{
+    (void)index;
+    (void)term;
+    (void)data;
+    (void)len;
+    *(int*)user_data = *(int*)user_data + 1;
+}
+
+static void
+test_raft_node_lifecycle_and_callbacks(void)
+{
+    csilk_raft_config_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.node_id = 1;
+    cfg.cluster_size = 1;
+
+    csilk_raft_node_t* node = csilk_raft_node_new(&cfg);
+    assert(node != nullptr);
+    assert(csilk_raft_node_start(node) == 0);
+
+    /* set_apply_cb with a per-entry callback + user_data counter. */
+    int counter = 0;
+    assert(csilk_raft_set_apply_cb(node, on_raft_entry, NULL, &counter) == 0);
+
+    /* replicate_wait on a single-node cluster commits immediately. */
+    uint64_t out_index = 0;
+    assert(csilk_raft_replicate_wait(node, (const uint8_t*)"commit-me", 9, 1000, &out_index) == 0);
+    assert(out_index >= 1);
+
+    /* Explicit committed replay re-applies any not-yet-applied entries. */
+    assert(csilk_raft_replay_committed(node) == 0);
+
+    /* node_tick advances the leader broadcast timer (and interval sync). */
+    assert(csilk_raft_node_tick(node, 0) == 0);
+
+    /* node_stop is safe to call on an already-stopped node. */
+    assert(csilk_raft_node_stop(node) == 0);
+    assert(csilk_raft_node_stop(node) == 0);
+
+    csilk_raft_node_free(node);
+
+    /* NULL-node guards across the lifecycle entry points. */
+    assert(csilk_raft_node_stop(nullptr) == -1);
+    assert(csilk_raft_node_tick(nullptr, 0) == -1);
+    assert(csilk_raft_replay_committed(nullptr) == -1);
+    assert(csilk_raft_set_apply_cb(nullptr, on_raft_entry, NULL, nullptr) == -1);
+    uint8_t* d = NULL;
+    size_t   l = 0;
+    assert(csilk_raft_get_log_entry(nullptr, 1, NULL, &d, &l) != 0);
+    printf("test_raft_node_lifecycle_and_callbacks passed\n");
+}
+
 int
 main(void)
 {
     test_raft_consensus_single_node();
     test_raft_randomized_election_timeout();
     test_raft_three_node_election_and_replication();
+    test_raft_node_lifecycle_and_callbacks();
     printf("All test_raft_consensus tests passed successfully!\n");
     return 0;
 }
