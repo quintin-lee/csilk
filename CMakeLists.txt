@@ -215,6 +215,11 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         target_compile_options(fuzz_wasm PRIVATE -fsanitize=fuzzer -std=c23)
         target_link_options(fuzz_wasm PRIVATE -fsanitize=fuzzer)
         target_link_libraries(fuzz_wasm csilk)
+
+        add_executable(fuzz_h3 fuzz/fuzz_h3.c)
+        target_compile_options(fuzz_h3 PRIVATE -fsanitize=fuzzer -std=c23)
+        target_link_options(fuzz_h3 PRIVATE -fsanitize=fuzzer)
+        target_link_libraries(fuzz_h3 csilk)
     endif()
   endif()
 
