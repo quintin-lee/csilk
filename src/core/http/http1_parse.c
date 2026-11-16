@@ -418,7 +418,7 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
 
         const char* qmark = memchr(udata, '?', ulen);
         if (__builtin_expect(!qmark, 1)) {
-            char* path = csilk_arena_alloc(client->ctx.arena, ulen + 1);
+            char* path = csilk_arena_alloc(client->ctx.arena, ulen + 3 + 1);
             if (path) {
                 memcpy(path, udata, ulen);
                 path[ulen] = '\0';
@@ -427,7 +427,7 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
             }
         } else {
             size_t path_len = (size_t)(qmark - udata);
-            char*  path = csilk_arena_alloc(client->ctx.arena, path_len + 1);
+            char*  path = csilk_arena_alloc(client->ctx.arena, path_len + 3 + 1);
             if (path) {
                 memcpy(path, udata, path_len);
                 path[path_len] = '\0';
@@ -435,7 +435,7 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
                 client->ctx.request.path = path;
             }
             size_t query_len = ulen - path_len - 1;
-            char*  query = csilk_arena_alloc(client->ctx.arena, query_len + 1);
+            char*  query = csilk_arena_alloc(client->ctx.arena, query_len + 3 + 1);
             if (query) {
                 memcpy(query, qmark + 1, query_len);
                 query[query_len] = '\0';
