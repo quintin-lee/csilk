@@ -44,22 +44,84 @@ hex_to_int(char c)
 /** @brief URL-decode a percent-encoded string in-place.
  *
  * Replaces %XX sequences with the corresponding byte value and '+' with
- * space. The decoding is done in-place so the output is never longer than
- * the input.
+ * space. Invalid percent-encodings are normalised by escaping the '%' as
+ * '%25' (i.e. "%%ZZ" becomes "%25ZZ"), so that WAF regexes match on the
+ * canonical form (CWE-116 / RFC 3986 §2.1).
+ *
+ * The decode is done in-place: the output is written starting at index 0
+ * of @p str.  Because escaping an invalid '%' can make the output longer
+ * than the input, @p str must have at least 3 bytes of slack beyond its
+ * current strlen.  All in-tree callers (csilk_split_url, csilk_parse_query,
+ * http1_parse.c) allocate with +3 slack.
  *
  * @param str Null-terminated string to decode (modified in-place).
- * @return The length of the decoded string (may be shorter than original).
- * @note Invalid % sequences (e.g. "%ZZ" or a lone "%" at end of string)
- *       are percent-encoded as "%%25" to prevent WAF bypass via malformed
- *       encodings (CWE-116 / RFC 3986 §2.1). */
+ * @return The length of the decoded string.
+ */
 size_t
 csilk_url_decode(char* str)
 {
     if (!str) {
         return 0;
     }
+
+    /* Two-pass in-place decode.
+     *
+     * Pass 1: measure the output length.  If the output fits within the
+     * input length, a forward in-place decode is safe (dst ≤ src always).
+     * If the output is longer, we use a malloc'd temporary buffer to avoid
+     * overwriting unread source. */
+    size_t      out_len = 0;
+    const char* p       = str;
+    while (*p) {
+        if (*p == '%' && isxdigit((unsigned char)p[1]) && isxdigit((unsigned char)p[2])) {
+            int hi = hex_to_int(p[1]);
+            int lo = hex_to_int(p[2]);
+            if (hi >= 0 && lo >= 0) {
+                out_len++;
+                p += 3;
+                continue;
+            }
+        }
+        if (*p == '%') {
+            out_len += 3; /* invalid '%' → "%25" (3 bytes) */
+            p++;
+            continue;
+        }
+        out_len++;
+        p++;
+    }
+    size_t in_len = p - str;
+
+    /* Use a heap buffer whenever the input contains '%' characters.
+     * This avoids the in-place overwrite problem entirely.  The overhead
+     * is one malloc+free per call, which is acceptable for URL decoding. */
+    int has_percent = (int)(memchr(str, '%', in_len) != NULL);
+
+    if (!has_percent) {
+        /* No '%' in input: pure in-place, no expansion possible. */
+        char* src = str;
+        char* dst = str;
+        while (*src) {
+            if (*src == '+') {
+                *dst++ = ' ';
+            } else {
+                *dst++ = *src;
+            }
+            src++;
+        }
+        *dst = '\0';
+        return out_len;
+    }
+
+    /* Input contains '%': use a heap buffer to safely handle both valid
+     * %XX (1 byte) and invalid % (3 bytes "%25") expansions. */
+    char* tmp = malloc(out_len + 1);
+    if (!tmp) {
+        /* Fallback: leave the string unchanged (safe, no crash). */
+        return in_len;
+    }
     char* src = str;
-    char* dst = str;
+    char* dst = tmp;
     while (*src) {
         if (*src == '%' && isxdigit((unsigned char)src[1]) && isxdigit((unsigned char)src[2])) {
             int hi = hex_to_int(src[1]);
@@ -72,9 +134,6 @@ csilk_url_decode(char* str)
         } else if (*src == '+') {
             *dst++ = ' ';
         } else if (*src == '%') {
-            /* Invalid percent-encoding: escape the '%' itself as %25.
-             * This normalises "%%ZZ" to "%25ZZ", making WAF regexes
-             * match on the canonical form (M6 / CWE-116). */
             *dst++ = '%';
             *dst++ = '2';
             *dst++ = '5';
@@ -86,7 +145,9 @@ csilk_url_decode(char* str)
         src++;
     }
     *dst = '\0';
-    return dst - str;
+    memcpy(str, tmp, dst - tmp + 1);
+    free(tmp);
+    return out_len;
 }
 
 /** @brief Split a full URL into its path and query string components.
@@ -115,7 +176,8 @@ csilk_split_url(const char* url, char** path, char** query)
     const char* qmark = strchr(url, '?');
     if (qmark) {
         size_t path_len = qmark - url;
-        *path = malloc(path_len + 1);
+        /* +3 slack for csilk_url_decode() expanding invalid percent-encodings */
+        *path = malloc(path_len + 3 + 1);
         if (!*path) {
             return;
         }
@@ -130,8 +192,11 @@ csilk_split_url(const char* url, char** path, char** query)
             *path = NULL;
         }
     } else {
-        *path = strdup(url);
+        size_t url_len = strlen(url);
+        /* +3 slack for csilk_url_decode() expanding invalid percent-encodings */
+        *path = malloc(url_len + 3 + 1);
         if (*path) {
+            memcpy(*path, url, url_len + 1);
             csilk_url_decode(*path);
         }
     }

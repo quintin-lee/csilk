@@ -86,12 +86,16 @@ csilk_parse_query(csilk_ctx_t* c, const char* query_string)
         return;
     }
 
-    char* qs = csilk_arena_strdup(c->arena, query_string);
+    /* Allocate with +3 slack so that csilk_url_decode() can expand
+     * invalid percent-encodings (%XX → %25XX) without overflow. */
+    size_t qs_len = strlen(query_string);
+    char*  qs = csilk_arena_alloc(c->arena, qs_len + 3 + 1);
     if (!qs) {
         CSILK_LOG_E("Context: failed to allocate arena memory to parse query string: %s",
                     query_string);
         return;
     }
+    memcpy(qs, query_string, qs_len + 1);
 
     parse_key_value_pairs(c, qs, &c->request.query_params);
 }
