@@ -11,6 +11,12 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Forward declarations for OpenSSL QUIC API (Phase 1.3) */
+struct ssl_st;
+typedef struct ssl_st SSL;
+struct ssl_ctx_st;
+typedef struct ssl_ctx_st SSL_CTX;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -268,6 +274,18 @@ int csilk_h3_session_send_response(csilk_h3_session_t* session,
                                    const uint8_t*      body,
                                    size_t              body_len);
 
+/**
+ * @brief Create a QUIC-enabled SSL object for ngtcp2's OpenSSL crypto adapter.
+ *
+ * Configures TLS 1.3 only (RFC 9001 mandates TLS 1.3 for QUIC).
+ * The caller passes the resulting SSL* to ngtcp2_conn_server_new / _client_new
+ * via the ngtcp2_crypto_ossl callback adapter.
+ *
+ * @param ssl_ctx  TLS context (from csilk_h3_transport_new).
+ * @return A new SSL* configured for QUIC, or NULL on failure.
+ */
+SSL* csilk_h3_quic_tls_new(SSL_CTX* ssl_ctx);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
@@ -289,6 +307,18 @@ csilk_h3_stream_data_t* csilk_h3_stream_data_new(uint64_t stream_id);
  * @brief Free per-stream user data.
  */
 void csilk_h3_stream_data_free(csilk_h3_stream_data_t* sd);
+
+/**
+ * @brief Dispatch a completed HTTP/3 stream into the shared router/middleware pipeline.
+ *
+ * Populates client->ctx from the collected stream data and invokes
+ * _csilk_dispatch_request(), the same path used by HTTP/1.1 and HTTP/2.
+ *
+ * @param client  The owning csilk_client_t (from the per-worker pool).
+ * @param sd      The completed stream data (headers_complete must be 1).
+ * @return 0 on success, -1 if stream data is incomplete or client is NULL.
+ */
+int csilk_h3_dispatch_stream(csilk_client_t* client, csilk_h3_stream_data_t* sd);
 
 #ifdef __cplusplus
 } /* extern "C" */

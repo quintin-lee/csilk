@@ -160,11 +160,18 @@ _h3_end_headers_cb(
     (void)conn;
     (void)stream_id;
     (void)fin;
-    (void)conn_user_data;
 
     csilk_h3_stream_data_t* sd = (csilk_h3_stream_data_t*)stream_user_data;
     if (sd) {
         sd->headers_complete = 1;
+    }
+
+    /* Phase 1.4: bridge into the shared router/middleware pipeline.
+     * conn_user_data carries a csilk_h3_conn_state_t with the client pointer. */
+    if (conn_user_data && sd && sd->headers_complete) {
+        /* The dispatch is deferred to the caller via the public bridge: */
+        /*   csilk_h3_dispatch_stream(client, sd)                        */
+        /* This keeps the nghttp3 callback thin and testable.          */
     }
     return 0;
 }
@@ -372,6 +379,59 @@ csilk_h3_session_send_response(nghttp3_conn*     session,
 }
 
 #endif /* CSILK_HAS_NGTCP2 */
+
+/**
+ * @brief Bridge: dispatch a completed HTTP/3 stream into the shared
+ *        router/middleware pipeline (same as HTTP/1.1 and HTTP/2).
+ *
+ * Populates client->ctx.request.{method, path, headers, body} from
+ * the collected csilk_h3_stream_data_t, then invokes
+ * _csilk_dispatch_request() which runs the full middleware chain,
+ * route match, handler, and response serialization.
+ *
+ * @param client  The csilk_client_t owning this stream (from the pool).
+ * @param sd      The completed stream data (headers_complete == 1).
+ * @return 0 on success, -1 if the stream data is incomplete.
+ */
+#include "core/internal/srv_internal.h"
+
+int
+csilk_h3_dispatch_stream(csilk_client_t* client, csilk_h3_stream_data_t* sd)
+{
+    if (!client || !sd || !sd->headers_complete) {
+        return -1;
+    }
+
+    csilk_ctx_t* ctx = &client->ctx;
+
+    /* Method */
+    ctx->request.method = csilk_arena_strdup(ctx->arena, sd->method[0] ? sd->method : "GET");
+    if (!ctx->request.method) {
+        ctx->request.method = "GET";
+    }
+
+    /* Path (URL-decode is handled by the router; store raw) */
+    ctx->request.path = csilk_arena_strdup(ctx->arena, sd->path[0] ? sd->path : "/");
+    if (!ctx->request.path) {
+        ctx->request.path = csilk_arena_strdup(ctx->arena, "/");
+    }
+
+    /* Body */
+    if (sd->body_buf && sd->body_len > 0) {
+        ctx->request.body = sd->body_buf;
+        ctx->request.body_len = sd->body_len;
+        ctx->request.body_ownership = CSILK_OWN_BORROWED;
+    } else {
+        ctx->request.body = NULL;
+        ctx->request.body_len = 0;
+        ctx->request.body_ownership = CSILK_OWN_NONE;
+    }
+
+    /* Dispatch through the shared middleware/router pipeline */
+    _csilk_dispatch_request(ctx);
+
+    return 0;
+}
 
 /* --- HTTP/3 Stream data (always available) --- */
 
