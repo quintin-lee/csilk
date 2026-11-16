@@ -355,6 +355,7 @@ set(CSILK_DATA_TEST_DIRS
 set(CSILK_AI_TESTS
     test_ai
     test_ai_ext
+    test_ai_driver_mock
     test_openai_mock
     test_ollama_mock
     test_ai_anthropic
@@ -369,7 +370,7 @@ set(CSILK_AI_TESTS
     test_mongodb
 )
 set(CSILK_AI_TEST_DIRS
-    drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector;drivers/vector;drivers/db;drivers/db
+    drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector;drivers/vector;drivers/db;drivers/db
 )
 
 # -- Reflection tests --
