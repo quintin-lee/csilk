@@ -175,6 +175,7 @@ set(CSILK_PROTOCOLS_SOURCES
     src/protocols/mcp/mcp_server.c
     src/protocols/mcp/mcp_client.c
     src/protocols/mcp/mcp_stdio_pool.c
+    src/protocols/grpc.c
 )
 
 # ── Permission Module ─────────────────────────────────────────────────────
