@@ -49,8 +49,9 @@ hex_to_int(char c)
  *
  * @param str Null-terminated string to decode (modified in-place).
  * @return The length of the decoded string (may be shorter than original).
- * @note If @p str contains invalid % sequences (e.g., "%ZZ"), they are left
- *       as-is. */
+ * @note Invalid % sequences (e.g. "%ZZ" or a lone "%" at end of string)
+ *       are percent-encoded as "%%25" to prevent WAF bypass via malformed
+ *       encodings (CWE-116 / RFC 3986 §2.1). */
 size_t
 csilk_url_decode(char* str)
 {
@@ -70,6 +71,15 @@ csilk_url_decode(char* str)
             }
         } else if (*src == '+') {
             *dst++ = ' ';
+        } else if (*src == '%') {
+            /* Invalid percent-encoding: escape the '%' itself as %25.
+             * This normalises "%%ZZ" to "%25ZZ", making WAF regexes
+             * match on the canonical form (M6 / CWE-116). */
+            *dst++ = '%';
+            *dst++ = '2';
+            *dst++ = '5';
+            src++;
+            continue;
         } else {
             *dst++ = *src;
         }
