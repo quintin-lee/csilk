@@ -418,24 +418,27 @@ finalize_request(csilk_client_t* client, llhttp_t* p)
 
         const char* qmark = memchr(udata, '?', ulen);
         if (__builtin_expect(!qmark, 1)) {
-            char* path = csilk_arena_alloc(client->ctx.arena, ulen + 3 + 1);
+            /* 3x worst-case room: an invalid '%' expands 1 byte to 3 bytes. */
+            char* path = csilk_arena_alloc(client->ctx.arena, ulen * 3 + 1);
             if (path) {
                 memcpy(path, udata, ulen);
                 path[ulen] = '\0';
-                csilk_url_decode(path);
+                csilk_url_decode(path, ulen * 3 + 1);
                 client->ctx.request.path = path;
             }
         } else {
             size_t path_len = (size_t)(qmark - udata);
-            char*  path = csilk_arena_alloc(client->ctx.arena, path_len + 3 + 1);
+            char*  path = csilk_arena_alloc(client->ctx.arena, path_len * 3 + 1);
             if (path) {
                 memcpy(path, udata, path_len);
                 path[path_len] = '\0';
-                csilk_url_decode(path);
+                csilk_url_decode(path, path_len * 3 + 1);
                 client->ctx.request.path = path;
             }
             size_t query_len = ulen - path_len - 1;
-            char*  query = csilk_arena_alloc(client->ctx.arena, query_len + 3 + 1);
+            /* Query is decoded per-token by csilk_parse_query; 3x covers any
+             * token's worst-case expansion. */
+            char* query = csilk_arena_alloc(client->ctx.arena, query_len * 3 + 1);
             if (query) {
                 memcpy(query, qmark + 1, query_len);
                 query[query_len] = '\0';

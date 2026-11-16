@@ -54,11 +54,14 @@ int csilk_base64url_decode(const char* src, uint8_t* out, size_t out_cap);
 /**
  * @brief URL-decode a percent-encoded string in-place.
  *
- * Converts %XX sequences to their byte values and '+' to space.
- * The decoded string is always shorter than or equal to the input.
+ * Converts %XX sequences to their byte values and '+' to space.  Invalid
+ * percent-encodings are normalised by escaping '%' as "%25", so the output
+ * can be longer than the input; @p str_cap bounds the write to prevent any
+ * overflow (truncating the decoded result if it would exceed str_cap).
  *
- * @param str  NUL-terminated percent-encoded string (modified in-place).
- * @return The length of the decoded string (may be shorter than strlen
- *         of the original).
+ * @param str    NUL-terminated percent-encoded string (modified in-place).
+ * @param str_cap Capacity of the @p str buffer in bytes, including the NUL.
+ * @return The length of the decoded string written (before truncation, i.e.
+ *         may exceed str_cap - 1 if the output was truncated).
  */
-size_t csilk_url_decode(char* str);
+size_t csilk_url_decode(char* str, size_t str_cap);

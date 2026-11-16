@@ -12,7 +12,7 @@ void
 test_basic_decode()
 {
     char   buf[24] = "%48%65%6C%6C%6F";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     assert(len == 5);
     assert(strcmp(buf, "Hello") == 0);
     printf("test_basic_decode passed\n");
@@ -23,7 +23,7 @@ void
 test_plus_to_space()
 {
     char   buf[20] = "hello+world";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     assert(len == 11);
     assert(strcmp(buf, "hello world") == 0);
     printf("test_plus_to_space passed\n");
@@ -34,7 +34,7 @@ void
 test_mixed()
 {
     char   buf[24] = "%48ello+World%21";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     assert(len == 12);
     assert(strcmp(buf, "Hello World!") == 0);
     printf("test_mixed passed\n");
@@ -45,7 +45,7 @@ void
 test_no_encoding()
 {
     char   buf[20] = "plain text";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     assert(len == 10);
     assert(strcmp(buf, "plain text") == 0);
     printf("test_no_encoding passed\n");
@@ -56,7 +56,7 @@ void
 test_empty()
 {
     char   buf[8] = "";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     assert(len == 0);
     assert(strcmp(buf, "") == 0);
     printf("test_empty passed\n");
@@ -66,7 +66,7 @@ test_empty()
 void
 test_null_input()
 {
-    size_t len = csilk_url_decode(nullptr);
+    size_t len = csilk_url_decode(nullptr, 0);
     assert(len == 0);
     printf("test_null_input passed\n");
     fflush(stdout);
@@ -76,7 +76,7 @@ void
 test_invalid_hex()
 {
     char   buf[32] = "%XX%GG%1";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     /* Each invalid '%' is escaped as "%25" (3 bytes):
      *   %XX → %25XX (5), %GG → %25GG (5), %1 → %251 (4). Total = 14 */
     assert(len == 14);
@@ -88,7 +88,7 @@ void
 test_lowercase_hex()
 {
     char   buf[16] = "%2f%7e";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     assert(len == 2);
     assert(strcmp(buf, "/~") == 0);
     printf("test_lowercase_hex passed\n");
@@ -98,7 +98,7 @@ void
 test_uppercase_hex()
 {
     char   buf[16] = "%2F%7E";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     assert(len == 2);
     assert(strcmp(buf, "/~") == 0);
     printf("test_uppercase_hex passed\n");
@@ -108,7 +108,7 @@ void
 test_percent_only()
 {
     char   buf[8] = "%";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     /* A lone '%' is escaped as %25 */
     assert(len == 3);
     assert(strcmp(buf, "%25") == 0);
@@ -119,7 +119,7 @@ void
 test_percent_one_char()
 {
     char   buf[16] = "%4";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     /* "%4" -> the '%' is invalid (only one hex digit follows), so it is
      * escaped as %25, giving "%254" (4 chars). */
     assert(len == 4);
@@ -131,7 +131,7 @@ void
 test_special_chars()
 {
     char   buf[16] = "%00%01%1F";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     assert(len == 3);
     assert((unsigned char)buf[0] == 0x00);
     assert((unsigned char)buf[1] == 0x01);
