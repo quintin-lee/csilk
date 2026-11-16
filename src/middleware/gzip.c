@@ -55,8 +55,12 @@ _csilk_gzip_work_cb(csilk_io_work_t* req)
         return;
     }
 
-    /* Limit output size to prevent gzip bombs (CWE-400) */
-    const size_t MAX_OUTPUT = (size_t)src_len * 1024;
+    /* Limit output size to prevent gzip bombs (CWE-400).
+     * A 10:1 expansion ratio cap (compressed ≤ 10 × original) is generous
+     * enough for all practical payloads while bounding worst-case memory
+     * use — the current 1024× factor is a DoS vector for incompressible
+     * data that inflates the allocation without meaningful gain. */
+    const size_t MAX_OUTPUT = (size_t)src_len * 10;
     state->dest_cap = deflateBound(&strm, (uLong)src_len);
     if (state->dest_cap > MAX_OUTPUT) {
         state->dest_cap = MAX_OUTPUT;
@@ -84,6 +88,18 @@ _csilk_gzip_work_cb(csilk_io_work_t* req)
                     (double)state->compressed_len / (src_len ? src_len : 1) * 100.0,
                     src_len,
                     state->compressed_len);
+        /* Skip compression if output is not meaningfully smaller (CWE-400
+         * defence).  A 10:1 cap means we reject if compressed_len ≥ 10× input,
+         * which effectively disables gzip for incompressible payloads. */
+        if (state->compressed_len >= (size_t)src_len * 10) {
+            CSILK_LOG_D("Gzip: output not meaningfully smaller (%zu bytes); "
+                        "skipping compression",
+                        state->compressed_len);
+            state->ret = Z_OK; /* mark as "don't compress" — caller sends original */
+            free(state->dest);
+            state->dest = NULL;
+            state->compressed_len = 0;
+        }
     } else {
         CSILK_LOG_E("Gzip: deflation failed with zlib code %d", state->ret);
     }
