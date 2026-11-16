@@ -1,6 +1,6 @@
 # Error Handling & Debugging Guide
 
-> **Version**: 1.0.0 | **Last updated**: 2026-11-15
+> **Version**: 1.1.0 | **Last updated**: 2026-11-16
 
 This guide details csilk's unified error return codes, structured asynchronous logging subsystem, deferred RAII cleanup, and diagnostics tooling.
 

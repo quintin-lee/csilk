@@ -1,6 +1,6 @@
 # csilk Official Comparative Benchmark Whitepaper (v1.0 LTS)
 
-> **Report Version**: 1.0.0-rc | **Date**: 2026-11-14  
+> **Report Version**: 1.1.0-rc | **Date**: 2026-11-14  
 > [English](comparative-benchmark-whitepaper.md) | [中文](../../zh-CN/design/comparative-benchmark-whitepaper.md)  
 > Refer to full root whitepaper: [benchmarks/COMPARATIVE_BENCHMARK_WHITEPAPER.md](../../../benchmarks/COMPARATIVE_BENCHMARK_WHITEPAPER.md)
 
