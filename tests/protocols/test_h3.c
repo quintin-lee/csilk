@@ -217,6 +217,65 @@ test_h3_listener()
 #endif
 }
 
+static void
+test_h3_transport_new_destroy()
+{
+    printf("Testing HTTP/3 transport new/destroy...\n");
+
+    /* Null args */
+    csilk_h3_transport_t* t = csilk_h3_transport_new(0, NULL, NULL);
+    assert(t == NULL);
+
+    /* Invalid port */
+    t = csilk_h3_transport_new(-1, NULL, NULL);
+    assert(t == NULL);
+
+    /* Valid port (binds UDP socket) */
+    t = csilk_h3_transport_new(4433, NULL, NULL);
+    assert(t != NULL);
+
+    /* Close/destroy */
+    assert(csilk_h3_transport_close_conn(t, NULL) == -1);
+    assert(csilk_h3_transport_close_stream(t, NULL, 0) == -1);
+    csilk_h3_transport_destroy(t);
+
+    /* Null transport */
+    csilk_h3_transport_destroy(NULL);
+
+    printf("test_h3_transport_new_destroy: PASS\n");
+}
+
+static void
+test_h3_session_data()
+{
+    printf("Testing HTTP/3 stream data alloc/free...\n");
+
+    csilk_h3_stream_data_t* sd = csilk_h3_stream_data_new(42);
+    assert(sd != NULL);
+    assert(sd->stream_id == 42);
+    assert(sd->method[0] == '\0');
+    assert(sd->path[0] == '\0');
+    assert(sd->num_headers == 0);
+    assert(sd->headers_complete == 0);
+    csilk_h3_stream_data_free(sd);
+    csilk_h3_stream_data_free(NULL); /* null-safe */
+
+    printf("test_h3_session_data: PASS\n");
+}
+
+static void
+test_h3_set_enabled()
+{
+    printf("Testing csilk_h3_set_enabled...\n");
+
+    /* Null server */
+    assert(csilk_h3_set_enabled(NULL, 443) == -1);
+    /* Invalid port */
+    assert(csilk_h3_set_enabled(NULL, 0) == -1);
+
+    printf("test_h3_set_enabled: PASS\n");
+}
+
 int
 main()
 {
@@ -227,6 +286,9 @@ main()
     test_h3_alt_svc_header();
     test_h3_alt_svc_and_listener_edge_cases();
     test_h3_listener();
+    test_h3_transport_new_destroy();
+    test_h3_session_data();
+    test_h3_set_enabled();
     printf("All HTTP/3 protocol tests passed successfully!\n");
     return 0;
 }

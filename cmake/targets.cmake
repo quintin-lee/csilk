@@ -348,6 +348,9 @@ else()
   csilk_link_module(csilk_mq csilk_runtime)
 endif()
 csilk_link_module(csilk_http2 csilk_runtime csilk_tls nghttp2)
+if(CSILK_ENABLE_HTTP3)
+  csilk_link_module(csilk_http2 csilk::ngtcp2 csilk::nghttp3)
+endif()
 csilk_link_module(csilk_http
     csilk_runtime
     csilk_json
