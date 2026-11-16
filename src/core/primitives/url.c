@@ -49,18 +49,19 @@ hex_to_int(char c)
  * canonical form (CWE-116 / RFC 3986 §2.1).
  *
  * The decode is done in-place: the output is written starting at index 0
- * of @p str.  Because escaping an invalid '%' can make the output longer
- * than the input, @p str must have at least 3 bytes of slack beyond its
- * current strlen.  All in-tree callers (csilk_split_url, csilk_parse_query,
- * http1_parse.c) allocate with +3 slack.
+ * of @p str.  Because escaping an invalid '%' expands one input byte into
+ * three output bytes, the decoded output can reach up to 3 * strlen(str)
+ * bytes.  All in-tree callers (csilk_split_url, csilk_parse_query,
+ * http1_parse.c) therefore allocate a buffer sized to that 3x worst case
+ * (3 * input_len + 1) so the in-place decode never overflows.
  *
  * @param str Null-terminated string to decode (modified in-place).
  * @return The length of the decoded string.
  */
 size_t
-csilk_url_decode(char* str)
+csilk_url_decode(char* str, size_t str_cap)
 {
-    if (!str) {
+    if (!str || str_cap == 0) {
         return 0;
     }
 
@@ -114,8 +115,13 @@ csilk_url_decode(char* str)
     }
 
     /* Input contains '%': use a heap buffer to safely handle both valid
-     * %XX (1 byte) and invalid % (3 bytes "%25") expansions. */
-    char* tmp = malloc(out_len + 1);
+     * %XX (1 byte) and invalid % (3 bytes "%25") expansions.  The buffer is
+     * sized to the absolute worst case, 3 * in_len + 1 (every input byte can
+     * expand to 3 bytes), which is provably >= the decoded output length.
+     * Sizing from in_len (rather than the measured out_len) keeps the
+     * capacity relationship transparent to static analysis. */
+    size_t tmp_cap = in_len * 3 + 1;
+    char*  tmp = malloc(tmp_cap);
     if (!tmp) {
         /* Fallback: leave the string unchanged (safe, no crash). */
         return in_len;
@@ -145,7 +151,19 @@ csilk_url_decode(char* str)
         src++;
     }
     *dst = '\0';
-    memcpy(str, tmp, dst - tmp + 1);
+    /* The decoded result is out_len bytes + NUL (out_len <= in_len * 3).
+     * Write as much as fits in str (bounded by str_cap); if the output does
+     * not fit, truncate but always NUL-terminate.  The copy length is
+     * min(out_len + 1, str_cap). */
+    size_t copy_len = (out_len + 1 < str_cap) ? (out_len + 1) : str_cap;
+    if (copy_len > 0) {
+        memcpy(str, tmp, copy_len);
+        /* When truncated, ensure the string is NUL-terminated at str_cap-1.
+         * When not truncated, the NUL was already copied as the last byte. */
+        if (copy_len <= out_len) {
+            str[copy_len - 1] = '\0';
+        }
+    }
     free(tmp);
     return out_len;
 }
@@ -176,15 +194,17 @@ csilk_split_url(const char* url, char** path, char** query)
     const char* qmark = strchr(url, '?');
     if (qmark) {
         size_t path_len = qmark - url;
-        /* +3 slack for csilk_url_decode() expanding invalid percent-encodings */
-        *path = malloc(path_len + 3 + 1);
+        /* Worst case: every char is an invalid '%' that expands to "%25",
+         * i.e. output length can reach 3 * path_len. Allocate to that bound
+         * plus the NUL terminator so the in-place decode never overflows. */
+        *path = malloc(path_len * 3 + 1);
         if (!*path) {
             return;
         }
 
         memcpy(*path, url, path_len);
         (*path)[path_len] = '\0';
-        csilk_url_decode(*path);
+        csilk_url_decode(*path, path_len * 3 + 1);
 
         *query = strdup(qmark + 1);
         if (!*query) {
@@ -193,11 +213,11 @@ csilk_split_url(const char* url, char** path, char** query)
         }
     } else {
         size_t url_len = strlen(url);
-        /* +3 slack for csilk_url_decode() expanding invalid percent-encodings */
-        *path = malloc(url_len + 3 + 1);
+        /* Same 3x worst-case bound for the decoded path. */
+        *path = malloc(url_len * 3 + 1);
         if (*path) {
             memcpy(*path, url, url_len + 1);
-            csilk_url_decode(*path);
+            csilk_url_decode(*path, url_len * 3 + 1);
         }
     }
 }
