@@ -362,7 +362,7 @@ _raft_broadcast_append_entries_locked(csilk_raft_node_t* node)
         ae.entry_count = (uint32_t)count;
 
         const csilk_raft_log_entry_t* slice = (count > 0) ? &node->entries[start_pos] : NULL;
-        int plen = _raft_rpc_encode_ae_req(&ae,
+        int                           plen = _raft_rpc_encode_ae_req(&ae,
                                            slice,
                                            count,
                                            tx_buf + sizeof(csilk_raft_hdr_t),
@@ -958,11 +958,11 @@ raft_transport_loop(void* arg)
                     struct sockaddr_in src_addr = {0};
                     socklen_t          slen = sizeof(src_addr);
                     ssize_t            n = recvfrom(fd,
-                                                    rx_buf,
-                                                    CSILK_RAFT_RPC_MAX_PACKET,
-                                                    0,
-                                                    (struct sockaddr*)&src_addr,
-                                                    &slen);
+                                         rx_buf,
+                                         CSILK_RAFT_RPC_MAX_PACKET,
+                                         0,
+                                         (struct sockaddr*)&src_addr,
+                                         &slen);
                     if (n < 0) {
                         if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
                             break;
