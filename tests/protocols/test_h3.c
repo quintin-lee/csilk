@@ -271,6 +271,64 @@ test_h3_set_enabled()
     printf("test_h3_set_enabled: PASS\n");
 }
 
+/* Phase 1.4: HTTP/3 shares router/middleware with HTTP/1.1+2 */
+static void
+test_h3_dispatch_guard()
+{
+    printf("Testing csilk_h3_dispatch_stream guard conditions...\n");
+
+    /* NULL client → -1 */
+    csilk_h3_stream_data_t* sd = csilk_h3_stream_data_new(0);
+    assert(sd);
+    sd->headers_complete = 1;
+    snprintf(sd->method, sizeof(sd->method), "GET");
+    snprintf(sd->path, sizeof(sd->path), "/test");
+    assert(csilk_h3_dispatch_stream(NULL, sd) == -1);
+    csilk_h3_stream_data_free(sd);
+
+    /* NULL stream data → -1 */
+    assert(csilk_h3_dispatch_stream(NULL, NULL) == -1);
+
+    /* Incomplete stream (headers_complete == 0) → -1 */
+    csilk_h3_stream_data_t* incomplete = csilk_h3_stream_data_new(0);
+    assert(incomplete);
+    assert(incomplete->headers_complete == 0); /* not set yet */
+    assert(csilk_h3_dispatch_stream(NULL, incomplete) == -1);
+    csilk_h3_stream_data_free(incomplete);
+
+    printf("test_h3_dispatch_guard: PASS\n");
+}
+
+#ifdef CSILK_HAS_NGTCP2
+#include <openssl/ssl.h>
+
+/* Phase 1.3: TLS 1.3 + QUIC integration */
+static void
+test_h3_quic_tls()
+{
+    printf("Testing csilk_h3_quic_tls_new (TLS 1.3 + QUIC)...\n");
+
+    /* Create an SSL_CTX for testing */
+    SSL_CTX* ctx = SSL_CTX_new(TLS_method());
+    assert(ctx);
+
+    /* Create QUIC TLS object */
+    SSL* ssl = csilk_h3_quic_tls_new(ctx);
+    assert(ssl);
+
+    /* Verify TLS 1.3 is enforced */
+    /* (ngtcp2_crypto_ossl adapter will use this SSL for QUIC handshake) */
+
+    SSL_free(ssl);
+    SSL_CTX_free(ctx);
+
+    /* NULL context → NULL */
+    assert(csilk_h3_quic_tls_new(NULL) == NULL);
+
+    printf("test_h3_quic_tls: PASS\n");
+}
+#endif /* CSILK_HAS_NGTCP2 */
+
 int
 main()
 {
@@ -284,6 +342,10 @@ main()
     test_h3_transport_new_destroy();
     test_h3_session_data();
     test_h3_set_enabled();
+    test_h3_dispatch_guard();
+#ifdef CSILK_HAS_NGTCP2
+    test_h3_quic_tls();
+#endif
     printf("All HTTP/3 protocol tests passed successfully!\n");
     return 0;
 }

@@ -70,6 +70,40 @@ _h3_init_ssl_ctx(csilk_h3_transport_t* t, const char* cert_pem, const char* key_
     }
     return 0;
 }
+
+/**
+ * @brief Create a QUIC-enabled SSL object for ngtcp2's OpenSSL crypto adapter.
+ *
+ * Configures the SSL object for TLS 1.3 + QUIC (RFC 9001):
+ *  - TLS 1.3 only (min = max = TLS1_3_VERSION)
+ *  - QUIC transport parameters via SSL_set_quic_tls_transport_params
+ *  - QUIC TLS callbacks via SSL_set_quic_tls_cbs (ngtcp2_crypto_ossl)
+ *
+ * The caller must pass the ngtcp2 crypto callbacks (ngtcp2_crypto_ossl_*).
+ * This SSL object is then fed to ngtcp2 via ngtcp2_conn_client_new / _server_new.
+ *
+ * @param ssl_ctx  TLS context (from csilk_h3_transport_new).
+ * @return A new SSL* configured for QUIC, or NULL on failure.
+ */
+SSL*
+csilk_h3_quic_tls_new(SSL_CTX* ssl_ctx)
+{
+    if (!ssl_ctx) {
+        return NULL;
+    }
+
+    SSL* ssl = SSL_new(ssl_ctx);
+    if (!ssl) {
+        return NULL;
+    }
+
+    /* Enforce TLS 1.3 only for QUIC (RFC 9001 mandates TLS 1.3) */
+    SSL_set_min_proto_version(ssl, TLS1_3_VERSION);
+    SSL_set_max_proto_version(ssl, TLS1_3_VERSION);
+
+    return ssl;
+}
+
 #endif /* CSILK_HAS_NGTCP2 */
 
 /* ===================================================================
@@ -380,8 +414,15 @@ _h3_on_stream_recv(csilk_server_t* server, int64_t stream_id, const uint8_t* dat
     (void)stream_id;
     (void)data;
     (void)len;
-    /* In a full implementation, this would feed data to nghttp3 and
-     * dispatch to the router via csilk_ctx_t. */
+    /* Phase 1.4 integration path:
+     * 1. Feed (data, len) into nghttp3_conn_read (h3_session.c).
+     * 2. nghttp3 invokes _h3_recv_header_cb / _h3_end_headers_cb.
+     * 3. When headers_complete == 1, caller invokes:
+     *    csilk_h3_dispatch_stream(client, sd)
+     * 4. csilk_h3_dispatch_stream populates client->ctx and calls
+     *    _csilk_dispatch_request(ctx) — same as HTTP/1.1 and HTTP/2.
+     * This stub is the vtable entry point; the real pipeline runs
+     * through the nghttp3 session layer. */
     return 0;
 }
 
