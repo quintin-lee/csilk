@@ -201,6 +201,7 @@ set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/request_id.c
     src/middleware/security_headers.c
     src/middleware/session.c
+    src/middleware/session_store.c
     src/middleware/sliding_ratelimit.c
     src/middleware/sse.c
     src/middleware/static.c
