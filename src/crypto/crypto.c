@@ -35,7 +35,6 @@
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
 
-
 /**
  * @brief Initialize a SHA-256 hashing context using OpenSSL.
  * @param context SHA-256 context to initialize (must not be NULL).
@@ -291,7 +290,8 @@ csilk_crypto_generate_nonce(uint8_t* out, size_t len)
 {
     if (csilk_crypto_fill_random(out, len) != 0) {
         CSILK_LOG_E("crypto: fatal — all entropy sources unavailable, "
-                    "cannot generate secure nonce (%zu bytes); aborting", len);
+                    "cannot generate secure nonce (%zu bytes); aborting",
+                    len);
         abort();
     }
 }

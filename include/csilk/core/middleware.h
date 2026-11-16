@@ -410,9 +410,9 @@ typedef void (*csilk_session_value_cleanup_fn)(void* value);
  * @param value   Opaque value pointer.
  * @param cleanup Cleanup callback invoked on session teardown, or NULL.
  */
-void csilk_session_set_ex(csilk_ctx_t* c,
-                          const char* key,
-                          void*       value,
+void csilk_session_set_ex(csilk_ctx_t*                   c,
+                          const char*                    key,
+                          void*                          value,
                           csilk_session_value_cleanup_fn cleanup);
 
 /**
