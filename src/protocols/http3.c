@@ -87,6 +87,10 @@ _h3_init_ssl_ctx(csilk_h3_transport_t* t, const char* cert_pem, const char* key_
 csilk_h3_transport_t*
 csilk_h3_transport_new(int port, const char* cert_pem, const char* key_pem)
 {
+    if (port <= 0) {
+        return NULL;
+    }
+
     csilk_h3_transport_t* t = calloc(1, sizeof(csilk_h3_transport_t));
     if (!t) {
         return NULL;

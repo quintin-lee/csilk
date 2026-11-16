@@ -70,7 +70,7 @@ if(CSILK_ENABLE_HTTP3)
       add_library(csilk::ngtcp2 INTERFACE IMPORTED)
       set_target_properties(csilk::ngtcp2 PROPERTIES
         INTERFACE_INCLUDE_DIRECTORIES "${NGTCP2_INCLUDE_DIR}"
-        INTERFACE_LINK_LIBRARIES "${NGTCP2_LIB};${NGTCP2_CRYPTO_OSSL_LIB};${OPENSSL_LIBRARIES}"
+        INTERFACE_LINK_LIBRARIES "${NGTCP2_LIB};${NGTCP2_CRYPTO_OSSL_LIB};OpenSSL::SSL;OpenSSL::Crypto"
       )
     endif()
     if(NOT TARGET csilk::nghttp3)

@@ -145,6 +145,12 @@ csilk_url_decode(char* str)
         src++;
     }
     *dst = '\0';
+    /*
+     * Copy back exactly the decoded content (including the NUL terminator).
+     * Using `dst - tmp` as the copy length (not the full tmp allocation)
+     * ensures we never read past the NUL written above, even if the caller's
+     * buffer has more slack than out_len+1.
+     */
     memcpy(str, tmp, dst - tmp + 1);
     free(tmp);
     return out_len;
