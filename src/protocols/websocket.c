@@ -60,7 +60,7 @@
  *       csilk_ws_parse_frame(). On failure (missing Sec-WebSocket-Key), a
  *       400 Bad Request JSON error is sent. */
 void
-csilK_ws_handshake(csilk_ctx_t* c)
+csilk_ws_handshake(csilk_ctx_t* c)
 {
     const char* key = csilk_get_header(c, "Sec-WebSocket-Key");
     if (!key) {
