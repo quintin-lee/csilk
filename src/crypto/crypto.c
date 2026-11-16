@@ -22,7 +22,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdatomic.h>
 #if defined(__linux__)
 #include <sys/random.h>
 #endif
@@ -36,7 +35,6 @@
 #include <openssl/hmac.h>
 #include <openssl/sha.h>
 
-static _Atomic uint32_t g_nonce_counter = 0;
 
 /**
  * @brief Initialize a SHA-256 hashing context using OpenSSL.
@@ -276,12 +274,14 @@ _csilk_bcrypt_hash(
 }
 
 /**
- * @brief Generate a random nonce, with a monotonic fallback.
+ * @brief Generate a random nonce, aborting on entropy failure.
  *
  * Fills @p out with @p len cryptographically random bytes.  If the system
- * entropy source fails, falls back to a deterministic-but-unique value built
- * from csilk_io_hrtime() plus an atomic counter, so the nonce is never
- * (accidentally) reused — important for AEAD / nonce-misuse resistance.
+ * entropy source fails (all of getrandom/arc4random/CryptGenRandom/
+ * /dev/urandom unavailable), the process aborts rather than silently
+ * falling back to a deterministic counter-based nonce — which would be
+ * predictable across reboots and would defeat AEAD nonce-misuse resistance
+ * (CWE-330).  A deterministic nonce is NEVER acceptable for GCM.
  *
  * @param out [out] Buffer to receive the nonce.
  * @param len Number of nonce bytes to generate.
@@ -290,18 +290,9 @@ void
 csilk_crypto_generate_nonce(uint8_t* out, size_t len)
 {
     if (csilk_crypto_fill_random(out, len) != 0) {
-        /* Monotonic unique fallback to ensure GCM safety (never reuse nonce)
-         * if the system entropy source fails. Uses csilk_io_hrtime() and atomic counter. */
-        uint64_t ts = csilk_io_hrtime();
-        uint32_t count = atomic_fetch_add(&g_nonce_counter, 1);
-        size_t   i = 0;
-        for (; i < len && i < 8; i++) {
-            out[i] = (uint8_t)(ts >> (i * 8));
-        }
-        for (; i < len; i++) {
-            size_t shift = ((i - 8) % 4) * 8;
-            out[i] = (uint8_t)(count >> shift);
-        }
+        CSILK_LOG_E("crypto: fatal — all entropy sources unavailable, "
+                    "cannot generate secure nonce (%zu bytes); aborting", len);
+        abort();
     }
 }
 

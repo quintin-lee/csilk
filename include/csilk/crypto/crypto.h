@@ -68,6 +68,11 @@ typedef struct {
  * the security of GCM mode.  It uses the best available randomness source
  * (OS entropy or the configured crypto driver).
  *
+ * @note Fail-fast: if all entropy sources are unavailable the process
+ *       aborts rather than falling back to a deterministic nonce, which
+ *       would be predictable and defeat GCM nonce-misuse resistance
+ *       (CWE-330).
+ *
  * @param[out] out  Buffer of at least @p len bytes.
  * @param      len  Length of the nonce to generate (typically CSILK_GCM_NONCE_SIZE).
  */
