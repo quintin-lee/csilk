@@ -359,7 +359,9 @@ test_chat_streaming_with_tools(void)
     assert(rc == 0);
     assert(res.tool_call_count == 1);
     assert(strcmp(res.tool_calls[0].name, "get_weather") == 0);
-    assert(strcmp(res.tool_calls[0].id, "call_mock_001") == 0);
+    /* The mock streams the tool id across two chunks ("call_mock_001" + "_extra"),
+     * exercising the id-accumulation realloc path in the OpenAI driver. */
+    assert(strcmp(res.tool_calls[0].id, "call_mock_001_extra") == 0);
     assert(strstr(res.tool_calls[0].arguments, "Beijing") != NULL);
     assert(res.prompt_tokens == 12);
     assert(res.completion_tokens == 8);

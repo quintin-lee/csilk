@@ -128,7 +128,9 @@ class OpenAIMockHandler(BaseHTTPRequestHandler):
                             "delta": {
                                 "tool_calls": [{
                                     "index": 0,
+                                    "id": "_extra",
                                     "function": {
+                                        "name": "",   # empty: exercises the name-accumulation realloc path
                                         "arguments": "{\"city\": "
                                     }
                                 }]
