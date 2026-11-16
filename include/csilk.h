@@ -23,6 +23,7 @@
 #include "csilk/core/router.h"
 #include "csilk/core/group.h"
 #include "csilk/core/middleware.h"
+#include "csilk/core/session_store.h"
 #include "csilk/protocols/websocket.h"
 #include "csilk/protocols/sse.h"
 #include "csilk/messaging/mq.h"
