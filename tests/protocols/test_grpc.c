@@ -249,6 +249,33 @@ test_streaming(void)
     printf("test_streaming: PASS\n");
 }
 
+static void
+test_stream_concurrent(void)
+{
+    printf("Testing concurrent gRPC streams...\n");
+
+#define NUM_STREAMS 8
+    csilk_grpc_stream_t* streams[NUM_STREAMS];
+    for (int i = 0; i < NUM_STREAMS; i++) {
+        streams[i] = csilk_grpc_stream_new(CSILK_GRPC_STREAM_BIDI_STREAMING, NULL, NULL);
+        assert(streams[i] != NULL);
+    }
+
+    for (int i = 0; i < NUM_STREAMS; i++) {
+        uint8_t frame[] = {0x00, 0x00, 0x00, 0x00, 0x01, (uint8_t)i};
+        int     rc = csilk_grpc_stream_feed(streams[i], frame, sizeof(frame));
+        assert(rc == 0);
+    }
+
+    for (int i = 0; i < NUM_STREAMS; i++) {
+        assert(csilk_grpc_stream_closed(streams[i]) == 0);
+        csilk_grpc_stream_destroy(streams[i]);
+    }
+#undef NUM_STREAMS
+
+    printf("test_stream_concurrent: PASS\n");
+}
+
 int
 main(void)
 {
@@ -261,6 +288,7 @@ main(void)
     test_trailer_parse();
     test_metadata_parse();
     test_streaming();
+    test_stream_concurrent();
 
     printf("==========================================\n");
     printf("All gRPC tests passed!\n");
