@@ -205,3 +205,162 @@ csilk_grpc_metadata_parse(const csilk_kv_t* headers,
 
     return 0;
 }
+
+/* ===================================================================
+ * gRPC Streaming
+ * =================================================================== */
+
+struct csilk_grpc_stream_s {
+    csilk_grpc_stream_type_t type;
+    csilk_grpc_on_message_cb on_msg;
+    void*                    user_data;
+    int                      closed;
+    int                      half_closed;
+    uint8_t*                 rbuf;
+    size_t                   rbuf_len;
+    size_t                   rbuf_cap;
+    uint32_t                 expected_len;
+    int                      in_header;
+    size_t                   header_pos;
+};
+
+csilk_grpc_stream_t*
+csilk_grpc_stream_new(csilk_grpc_stream_type_t type,
+                      csilk_grpc_on_message_cb on_msg,
+                      void*                    user_data)
+{
+    csilk_grpc_stream_t* s = calloc(1, sizeof(csilk_grpc_stream_t));
+    if (!s) {
+        return NULL;
+    }
+
+    s->type = type;
+    s->on_msg = on_msg;
+    s->user_data = user_data;
+    s->closed = 0;
+    s->half_closed = 0;
+    s->in_header = 1;
+    s->header_pos = 0;
+    s->expected_len = 0;
+
+    s->rbuf_cap = 4096;
+    s->rbuf = malloc(s->rbuf_cap);
+    if (!s->rbuf) {
+        free(s);
+        return NULL;
+    }
+    s->rbuf_len = 0;
+
+    return s;
+}
+
+int
+csilk_grpc_stream_send(csilk_grpc_stream_t* stream,
+                       const uint8_t*       payload,
+                       size_t               payload_len,
+                       int                  is_last)
+{
+    if (!stream || stream->closed) {
+        return -1;
+    }
+
+    (void)payload;
+    (void)payload_len;
+
+    if (is_last) {
+        stream->half_closed = 1;
+        if (stream->type == CSILK_GRPC_STREAM_UNARY ||
+            stream->type == CSILK_GRPC_STREAM_CLIENT_STREAMING) {
+            stream->closed = 1;
+        }
+    }
+
+    return 0;
+}
+
+int
+csilk_grpc_stream_feed(csilk_grpc_stream_t* stream, const uint8_t* data, size_t len)
+{
+    if (!stream || stream->closed || !data) {
+        return -1;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        uint8_t byte = data[i];
+
+        if (stream->in_header) {
+            stream->header_pos++;
+            if (stream->rbuf_len + 1 > stream->rbuf_cap) {
+                size_t   new_cap = stream->rbuf_cap * 2;
+                uint8_t* tmp = realloc(stream->rbuf, new_cap);
+                if (!tmp) {
+                    return -1;
+                }
+                stream->rbuf = tmp;
+                stream->rbuf_cap = new_cap;
+            }
+            stream->rbuf[stream->rbuf_len++] = byte;
+
+            if (stream->header_pos >= 5) {
+                stream->expected_len = ((uint32_t)stream->rbuf[1] << 24) |
+                                       ((uint32_t)stream->rbuf[2] << 16) |
+                                       ((uint32_t)stream->rbuf[3] << 8) | (uint32_t)stream->rbuf[4];
+                stream->in_header = 0;
+                stream->header_pos = 0;
+            }
+            continue;
+        }
+
+        if (stream->rbuf_len + 1 > stream->rbuf_cap) {
+            size_t   new_cap = stream->rbuf_cap * 2;
+            uint8_t* tmp = realloc(stream->rbuf, new_cap);
+            if (!tmp) {
+                return -1;
+            }
+            stream->rbuf = tmp;
+            stream->rbuf_cap = new_cap;
+        }
+        stream->rbuf[stream->rbuf_len++] = byte;
+
+        size_t payload_start = 5;
+        if (stream->rbuf_len >= payload_start + stream->expected_len) {
+            if (stream->on_msg) {
+                stream->on_msg(
+                    stream, stream->rbuf + payload_start, stream->expected_len, stream->user_data);
+            }
+            stream->in_header = 1;
+            stream->header_pos = 0;
+            stream->expected_len = 0;
+            stream->rbuf_len = 0;
+        }
+    }
+
+    return 0;
+}
+
+void
+csilk_grpc_stream_end(csilk_grpc_stream_t* stream)
+{
+    if (stream) {
+        stream->closed = 1;
+    }
+}
+
+int
+csilk_grpc_stream_closed(const csilk_grpc_stream_t* stream)
+{
+    if (!stream) {
+        return 1;
+    }
+    return stream->closed;
+}
+
+void
+csilk_grpc_stream_destroy(csilk_grpc_stream_t* stream)
+{
+    if (!stream) {
+        return;
+    }
+    free(stream->rbuf);
+    free(stream);
+}
