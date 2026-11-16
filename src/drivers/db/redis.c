@@ -143,9 +143,13 @@ redis_drv_connect(csilk_db_pool_t* pool, const char* dsn)
         return -1;
     }
 
-    /* Authenticate if password provided */
+    /* Authenticate if password provided.
+     * Use redisCommandArgv to pass the password as a separate argv element,
+     * avoiding any %s format-string interpretation if password contains '%'. */
     if (password) {
-        redisReply* reply = redisCommand(conn->c, "AUTH %s", password);
+        const char*   auth_argv[] = {"AUTH", password, NULL};
+        size_t        auth_len[]  = {4, strlen(password), 0};
+        redisReply*   reply       = (redisReply*)redisCommandArgv(conn->c, 2, auth_argv, auth_len);
         free(password);
         if (!reply || reply->type == REDIS_REPLY_ERROR) {
             CSILK_LOG_E("csilk_db_redis: AUTH failed: %s", reply ? reply->str : "no reply");
