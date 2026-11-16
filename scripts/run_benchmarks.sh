@@ -357,7 +357,11 @@ python3 -m json.tool "$tmpfile" 2>/dev/null || cat "$tmpfile"
 if [ "$MODE" = "save" ] || [ "$MODE" = "ci" ]; then
     outfile="${BENCH_DIR}/results/v${VERSION}-${GIT_HASH}.json"
     cp "$tmpfile" "$outfile"
-    echo "Saved: ${outfile}"
+    # Also keep a stable alias so CI workflows that expect
+    # `results/latest.json` (e.g. bench.yml's PR Compare step) can `mv` it
+    # without depending on the versioned file name.
+    cp "$tmpfile" "${BENCH_DIR}/results/latest.json"
+    echo "Saved: ${outfile} (alias: results/latest.json)"
 fi
 
 # --compare or --ci
