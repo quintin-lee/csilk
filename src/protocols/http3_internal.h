@@ -73,9 +73,6 @@ struct csilk_h3_transport_s {
     int                     conn_count;
 };
 
-/** @brief Get the HTTP/3 QUIC transport vtable (matches csilk_quic_transport_t from server.h). */
-const csilk_quic_transport_t* csilk_h3_get_quic_transport(void);
-
 #ifdef __cplusplus
 }
 #endif

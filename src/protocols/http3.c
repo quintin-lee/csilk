@@ -394,22 +394,6 @@ _h3_on_stream_send(csilk_server_t* server, int64_t stream_id, const uint8_t* dat
 }
 
 /**
- * @brief Get the HTTP/3 QUIC transport vtable.
- *
- * @return Pointer to the static csilk_quic_transport_t vtable.
- */
-const csilk_quic_transport_t*
-csilk_h3_get_quic_transport(void)
-{
-    static csilk_quic_transport_t h3_vtable = {
-        .name = "ngtcp2",
-        .on_stream_recv = _h3_on_stream_recv,
-        .on_stream_send = _h3_on_stream_send,
-    };
-    return &h3_vtable;
-}
-
-/**
  * @brief Enable HTTP/3 on a csilk_server_t.
  *
  * @param server  Server instance (csilk_server_t*).
@@ -422,8 +406,13 @@ csilk_h3_set_enabled(void* server, int port)
     if (!server || port <= 0) {
         return -1;
     }
-    csilk_server_t* srv = (csilk_server_t*)server;
-    csilk_server_set_quic_transport(srv, csilk_h3_get_quic_transport());
+    csilk_server_t*               srv = (csilk_server_t*)server;
+    static csilk_quic_transport_t h3_vtable = {
+        .name = "ngtcp2",
+        .on_stream_recv = _h3_on_stream_recv,
+        .on_stream_send = _h3_on_stream_send,
+    };
+    csilk_server_set_quic_transport(srv, &h3_vtable);
     CSILK_LOG_I("HTTP/3: enabled on server, UDP port %d", port);
     return 0;
 }
