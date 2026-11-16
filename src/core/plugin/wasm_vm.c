@@ -181,9 +181,12 @@ csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin)
  * @param[in]  err_len   Capacity of err_buf.
  * @return A strdup'd JSON result string on success, or NULL on invalid args or
  *         a fuel-exhausted trap (err_buf is filled when non-NULL and non-empty).
- * @note Currently simulated: returns a constant success JSON under the plugin
- *       mutex. Enforces the configured fuel budget; a zero fuel simulates a
- *       trap and emits "CSILK_WASM_TRAP_FUEL_EXHAUSTED".
+ * @note WAMR path: the WASM function may return an i32 offset into linear
+ *       memory pointing to a NUL-terminated string (typically JSON).  That
+ *       string is read and returned.  A zero return (void) yields the
+ *       default success JSON.  Stub path: enforces the configured fuel
+ *       budget; a zero fuel simulates a trap and emits
+ *       "CSILK_WASM_TRAP_FUEL_EXHAUSTED".
  */
 char*
 csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
@@ -222,17 +225,48 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
             }
             return NULL;
         }
-        int rc = wasm_runtime_call_wasm(env, func, 0, NULL);
+        /* argv holds the i32/i64 return value after the call. */
+        uint32_t argv[2] = {0};
+        int      rc = wasm_runtime_call_wasm(env, func, 0, argv);
         wasm_runtime_destroy_exec_env(env);
         if (!rc) {
             csilk_mutex_unlock(&plugin->mutex);
             if (err_buf && err_len > 0) {
-                snprintf(err_buf, err_len, "CSILK_WASM_TRAP_EXECUTION_ERR");
+                const char* exc = wasm_runtime_get_exception(inst);
+                snprintf(
+                    err_buf, err_len, "CSILK_WASM_TRAP_EXECUTION_ERR: %s", exc ? exc : "unknown");
             }
             return NULL;
         }
         csilk_mutex_unlock(&plugin->mutex);
-        char* res = strdup("{\"status\":\"ok\",\"result\":\"wasm_execution_success\"}");
+
+        /* Extract the return value.
+         * argv[0] holds the i32 return (or first 32 bits of i64).
+         * Convention: a non-zero i32 return is an offset into WASM linear
+         * memory pointing to a NUL-terminated string (typically JSON).
+         * A zero return means void — use the default success JSON. */
+        char*    res = NULL;
+        uint32_t ret = argv[0];
+        if (ret != 0) {
+            /* Read the string from WAMR's linear memory. */
+            wasm_memory_t mem = wasm_runtime_get_linear_memory(inst);
+            uint32_t      mem_size = wasm_runtime_get_linear_memory_size(mem);
+            if (mem && ret < mem_size) {
+                const char* p = (const char*)mem + ret;
+                size_t      str_len = 0;
+                while (str_len < (size_t)(mem_size - ret) && p[str_len] != '\0') {
+                    str_len++;
+                }
+                /* Cap at 1 MB to prevent a corrupt offset from exhausting memory */
+                if (str_len > (size_t)(1024 * 1024)) {
+                    str_len = 1024 * 1024;
+                }
+                res = strndup(p, str_len);
+            }
+        }
+        if (!res) {
+            res = strdup("{\"status\":\"ok\",\"result\":\"wasm_execution_success\"}");
+        }
         return res;
     }
 #endif

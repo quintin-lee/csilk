@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-16
+
+### Added
+
+- **WASM WAMR real runtime** (`src/core/plugin/wasm_vm.c`, `cmake/dependencies.cmake`): optional WAMR 2.4.4 interpreter via `-DCSILK_ENABLE_WAMR=ON`. `csilk_wasm_plugin_exec` now executes real bytecode and extracts the return value from WAMR's linear memory (i32 offset convention). WASI host-imports (`fd_write`, `clock_time_get`) replace the previous constant stubs.
+- **AF_XDP kernel bypass** (`src/core/io/af_xdp.c`): real `socket(AF_XDP)` + UMEM/ring initialization on Linux ≥ 5.3. `io_perf_probe.c` now probes `/sys/class/net/<if>/xsk` + `xsk_socket_get_features()` instead of `geteuid()==0`.
+- **HTTP/3 architecture groundwork** (`cmake/dependencies.cmake`, `src/protocols/h3_internal.h`): ngtcp2/nghttp3 FetchContent + QUIC transport vtable definitions behind `-DCSILK_ENABLE_HTTP3=ON` (default OFF; full implementation deferred to v1.2).
+- **`csilk_session_set_ex()` / `csilk_session_set_len()` / `csilk_session_get_ex()`** (`include/csilk/core/middleware.h`): session value storage with optional cleanup callback and explicit byte-length for binary data.
+- **`CSILK_WF_CLUSTER_MAX_BINDINGS`** (`cmake/options.cmake`): parametric workflow↔Raft binding limit (default 128, was hard-coded 32).
+
+### Changed
+
+- **Session store** (`src/middleware/session.c`): global singly-linked list O(n) → 1024-bucket sharded hash table with LRU eviction cap. `csilk_session_get` is now O(1) amortised.
+- **OTLP trace buffer** (`src/middleware/otlp_trace.c`): fixed 2048-span global ring → per-worker 1024-span buffer with configurable sampling degradation on overflow (default 1/1000).
+- **`CSILK_ENABLE_EXPERIMENTAL_STUBS` default flipped to OFF** (`cmake/options.cmake`): AF_XDP/DPDK/HTTP/3 stubs are fail-closed by default, honouring the 1.0.0 LTS stability commitment. Build with `-DCSILK_ENABLE_EXPERIMENTAL_STUBS=ON` to re-enable simulated rings.
+- **`CSILK_ENABLE_WAMR` forces `CSILK_ENABLE_EXPERIMENTAL_STUBS=OFF`**: when WAMR is active the stub VM is irrelevant.
+- **WAMR 64-bit safety** (`src/core/plugin/wasm_vm.c`): `uintptr_t` for WAMR module/instance IDs (was `uint32_t`).
+- **HNSW doc_id + MVCC cache leak fix** (`src/drivers/vector/hnsw.c`, `src/core/cache/`): two LSAN-detected leaks fixed.
+- **Python ctypes mirror sync** (`python/`): `CsilkAiConfig` now includes the new driver field.
+- **AI node driver injectable** (`src/workflow/wf_ai_react_loop.c`): driver pointer is a parameter, improving testability.
+
+### Fixed
+
+- **CWE-330**: `csilk_crypto_generate_nonce` now aborts on total entropy failure instead of falling back to a deterministic counter (which would defeat AEAD nonce-misuse resistance).
+- **CWE-20**: `csilk_ws_handshake` rejects `Sec-WebSocket-Key` > 255 bytes before SHA-1 computation, preventing input truncation.
+- **CWE-400**: gzip middleware caps expansion ratio at 10:1; incompressible payloads skip compression instead of inflating memory.
+- **CWE-116**: `csilk_url_decode` normalises invalid `%XX` to `%25` (WAF-bypass defence). Heap buffer used when input contains `%` to avoid in-place overwrite. +3 slack added to all in-tree callers.
+- **Redis AUTH format-string injection** (`src/drivers/db/redis.c`): switched to `redisCommandArgv`.
+- **`csilK_` typo** (`src/protocols/websocket.c`): `csilk_ws_handshake` was misspelled `csilK_ws_handshake`, breaking 4 test link targets.
+- **WAMR exception info** (`src/core/plugin/wasm_vm.c`): `csilk_wasm_plugin_exec` now reports `wasm_runtime_get_exception()` details on trap.
+
+### Tests
+
+- New coverage: `test_wasm_real`, `fuzz_wasm`, `test_af_xdp` (fail-closed), `test_otlp_trace` (cross-module span chaining + backpressure), `test_wf_cluster_sm` (snapshot recovery + idempotent replay), `test_vector_hnsw` (1000×128 recall > 95 %), `test_ratelimit` (distributed Redis mock), `fuzz_h3` + conditional compile test skeleton.
+- GCovr 80 % line-coverage gate added to local + CI (`--fail-under-line`).
+- 265/265 unit tests + 2/2 integration tests passing.
+
 ## [Unreleased]
 
 ## [1.0.0] - 2026-11-15

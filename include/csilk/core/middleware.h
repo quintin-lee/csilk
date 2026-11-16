@@ -416,6 +416,27 @@ void csilk_session_set_ex(csilk_ctx_t*                   c,
                           csilk_session_value_cleanup_fn cleanup);
 
 /**
+ * @brief Store a value in the session with an explicit byte length and
+ *        optional cleanup callback.
+ *
+ * Records the byte size of the value so that csilk_session_get_ex() can
+ * return it to the caller without a side-channel.  Replaces the existing
+ * value for @p key (running the old value's cleanup if one was registered)
+ * or appends a new entry.
+ *
+ * @param c       The request context.
+ * @param key     Key name (copied internally).
+ * @param value   Opaque value pointer.
+ * @param len     Byte length of @p value (0 = caller-managed size).
+ * @param cleanup Cleanup callback invoked on session teardown, or NULL.
+ */
+void csilk_session_set_len(csilk_ctx_t*                   c,
+                           const char*                    key,
+                           void*                          value,
+                           size_t                         len,
+                           csilk_session_value_cleanup_fn cleanup);
+
+/**
  * @brief Retrieve a value from the session.
  *
  * @param c   The request context.
@@ -424,6 +445,21 @@ void csilk_session_set_ex(csilk_ctx_t*                   c,
  *         not found.
  */
 void* csilk_session_get(csilk_ctx_t* c, const char* key);
+
+/**
+ * @brief Retrieve a value from the session with an optional size out-parameter.
+ *
+ * Symmetric to csilk_session_set_ex(): when the value was stored with a
+ * known byte size (e.g. a binary blob), the caller can retrieve both the
+ * pointer and its length in one call without needing a side-channel.
+ *
+ * @param c       The request context.
+ * @param key     Key name.
+ * @param out_len Optional; receives the stored value's byte size.  Pass NULL
+ *                to ignore.  Set to 0 when the key is not found.
+ * @return The value previously stored, or NULL if not found / no session.
+ */
+void* csilk_session_get_ex(csilk_ctx_t* c, const char* key, size_t* out_len);
 
 /**
  * @brief Destroy the session and clear the session cookie.

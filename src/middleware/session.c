@@ -38,7 +38,8 @@ enum { SESSION_TTL = 3600 };
 typedef struct csilk_session_data_s {
     char*                          key;
     void*                          value;
-    csilk_session_value_cleanup_fn cleanup; /* optional; NULL = caller-owned */
+    size_t                         value_len; /* 0 = caller-managed size */
+    csilk_session_value_cleanup_fn cleanup;   /* optional; NULL = caller-owned */
     struct csilk_session_data_s*   next;
 } csilk_session_data_t;
 
@@ -459,15 +460,32 @@ csilk_session_set(csilk_ctx_t* c, const char* key, void* value)
 /**
  * @brief Store a value in the session with an optional cleanup callback.
  *
- * Replaces the existing value for @p key (running the old value's cleanup if
- * one was registered) or appends a new entry.  Use this instead of
- * csilk_session_set() when the value must be released on session teardown.
+ * Thin wrapper around csilk_session_set_len() with a value_len of 0.
  */
 void
 csilk_session_set_ex(csilk_ctx_t*                   c,
                      const char*                    key,
                      void*                          value,
                      csilk_session_value_cleanup_fn cleanup)
+{
+    csilk_session_set_len(c, key, value, 0, cleanup);
+}
+
+/**
+ * @brief Store a value in the session with an explicit byte length and
+ *        optional cleanup callback.
+ *
+ * Replaces the existing value for @p key (running the old value's cleanup if
+ * one was registered) or appends a new entry.  The @p len parameter records
+ * the byte size of the value so that csilk_session_get_ex() can return it to
+ * the caller without a side-channel.
+ */
+void
+csilk_session_set_len(csilk_ctx_t*                   c,
+                      const char*                    key,
+                      void*                          value,
+                      size_t                         len,
+                      csilk_session_value_cleanup_fn cleanup)
 {
     if (!c || !key) {
         return;
@@ -478,9 +496,10 @@ csilk_session_set_ex(csilk_ctx_t*                   c,
         return;
     }
 
-    CSILK_LOG_T("Session: Storing key '%s' in session '%s' (cleanup=%s)",
+    CSILK_LOG_T("Session: Storing key '%s' in session '%s' (len=%zu, cleanup=%s)",
                 key,
                 session->id,
+                len,
                 cleanup ? "yes" : "no");
 
     csilk_session_data_t* d = session->data;
@@ -490,6 +509,7 @@ csilk_session_set_ex(csilk_ctx_t*                   c,
                 d->cleanup(d->value);
             }
             d->value = value;
+            d->value_len = len;
             d->cleanup = cleanup;
             return;
         }
@@ -509,6 +529,7 @@ csilk_session_set_ex(csilk_ctx_t*                   c,
         return;
     }
     new_d->value = value;
+    new_d->value_len = len;
     new_d->cleanup = cleanup;
     new_d->next = session->data;
     session->data = new_d;
@@ -564,6 +585,74 @@ csilk_session_get(csilk_ctx_t* c, const char* key)
         free(val);
     }
 
+    return NULL;
+}
+
+/**
+ * @brief Retrieve a value from the session with an optional size out-parameter.
+ *
+ * Symmetric to csilk_session_set_len(): when the value was stored with a
+ * known byte size, the caller can retrieve both the pointer and its length
+ * in one call without needing a side-channel.
+ *
+ * @param c        The request context (used to look up the session).
+ * @param key      Null-terminated key string. Must not be NULL.
+ * @param out_len  Optional; receives the stored value's byte size.  Pass
+ *                 NULL to ignore.  Set to 0 when the key is not found.
+ * @return The value pointer previously stored, or NULL if not found or no
+ *         session is active.
+ */
+void*
+csilk_session_get_ex(csilk_ctx_t* c, const char* key, size_t* out_len)
+{
+    if (!c || !key) {
+        return NULL;
+    }
+
+    csilk_session_t* session = csilk_get(c, "_session");
+    if (!session) {
+        if (out_len) {
+            *out_len = 0;
+        }
+        return NULL;
+    }
+
+    CSILK_LOG_T("Session: Retrieving key '%s' from session '%s'", key, session->id);
+
+    csilk_session_data_t* d = session->data;
+    while (d) {
+        if (strcmp(d->key, key) == 0) {
+            if (out_len) {
+                *out_len = d->value_len;
+            }
+            return d->value;
+        }
+        d = d->next;
+    }
+
+    /* Fallback to context storage, same as csilk_session_get */
+    char s_key[128];
+    snprintf(s_key, sizeof(s_key), "session:%s:%s", session->id, key);
+    char* val = csilk_get_string(c, s_key);
+    explicit_bzero(s_key, sizeof(s_key));
+    if (val) {
+        csilk_arena_t* arena = csilk_get_arena(c);
+        if (arena) {
+            char* arena_val = csilk_arena_strdup(arena, val);
+            free(val);
+            /* Cache it locally for subsequent gets */
+            csilk_session_set(c, key, arena_val);
+            if (out_len) {
+                *out_len = 0;
+            }
+            return arena_val;
+        }
+        free(val);
+    }
+
+    if (out_len) {
+        *out_len = 0;
+    }
     return NULL;
 }
 
