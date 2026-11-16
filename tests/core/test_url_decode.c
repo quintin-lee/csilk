@@ -15,7 +15,8 @@ test_basic_decode()
     size_t len = csilk_url_decode(buf);
     assert(len == 5);
     assert(strcmp(buf, "Hello") == 0);
-    printf("test_basic_decode passed\n"); fflush(stdout);
+    printf("test_basic_decode passed\n");
+    fflush(stdout);
 }
 
 void
@@ -25,7 +26,8 @@ test_plus_to_space()
     size_t len = csilk_url_decode(buf);
     assert(len == 11);
     assert(strcmp(buf, "hello world") == 0);
-    printf("test_plus_to_space passed\n"); fflush(stdout);
+    printf("test_plus_to_space passed\n");
+    fflush(stdout);
 }
 
 void
@@ -35,7 +37,8 @@ test_mixed()
     size_t len = csilk_url_decode(buf);
     assert(len == 12);
     assert(strcmp(buf, "Hello World!") == 0);
-    printf("test_mixed passed\n"); fflush(stdout);
+    printf("test_mixed passed\n");
+    fflush(stdout);
 }
 
 void
@@ -45,7 +48,8 @@ test_no_encoding()
     size_t len = csilk_url_decode(buf);
     assert(len == 10);
     assert(strcmp(buf, "plain text") == 0);
-    printf("test_no_encoding passed\n"); fflush(stdout);
+    printf("test_no_encoding passed\n");
+    fflush(stdout);
 }
 
 void
@@ -55,7 +59,8 @@ test_empty()
     size_t len = csilk_url_decode(buf);
     assert(len == 0);
     assert(strcmp(buf, "") == 0);
-    printf("test_empty passed\n"); fflush(stdout);
+    printf("test_empty passed\n");
+    fflush(stdout);
 }
 
 void
@@ -63,7 +68,8 @@ test_null_input()
 {
     size_t len = csilk_url_decode(nullptr);
     assert(len == 0);
-    printf("test_null_input passed\n"); fflush(stdout);
+    printf("test_null_input passed\n");
+    fflush(stdout);
 }
 
 void

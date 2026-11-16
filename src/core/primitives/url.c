@@ -71,7 +71,7 @@ csilk_url_decode(char* str)
      * If the output is longer, we use a malloc'd temporary buffer to avoid
      * overwriting unread source. */
     size_t      out_len = 0;
-    const char* p       = str;
+    const char* p = str;
     while (*p) {
         if (*p == '%' && isxdigit((unsigned char)p[1]) && isxdigit((unsigned char)p[2])) {
             int hi = hex_to_int(p[1]);
