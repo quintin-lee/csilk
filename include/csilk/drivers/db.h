@@ -546,6 +546,14 @@ void csilk_db_pool_free(csilk_db_pool_t* pool);
  * converts each row to a JSON object (keyed by column name), frees the
  * native result, and returns the csilk_json array.
  *
+ * @warning **SQL injection risk**: The @p sql string is passed directly
+ *          to the underlying driver (sqlite3_exec / PQexec / mysql_real_query)
+ *          without any parameterisation or sanitisation.  Never interpolate
+ *          untrusted user input into @p sql.  Use the parameterised variants
+ *          csilk_db_query_param_json / csilk_db_query_param_json_typed
+ *          (with `?` placeholders and typed bindings) whenever a query
+ *          contains external data.  See `csilk_db_query_param_json` docs.
+ *
  * @param pool  Connection pool.
  * @param sql   SQL SELECT statement.
  * @return A csilk_json array of row objects, or NULL on failure.  Caller must
@@ -637,6 +645,14 @@ int csilk_db_exec_param_async(csilk_db_pool_t*       pool,
  * @brief Execute a statement that produces no result rows.
  *
  * Acquires the pool mutex and calls the driver's exec function.
+ *
+ * @warning **SQL injection risk**: The @p sql string is passed directly
+ *          to the underlying driver (sqlite3_exec / PQexec / mysql_real_query)
+ *          without any parameterisation or sanitisation.  Never interpolate
+ *          untrusted user input into @p sql.  Use the parameterised variants
+ *          csilk_db_exec_param / csilk_db_exec_param_typed
+ *          (with `?` placeholders and typed bindings) whenever a statement
+ *          contains external data.
  *
  * @param pool  Connection pool.
  * @param sql   SQL statement (INSERT, UPDATE, DELETE, DDL).
