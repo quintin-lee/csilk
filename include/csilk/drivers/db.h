@@ -554,6 +554,10 @@ void csilk_db_pool_free(csilk_db_pool_t* pool);
  *          (with `?` placeholders and typed bindings) whenever a query
  *          contains external data.  See `csilk_db_query_param_json` docs.
  *
+ * @deprecated Use csilk_db_query_param_json() or csilk_db_query_param_json_typed()
+ *             instead.  These parameterised variants prevent SQL injection
+ *             (CWE-89).  This raw-SQL API will be removed in a future release.
+ *
  * @param pool  Connection pool.
  * @param sql   SQL SELECT statement.
  * @return A csilk_json array of row objects, or NULL on failure.  Caller must
@@ -573,6 +577,10 @@ typedef void (*csilk_db_exec_async_cb)(int rc, void* user_data);
  * Offloads the database query to the I/O thread pool and invokes @p cb on the
  * event loop thread when complete.
  *
+ * @deprecated Use csilk_db_query_param_json_async() or csilk_db_query_param_json_typed_async()
+ *             instead.  These parameterised async variants prevent SQL injection
+ *             (CWE-89).  This raw-SQL API will be removed in a future release.
+ *
  * @param pool      Connection pool.
  * @param sql       SQL query string.
  * @param cb        Callback to invoke with the query result (csilk_json_t*).
@@ -589,6 +597,10 @@ int csilk_db_query_json_async(csilk_db_pool_t*  pool,
  *
  * Offloads csilk_db_exec() to the I/O thread pool and invokes @p cb on the
  * event loop thread with the return code (0 on success, -1 on error).
+ *
+ * @deprecated Use csilk_db_exec_param_async() instead.  The parameterised
+ *             variant prevents SQL injection (CWE-89).  This raw-SQL API will
+ *             be removed in a future release.
  *
  * @param pool      Connection pool.
  * @param sql       SQL statement string.
@@ -653,6 +665,10 @@ int csilk_db_exec_param_async(csilk_db_pool_t*       pool,
  *          csilk_db_exec_param / csilk_db_exec_param_typed
  *          (with `?` placeholders and typed bindings) whenever a statement
  *          contains external data.
+ *
+ * @deprecated Use csilk_db_exec_param() or csilk_db_exec_param_typed() instead.
+ *             These parameterised variants prevent SQL injection (CWE-89).
+ *             This raw-SQL API will be removed in a future release.
  *
  * @param pool  Connection pool.
  * @param sql   SQL statement (INSERT, UPDATE, DELETE, DDL).
