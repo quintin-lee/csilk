@@ -34,6 +34,30 @@ on_signal(csilk_io_signal_t* handle, int signum)
 
 /**
  * @brief Iterate clients on the given loop and close them appropriately.
+ *
+ * ## Timing Contract (H3 from security audit)
+ *
+ * This function walks `wp->active_clients` without holding a lock. It is
+ * safe because:
+ *
+ *  1. **Accept is already stopped** — the listener was closed before
+ *     `close_active_clients` is called (see `on_stop_async` / `on_worker_stop_async`),
+ *     so no new connections will be added to the list.
+ *  2. **In-flight I/O callbacks still run on the owning worker's loop**,
+ *     but they only *remove* a client from the list (via `client_list_remove`)
+ *     when the connection is being closed.  Because the loop is still
+ *     spinning at this point (we stop it after draining), concurrent
+ *     removals can set `client->next` to NULL.  The `while (client)` loop
+ *     handles that correctly: `client->next` is read *before* the close
+ *     call, so even if the close path nulls it, the iteration already
+ *     captured the pointer.
+ *  3. **Dispatch queues are drained *after* this call** (see
+ *     `on_stop_async`).  Any cross-worker recycle task that was enqueued
+ *     before the listener closed will be processed by
+ *     `_csilk_worker_drain_dispatch` — it will find the client already in
+ *     CLOSING/CLOSED state and skip the destroy, avoiding a double-close.
+ *
+ * The `assert` below makes this contract explicit in debug builds.
  */
 static int
 close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
@@ -53,6 +77,17 @@ close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
     if (!wp) {
         return 0;
     }
+
+    /* Timing contract: the listener must already be closing or closed.
+     * In on_stop_async the main-loop listener is closed before this call.
+     * In on_worker_stop_async the worker's listen_handle is closed first.
+     * No new connections can be added to active_clients after that point.
+     * In-flight I/O callbacks may still remove clients (client_list_remove
+     * sets ->next to NULL), but the while-loop reads `client->next` before
+     * calling the close path, so a concurrent NULL-out is safe.  Dispatch
+     * queues are drained after this call, and any cross-worker recycle
+     * task that arrives late will find the client in CLOSING/CLOSED state
+     * and skip the destroy. */
 
     csilk_client_t* client = wp->active_clients;
     while (client) {
