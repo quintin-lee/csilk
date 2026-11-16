@@ -86,6 +86,60 @@ int csilk_grpc_metadata_parse(const csilk_kv_t* headers,
                               char**            out_content_type,
                               int64_t*          out_timeout_ms);
 
+/* --- gRPC Streaming --- */
+
+/** @brief gRPC stream type. */
+typedef enum {
+    CSILK_GRPC_STREAM_UNARY = 0,            /**< One request, one response. */
+    CSILK_GRPC_STREAM_CLIENT_STREAMING = 1, /**< Many requests, one response. */
+    CSILK_GRPC_STREAM_SERVER_STREAMING = 2, /**< One request, many responses. */
+    CSILK_GRPC_STREAM_BIDI_STREAMING = 3    /**< Many requests, many responses. */
+} csilk_grpc_stream_type_t;
+
+/** @brief Opaque handle for a gRPC stream. */
+typedef struct csilk_grpc_stream_s csilk_grpc_stream_t;
+
+/** @brief Callback for receiving a gRPC stream message. */
+typedef void (*csilk_grpc_on_message_cb)(csilk_grpc_stream_t* stream,
+                                         const uint8_t*       data,
+                                         size_t               len,
+                                         void*                user_data);
+
+/**
+ * @brief Create a gRPC stream of the given type.
+ */
+csilk_grpc_stream_t* csilk_grpc_stream_new(csilk_grpc_stream_type_t type,
+                                           csilk_grpc_on_message_cb on_msg,
+                                           void*                    user_data);
+
+/**
+ * @brief Send a gRPC frame on a stream.
+ */
+int csilk_grpc_stream_send(csilk_grpc_stream_t* stream,
+                           const uint8_t*       payload,
+                           size_t               payload_len,
+                           int                  is_last);
+
+/**
+ * @brief Feed received bytes into a stream (for server-side).
+ */
+int csilk_grpc_stream_feed(csilk_grpc_stream_t* stream, const uint8_t* data, size_t len);
+
+/**
+ * @brief End a stream (send half-close).
+ */
+void csilk_grpc_stream_end(csilk_grpc_stream_t* stream);
+
+/**
+ * @brief Check if a stream is closed.
+ */
+int csilk_grpc_stream_closed(const csilk_grpc_stream_t* stream);
+
+/**
+ * @brief Destroy a gRPC stream and release resources.
+ */
+void csilk_grpc_stream_destroy(csilk_grpc_stream_t* stream);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

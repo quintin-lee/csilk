@@ -188,6 +188,67 @@ test_metadata_parse(void)
     printf("test_metadata_parse: PASS\n");
 }
 
+/* --- Streaming tests --- */
+
+static int     stream_msg_count;
+static uint8_t stream_last_payload[256];
+static size_t  stream_last_len;
+
+static void
+test_on_message(csilk_grpc_stream_t* stream, const uint8_t* data, size_t len, void* user_data)
+{
+    (void)stream;
+    (void)user_data;
+    stream_msg_count++;
+    if (len <= sizeof(stream_last_payload)) {
+        memcpy(stream_last_payload, data, len);
+    }
+    stream_last_len = len;
+}
+
+static void
+test_streaming(void)
+{
+    printf("Testing gRPC streaming...\n");
+
+    stream_msg_count = 0;
+
+    csilk_grpc_stream_t* s =
+        csilk_grpc_stream_new(CSILK_GRPC_STREAM_BIDI_STREAMING, test_on_message, NULL);
+    assert(s != NULL);
+    assert(csilk_grpc_stream_closed(s) == 0);
+
+    uint8_t frame[] = {0x00, 0x00, 0x00, 0x00, 0x03, 0xAA, 0xBB, 0xCC};
+    int     rc = csilk_grpc_stream_feed(s, frame, sizeof(frame));
+    assert(rc == 0);
+    assert(stream_msg_count == 1);
+    assert(stream_last_len == 3);
+    assert(stream_last_payload[0] == 0xAA);
+
+    uint8_t frame2[] = {0x00, 0x00, 0x00, 0x00, 0x02, 0x11, 0x22};
+    rc = csilk_grpc_stream_feed(s, frame2, sizeof(frame2));
+    assert(rc == 0);
+    assert(stream_msg_count == 2);
+
+    rc = csilk_grpc_stream_send(s, NULL, 0, 1);
+    assert(rc == 0);
+    assert(csilk_grpc_stream_closed(s) == 0);
+
+    csilk_grpc_stream_end(s);
+    assert(csilk_grpc_stream_closed(s) == 1);
+    csilk_grpc_stream_destroy(s);
+    csilk_grpc_stream_destroy(NULL);
+
+    csilk_grpc_stream_t* u = csilk_grpc_stream_new(CSILK_GRPC_STREAM_UNARY, NULL, NULL);
+    assert(u != NULL);
+    rc = csilk_grpc_stream_send(u, NULL, 0, 1);
+    assert(rc == 0);
+    assert(csilk_grpc_stream_closed(u) == 1);
+    csilk_grpc_stream_destroy(u);
+
+    printf("test_streaming: PASS\n");
+}
+
 int
 main(void)
 {
@@ -199,6 +260,7 @@ main(void)
     test_frame_roundtrip();
     test_trailer_parse();
     test_metadata_parse();
+    test_streaming();
 
     printf("==========================================\n");
     printf("All gRPC tests passed!\n");
