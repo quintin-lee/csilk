@@ -15,6 +15,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef HAS_REDIS
+#include <hiredis/hiredis.h>
+#endif
+
 /* ===================================================================
  * Internal store structure
  * =================================================================== */
@@ -101,16 +105,181 @@ csilk_session_store_new_local(void)
  * Redis backend
  * =================================================================== */
 
+#ifdef HAS_REDIS
 static int
 _redis_get(csilk_session_store_t* store, const char* session_id, char** out_data, size_t* out_len)
 {
-    /* In a full implementation, this would use hiredis:
-     * redisCommand(ctx, "GET %s%s", prefix, session_id);
-     * For now, return -1 (not implemented). */
+    redisContext* ctx = (redisContext*)store->redis.redis_ctx;
+    if (!ctx || !session_id) {
+        return -1;
+    }
+
+    size_t keylen = strlen(store->redis.prefix) + strlen(session_id);
+    char*  key = malloc(keylen + 1);
+    if (!key) {
+        return -1;
+    }
+    snprintf(key, keylen + 1, "%s%s", store->redis.prefix, session_id);
+
+    redisReply* reply = (redisReply*)redisCommand(ctx, "GET %s", key);
+    free(key);
+    if (!reply) {
+        return -1;
+    }
+
+    if (reply->type == REDIS_REPLY_NIL) {
+        freeReplyObject(reply);
+        if (out_data) {
+            *out_data = NULL;
+        }
+        if (out_len) {
+            *out_len = 0;
+        }
+        return -1;
+    }
+
+    if (reply->type == REDIS_REPLY_STRING && reply->str) {
+        *out_data = strdup(reply->str);
+        if (!*out_data) {
+            freeReplyObject(reply);
+            return -1;
+        }
+        if (out_len) {
+            *out_len = strlen(*out_data);
+        }
+    } else {
+        freeReplyObject(reply);
+        return -1;
+    }
+
+    freeReplyObject(reply);
+    return 0;
+}
+
+static int
+_redis_set(csilk_session_store_t* store,
+           const char*            session_id,
+           const char*            data,
+           size_t                 len,
+           int32_t                ttl_sec)
+{
+    redisContext* ctx = (redisContext*)store->redis.redis_ctx;
+    if (!ctx || !session_id || !data) {
+        return -1;
+    }
+
+    size_t keylen = strlen(store->redis.prefix) + strlen(session_id);
+    char*  key = malloc(keylen + 1);
+    if (!key) {
+        return -1;
+    }
+    snprintf(key, keylen + 1, "%s%s", store->redis.prefix, session_id);
+
+    redisReply* reply;
+    if (ttl_sec > 0) {
+        char        ttlbuf[16];
+        int         tn = snprintf(ttlbuf, sizeof(ttlbuf), "%d", ttl_sec);
+        const char* argv[] = {"SETEX", key, ttlbuf, data, NULL};
+        size_t      argvlen[] = {5, keylen, (size_t)tn, len, 0};
+        reply = (redisReply*)redisCommandArgv(ctx, 4, argv, argvlen);
+    } else {
+        const char* argv[] = {"SET", key, data, NULL};
+        size_t      argvlen[] = {3, keylen, len, 0};
+        reply = (redisReply*)redisCommandArgv(ctx, 3, argv, argvlen);
+    }
+    free(key);
+    if (!reply) {
+        return -1;
+    }
+
+    int rc = (reply->type == REDIS_REPLY_ERROR) ? -1 : 0;
+    freeReplyObject(reply);
+    return rc;
+}
+
+static int
+_redis_del(csilk_session_store_t* store, const char* session_id)
+{
+    redisContext* ctx = (redisContext*)store->redis.redis_ctx;
+    if (!ctx || !session_id) {
+        return -1;
+    }
+
+    size_t keylen = strlen(store->redis.prefix) + strlen(session_id);
+    char*  key = malloc(keylen + 1);
+    if (!key) {
+        return -1;
+    }
+    snprintf(key, keylen + 1, "%s%s", store->redis.prefix, session_id);
+
+    redisReply* reply = (redisReply*)redisCommand(ctx, "DEL %s", key);
+    free(key);
+    if (!reply) {
+        return -1;
+    }
+
+    int rc = (reply->type == REDIS_REPLY_ERROR) ? -1 : 0;
+    freeReplyObject(reply);
+    return rc;
+}
+
+static void
+_redis_destroy(csilk_session_store_t* store)
+{
+    if (store->redis.redis_ctx) {
+        redisFree((redisContext*)store->redis.redis_ctx);
+        store->redis.redis_ctx = NULL;
+    }
+}
+
+csilk_session_store_t*
+csilk_session_store_new_redis(const char* host, int port, const char* prefix)
+{
+    if (!prefix || prefix[0] == '\0') {
+        prefix = "csilk:session:";
+    }
+
+    csilk_session_store_t* store = calloc(1, sizeof(csilk_session_store_t));
+    if (!store) {
+        return NULL;
+    }
+
+    snprintf(store->redis.prefix, sizeof(store->redis.prefix), "%s", prefix);
+
+    struct timeval tv = {5, 0};
+    redisContext*  ctx = redisConnectWithTimeout(host ? host : "127.0.0.1", port ? port : 6379, tv);
+    if (!ctx || ctx->err) {
+        if (ctx) {
+            redisFree(ctx);
+        }
+        free(store);
+        return NULL;
+    }
+
+    store->redis.redis_ctx = ctx;
+
+    store->ops = (csilk_session_store_ops_t){
+        .get = _redis_get,
+        .set = _redis_set,
+        .del = _redis_del,
+        .destroy = _redis_destroy,
+        .name = "redis",
+    };
+    return store;
+}
+#else  /* !HAS_REDIS — fallback stubs */
+
+static int
+_redis_get(csilk_session_store_t* store, const char* session_id, char** out_data, size_t* out_len)
+{
     (void)store;
     (void)session_id;
-    (void)out_data;
-    (void)out_len;
+    if (out_data) {
+        *out_data = NULL;
+    }
+    if (out_len) {
+        *out_len = 0;
+    }
     return -1;
 }
 
@@ -121,11 +290,6 @@ _redis_set(csilk_session_store_t* store,
            size_t                 len,
            int32_t                ttl_sec)
 {
-    /* In a full implementation, this would use hiredis:
-     * if (ttl_sec > 0)
-     *   redisCommand(ctx, "SETEX %s%s %d %b", prefix, session_id, ttl_sec, data, len);
-     * else
-     *   redisCommand(ctx, "SET %s%s %b", prefix, session_id, data, len); */
     (void)store;
     (void)session_id;
     (void)data;
@@ -137,7 +301,6 @@ _redis_set(csilk_session_store_t* store,
 static int
 _redis_del(csilk_session_store_t* store, const char* session_id)
 {
-    /* redisCommand(ctx, "DEL %s%s", prefix, session_id); */
     (void)store;
     (void)session_id;
     return 0;
@@ -146,10 +309,7 @@ _redis_del(csilk_session_store_t* store, const char* session_id)
 static void
 _redis_destroy(csilk_session_store_t* store)
 {
-    if (store->redis.redis_ctx) {
-        /* redisFree(store->redis.redis_ctx); */
-        store->redis.redis_ctx = NULL;
-    }
+    (void)store;
 }
 
 csilk_session_store_t*
@@ -167,9 +327,6 @@ csilk_session_store_new_redis(const char* host, int port, const char* prefix)
     }
 
     snprintf(store->redis.prefix, sizeof(store->redis.prefix), "%s", prefix);
-
-    /* In a full implementation, this would call redisConnect(host, port)
-     * and store the context in store->redis.redis_ctx. */
     store->redis.redis_ctx = NULL;
 
     store->ops = (csilk_session_store_ops_t){
@@ -181,6 +338,7 @@ csilk_session_store_new_redis(const char* host, int port, const char* prefix)
     };
     return store;
 }
+#endif /* HAS_REDIS */
 
 /* ===================================================================
  * MQ backend (WAL + raft replication)

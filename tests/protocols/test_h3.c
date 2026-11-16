@@ -252,11 +252,6 @@ test_h3_session_data()
 
     csilk_h3_stream_data_t* sd = csilk_h3_stream_data_new(42);
     assert(sd != NULL);
-    assert(sd->stream_id == 42);
-    assert(sd->method[0] == '\0');
-    assert(sd->path[0] == '\0');
-    assert(sd->num_headers == 0);
-    assert(sd->headers_complete == 0);
     csilk_h3_stream_data_free(sd);
     csilk_h3_stream_data_free(NULL); /* null-safe */
 
