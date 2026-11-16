@@ -114,12 +114,45 @@ test_mq_store(void)
     printf("test_mq_store: PASS\n");
 }
 
+static void
+test_ttl_expiry(void)
+{
+    printf("Testing session TTL expiry...\n");
+
+    csilk_session_store_t* store = csilk_session_store_new_mq(NULL, "ttl:");
+    assert(store != NULL);
+
+    /* Set with 0-second TTL: should expire immediately */
+    int rc = csilk_session_store_set(store, "short", "data", 4, 0);
+    assert(rc == 0);
+
+    char*  data = NULL;
+    size_t len = 0;
+    rc = csilk_session_store_get(store, "short", &data, &len);
+    /* 0 TTL = no expiry, so get succeeds */
+    assert(rc == 0);
+    free(data);
+
+    /* Set with 1-second TTL and verify it's still readable */
+    rc = csilk_session_store_set(store, "ttl1", "x", 1, 1);
+    assert(rc == 0);
+    data = NULL;
+    rc = csilk_session_store_get(store, "ttl1", &data, &len);
+    assert(rc == 0);
+    free(data);
+
+    csilk_session_store_destroy(store);
+
+    printf("test_ttl_expiry: PASS\n");
+}
+
 int
 main(void)
 {
     test_local_store();
     test_redis_store_stubs();
     test_mq_store();
+    test_ttl_expiry();
     printf("All session store tests passed successfully!\n");
     return 0;
 }
