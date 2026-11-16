@@ -36,10 +36,10 @@ enum { SESSION_TTL = 3600 };
  * a string key and an opaque void* value.
  */
 typedef struct csilk_session_data_s {
-    char*                         key;
-    void*                         value;
+    char*                          key;
+    void*                          value;
     csilk_session_value_cleanup_fn cleanup; /* optional; NULL = caller-owned */
-    struct csilk_session_data_s*  next;
+    struct csilk_session_data_s*   next;
 } csilk_session_data_t;
 
 /**
@@ -180,8 +180,9 @@ free_session(csilk_session_t* session)
     csilk_session_data_t* d = session->data;
     while (d) {
         csilk_session_data_t* next = d->next;
-        if (d->cleanup)
+        if (d->cleanup) {
             d->cleanup(d->value);
+        }
         free(d->key);
         free(d);
         d = next;
@@ -463,9 +464,9 @@ csilk_session_set(csilk_ctx_t* c, const char* key, void* value)
  * csilk_session_set() when the value must be released on session teardown.
  */
 void
-csilk_session_set_ex(csilk_ctx_t* c,
-                     const char* key,
-                     void*       value,
+csilk_session_set_ex(csilk_ctx_t*                   c,
+                     const char*                    key,
+                     void*                          value,
                      csilk_session_value_cleanup_fn cleanup)
 {
     if (!c || !key) {
@@ -485,8 +486,9 @@ csilk_session_set_ex(csilk_ctx_t* c,
     csilk_session_data_t* d = session->data;
     while (d) {
         if (strcmp(d->key, key) == 0) {
-            if (d->cleanup && d->value != value)
+            if (d->cleanup && d->value != value) {
                 d->cleanup(d->value);
+            }
             d->value = value;
             d->cleanup = cleanup;
             return;
@@ -594,8 +596,9 @@ csilk_session_destroy(csilk_ctx_t* c)
     csilk_session_data_t* d = session->data;
     while (d) {
         csilk_session_data_t* next = d->next;
-        if (d->cleanup)
+        if (d->cleanup) {
             d->cleanup(d->value);
+        }
         free(d->key);
         free(d);
         d = next;
