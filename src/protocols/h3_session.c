@@ -30,19 +30,6 @@
 
 #ifdef CSILK_HAS_NGTCP2
 
-/** @brief Per-stream user data (matches csilk_h3_stream_data_t from h3.h). */
-typedef struct csilk_h3_stream_data_s {
-    uint64_t stream_id;
-    char     method[16];
-    char     path[512];
-    uint32_t num_headers;
-    char**   header_names;
-    char**   header_values;
-    char*    body_buf;
-    uint32_t body_len;
-    int      headers_complete;
-} csilk_h3_stream_data_t;
-
 static int
 _h3_stream_close_cb(nghttp3_conn* conn,
                     int64_t       stream_id,
@@ -384,6 +371,10 @@ csilk_h3_session_send_response(nghttp3_conn*     session,
     return 0;
 }
 
+#endif /* CSILK_HAS_NGTCP2 */
+
+/* --- HTTP/3 Stream data (always available) --- */
+
 /**
  * @brief Allocate per-stream user data for an HTTP/3 stream.
  *
@@ -419,5 +410,3 @@ csilk_h3_stream_data_free(csilk_h3_stream_data_t* sd)
     free(sd->body_buf);
     free(sd);
 }
-
-#endif /* CSILK_HAS_NGTCP2 */

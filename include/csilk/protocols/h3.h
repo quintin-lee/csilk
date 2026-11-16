@@ -207,17 +207,7 @@ int csilk_h3_set_enabled(void* server, int port);
 } /* extern "C" */
 #endif
 
-/* --- HTTP/3 Session (nghttp3) — v1.2+ --- */
-
-#ifdef CSILK_HAS_NGTCP2
-#include <nghttp3/nghttp3.h>
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-/** @brief Opaque handle for an HTTP/3 session (nghttp3_conn*). */
-typedef struct nghttp3_conn csilk_h3_session_t;
+/* --- HTTP/3 Stream data (always available) --- */
 
 /** @brief Per-stream user data for HTTP/3 callbacks. */
 typedef struct csilk_h3_stream_data_s {
@@ -231,6 +221,18 @@ typedef struct csilk_h3_stream_data_s {
     uint32_t body_len;
     int      headers_complete;
 } csilk_h3_stream_data_t;
+
+/* --- HTTP/3 Session (nghttp3) — v1.2+ --- */
+
+#ifdef CSILK_HAS_NGTCP2
+#include <nghttp3/nghttp3.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @brief Opaque handle for an HTTP/3 session (nghttp3_conn*). */
+typedef struct nghttp3_conn csilk_h3_session_t;
 
 /**
  * @brief Create an HTTP/3 session for a new QUIC connection.
@@ -266,6 +268,18 @@ int csilk_h3_session_send_response(csilk_h3_session_t* session,
                                    const uint8_t*      body,
                                    size_t              body_len);
 
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
+#endif /* CSILK_HAS_NGTCP2 */
+
+/* --- HTTP/3 Stream data functions (always available) --- */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @brief Allocate per-stream user data for an HTTP/3 stream.
  */
@@ -279,7 +293,5 @@ void csilk_h3_stream_data_free(csilk_h3_stream_data_t* sd);
 #ifdef __cplusplus
 } /* extern "C" */
 #endif
-
-#endif /* CSILK_HAS_NGTCP2 */
 
 #endif /* CSILK_PROTOCOLS_H3_H */
