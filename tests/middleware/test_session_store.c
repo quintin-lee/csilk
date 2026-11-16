@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "csilk/csilk.h"
 #include "csilk/core/session_store.h"
@@ -67,22 +68,50 @@ test_redis_store_stubs(void)
 }
 
 static void
-test_mq_store_stubs(void)
+test_mq_store(void)
 {
-    printf("Testing MQ session store stubs...\n");
+    printf("Testing MQ session store (local table fallback)...\n");
 
     csilk_session_store_t* store = csilk_session_store_new_mq(NULL, "mq:");
     assert(store != NULL);
 
+    /* get before set: not found */
     char*  data = NULL;
     size_t len = 0;
-    assert(csilk_session_store_get(store, "sess-1", &data, &len) == -1);
-    assert(csilk_session_store_set(store, "sess-1", "v", 1, 3600) == 0);
-    assert(csilk_session_store_del(store, "sess-1") == 0);
+    int    rc = csilk_session_store_get(store, "sess-1", &data, &len);
+    assert(rc == -1);
+
+    /* set + get roundtrip */
+    rc = csilk_session_store_set(store, "sess-1", "hello", 5, 3600);
+    assert(rc == 0);
+
+    rc = csilk_session_store_get(store, "sess-1", &data, &len);
+    assert(rc == 0);
+    assert(data != NULL);
+    assert(len == 5);
+    assert(strncmp(data, "hello", 5) == 0);
+    free(data);
+
+    /* del + get: not found */
+    rc = csilk_session_store_del(store, "sess-1");
+    assert(rc == 0);
+    data = NULL;
+    rc = csilk_session_store_get(store, "sess-1", &data, &len);
+    assert(rc == -1);
+
+    /* Multiple sessions */
+    csilk_session_store_set(store, "a", "1", 1, 0);
+    csilk_session_store_set(store, "b", "2", 1, 0);
+    data = NULL;
+    assert(csilk_session_store_get(store, "a", &data, &len) == 0);
+    free(data);
+    data = NULL;
+    assert(csilk_session_store_get(store, "b", &data, &len) == 0);
+    free(data);
 
     csilk_session_store_destroy(store);
 
-    printf("test_mq_store_stubs: PASS\n");
+    printf("test_mq_store: PASS\n");
 }
 
 int
@@ -90,7 +119,7 @@ main(void)
 {
     test_local_store();
     test_redis_store_stubs();
-    test_mq_store_stubs();
+    test_mq_store();
     printf("All session store tests passed successfully!\n");
     return 0;
 }
