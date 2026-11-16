@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ## [1.1.0] - 2026-11-16
 
 ### Added
@@ -41,8 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New coverage: `test_wasm_real`, `fuzz_wasm`, `test_af_xdp` (fail-closed), `test_otlp_trace` (cross-module span chaining + backpressure), `test_wf_cluster_sm` (snapshot recovery + idempotent replay), `test_vector_hnsw` (1000×128 recall > 95 %), `test_ratelimit` (distributed Redis mock), `fuzz_h3` + conditional compile test skeleton.
 - GCovr 80 % line-coverage gate added to local + CI (`--fail-under-line`).
 - 265/265 unit tests + 2/2 integration tests passing.
-
-## [Unreleased]
 
 ## [1.0.0] - 2026-11-15
 
