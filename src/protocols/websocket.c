@@ -33,10 +33,17 @@
 #include "core/internal/srv_impl.h"
 
 /** @brief WebSocket magic GUID string per RFC 6455 Section 4.2.2.
- *
  * Appended to the client's Sec-WebSocket-Key before SHA-1 hashing to produce
  * the Sec-WebSocket-Accept response header. */
 #define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
+/** @brief Maximum accepted Sec-WebSocket-Key length.
+ *
+ * RFC 6455 §4.1 mandates the key be exactly 16 base64 characters (128 bits).
+ * Values longer than this are rejected to prevent the SHA-1 input buffer from
+ * being truncated, which would silently produce an incorrect accept key.
+ */
+#define WS_MAX_KEY_LEN 255
 
 /** @brief Perform the WebSocket upgrade handshake per RFC 6455.
  *
@@ -53,12 +60,22 @@
  *       csilk_ws_parse_frame(). On failure (missing Sec-WebSocket-Key), a
  *       400 Bad Request JSON error is sent. */
 void
-csilk_ws_handshake(csilk_ctx_t* c)
+csilK_ws_handshake(csilk_ctx_t* c)
 {
     const char* key = csilk_get_header(c, "Sec-WebSocket-Key");
     if (!key) {
         csilk_json_error(
             c, CSILK_STATUS_BAD_REQUEST, "Upgrade Required: Sec-WebSocket-Key missing");
+        return;
+    }
+
+    /* Reject oversized keys to prevent SHA-1 input truncation (CWE-20).
+     * RFC 6455 mandates exactly 16 base64 chars; anything over 255 is
+     * clearly malformed and would corrupt the accept key computation. */
+    if (strlen(key) > WS_MAX_KEY_LEN) {
+        CSILK_LOG_W("WebSocket: Sec-WebSocket-Key too long (%zu bytes); rejecting handshake",
+                    strlen(key));
+        csilk_json_error(c, CSILK_STATUS_BAD_REQUEST, "Bad Handshake: key too long");
         return;
     }
 
