@@ -270,6 +270,7 @@ set(CSILK_MIDDLEWARE_TESTS
     test_request_id
     test_session
     test_session_ext
+    test_session_store
     test_sse
     test_sse_concurrent
     test_static
@@ -289,7 +290,7 @@ set(CSILK_MIDDLEWARE_TEST_DIRS
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
     middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
-    middleware;middleware;middleware;middleware
+    middleware;middleware;middleware;middleware;middleware
 )
 
 # -- Protocol tests --
