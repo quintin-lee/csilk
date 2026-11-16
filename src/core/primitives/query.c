@@ -51,9 +51,9 @@ parse_key_value_pairs(csilk_ctx_t* c, char* qs, csilk_kv_map_t* target_map)
         }
 
         if (*key != '\0') {
-            csilk_url_decode(key);
+            csilk_url_decode(key, strlen(key) * 3 + 1);
             if (value && *value != '\0') {
-                csilk_url_decode(value);
+                csilk_url_decode(value, strlen(value) * 3 + 1);
             }
             map_kv_add(c, target_map, key, value);
             CSILK_LOG_T("Context: parsed %s = %s", key, value);
@@ -86,10 +86,13 @@ csilk_parse_query(csilk_ctx_t* c, const char* query_string)
         return;
     }
 
-    /* Allocate with +3 slack so that csilk_url_decode() can expand
-     * invalid percent-encodings (%XX → %25XX) without overflow. */
+    /* Allocate 3x worst-case room: each invalid '%' in any key/value token
+     * expands 1 byte to 3 bytes, so a token's decoded form can reach 3 * its
+     * length. Since every token is a substring of query_string, sizing the
+     * whole buffer to 3 * qs_len + 1 guarantees the in-place decode of any
+     * token never overflows the allocation. */
     size_t qs_len = strlen(query_string);
-    char*  qs = csilk_arena_alloc(c->arena, qs_len + 3 + 1);
+    char*  qs = csilk_arena_alloc(c->arena, qs_len * 3 + 1);
     if (!qs) {
         CSILK_LOG_E("Context: failed to allocate arena memory to parse query string: %s",
                     query_string);
@@ -147,12 +150,16 @@ csilk_parse_form_urlencoded(csilk_ctx_t* c)
         }
     }
 
-    char* qs = csilk_arena_strndup(c->arena, body, body_len);
+    /* Allocate 3x worst-case room so the in-place decode of any key/value
+     * token cannot overflow (invalid '%' expands 1 byte to 3 bytes). */
+    char* qs = csilk_arena_alloc(c->arena, body_len * 3 + 1);
     if (!qs) {
         CSILK_LOG_E("Context: failed to allocate arena memory to parse form urlencoded "
                     "request body");
         return;
     }
+    memcpy(qs, body, body_len);
+    qs[body_len] = '\0';
 
     parse_key_value_pairs(c, qs, &c->request.form_params);
 }

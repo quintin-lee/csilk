@@ -56,11 +56,11 @@ test_url_decode_stable(void)
             buf[pos++] = (char)('a' + (int)(xorshift64(&seed) % 26));
         }
         buf[pos] = '\0';
-        size_t len1 = csilk_url_decode(buf);
+        size_t len1 = csilk_url_decode(buf, sizeof(buf));
         /* Second decode: no '%' left, so output is identical */
         char saved[256];
         memcpy(saved, buf, len1 + 1);
-        size_t len2 = csilk_url_decode(buf);
+        size_t len2 = csilk_url_decode(buf, sizeof(buf));
         assert(len1 == len2);
         assert(memcmp(buf, saved, len1 + 1) == 0);
     }
@@ -81,7 +81,7 @@ test_url_decode_length(void)
         }
         buf[pos] = '\0';
         size_t input_len = strlen(buf);
-        size_t output_len = csilk_url_decode(buf);
+        size_t output_len = csilk_url_decode(buf, sizeof(buf));
         /* Output may be longer than input when invalid '%' are escaped
          * as "%25".  The maximum expansion is 3× (each '%' → 3 chars). */
         assert(output_len <= input_len * 3);
@@ -111,7 +111,7 @@ test_url_decode_plain_identity(void)
         buf[pos] = '\0';
         char original[256];
         strcpy(original, buf);
-        size_t output_len = csilk_url_decode(buf);
+        size_t output_len = csilk_url_decode(buf, sizeof(buf));
         assert(output_len == pos);
         assert(strcmp(buf, original) == 0);
     }

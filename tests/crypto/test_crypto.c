@@ -196,7 +196,7 @@ test_url_decode_valid(void)
 {
     printf("Testing URL decode valid sequences...\n");
     char   buf[] = "%48%65%6C%6C%6F";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     assert(len == 5);
     assert(strcmp(buf, "Hello") == 0);
     printf("  passed\n");
@@ -207,7 +207,7 @@ test_url_decode_plus(void)
 {
     printf("Testing URL decode '+' → space...\n");
     char   buf[] = "hello+world";
-    size_t len = csilk_url_decode(buf);
+    size_t len = csilk_url_decode(buf, sizeof(buf));
     assert(len == 11);
     assert(strcmp(buf, "hello world") == 0);
     printf("  passed\n");
@@ -218,8 +218,8 @@ test_url_decode_already_decoded(void)
 {
     printf("Testing URL decode idempotence...\n");
     char   buf[] = "hello world";
-    size_t len1 = csilk_url_decode(buf);
-    size_t len2 = csilk_url_decode(buf);
+    size_t len1 = csilk_url_decode(buf, sizeof(buf));
+    size_t len2 = csilk_url_decode(buf, sizeof(buf));
     assert(len1 == len2);
     assert(strcmp(buf, "hello world") == 0);
     printf("  passed\n");

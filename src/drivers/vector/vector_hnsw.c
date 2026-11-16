@@ -20,6 +20,16 @@
 
 enum { HNSW_MAX_LEVEL = 16 };
 
+/* Deserialisation bounds: values read from the HNSW file header / per-node
+ * records are attacker-controlled.  Reject any index whose fields exceed
+ * these caps so that the subsequent alloc (dim, node_count) and array
+ * indexing cannot be driven into integer overflow, memory exhaustion, or
+ * out-of-bounds writes. */
+#define HNSW_MAX_DIM 65536u     /* 64K floats = 256 KB per vector, sane */
+#define HNSW_MAX_NODES 1048576u /* ~1M nodes */
+#define HNSW_MAX_M 512u
+#define HNSW_MAX_DOC_LEN 4096u
+
 typedef struct {
     float    dist;
     uint32_t id;
@@ -851,6 +861,15 @@ csilk_hnsw_load(const char* filepath)
         return NULL;
     }
 
+    /* Taint bounds: the header fields are read straight from a file that may
+     * be attacker-controlled.  Reject out-of-range values before they drive
+     * any allocation (dim / node_count / m) or array index (level, doc_len). */
+    if (dim == 0 || dim > HNSW_MAX_DIM || m == 0 || m > HNSW_MAX_M || node_count > HNSW_MAX_NODES ||
+        (uint32_t)max_level > HNSW_MAX_LEVEL) {
+        fclose(fp);
+        return NULL;
+    }
+
     csilk_hnsw_index_t* index = csilk_hnsw_index_new((size_t)dim, (int)metric);
     if (!index) {
         fclose(fp);
@@ -864,8 +883,19 @@ csilk_hnsw_load(const char* filepath)
     index->max_level = max_level;
 
     if (node_count > index->node_capacity) {
-        size_t              new_cap = node_count + 64;
-        csilk_hnsw_node_t** new_nodes = realloc(index->nodes, new_cap * sizeof(csilk_hnsw_node_t*));
+        size_t new_cap = node_count + 64;
+        /* Bound the realloc size so a (taint-checked) node_count cannot
+         * produce an integer overflow in new_cap * sizeof(...). */
+        if (new_cap > HNSW_MAX_NODES + 64) {
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+        csilk_hnsw_node_t** new_nodes = realloc(
+            index->nodes,
+            new_cap *
+                sizeof(
+                    csilk_hnsw_node_t*)); // NOLINT(clang-analyzer-optin.taint.TaintedAlloc) /* new_cap bounded by HNSW_MAX_NODES + 64 */
         if (!new_nodes) {
             csilk_hnsw_index_free(index);
             fclose(fp);
@@ -880,6 +910,15 @@ csilk_hnsw_load(const char* filepath)
         int32_t  level = 0;
         if (fread(&id, sizeof(id), 1, fp) != 1 || fread(&level, sizeof(level), 1, fp) != 1 ||
             fread(&doc_len, sizeof(doc_len), 1, fp) != 1) {
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+
+        /* Per-node taint bounds: level indexes node->neighbors[level]; a
+         * negative or oversized level would corrupt the neighbor array.  doc_len
+         * sizes the doc_id allocation; an unbounded value is a DoS vector. */
+        if (level < 0 || (uint32_t)level > HNSW_MAX_LEVEL || doc_len > HNSW_MAX_DOC_LEN) {
             csilk_hnsw_index_free(index);
             fclose(fp);
             return NULL;
@@ -902,7 +941,8 @@ csilk_hnsw_load(const char* filepath)
             fclose(fp);
             return NULL;
         }
-        node->doc_id[doc_len] = '\0';
+        node->doc_id[doc_len] =
+            '\0'; // NOLINT(clang-analyzer-security.ArrayBound) /* doc_id allocated with doc_len+1, doc_len bounded by HNSW_MAX_DOC_LEN */
 
         node->vector = csilk_aligned_alloc(32, (size_t)dim * sizeof(float));
         if (!node->vector || fread(node->vector, sizeof(float), dim, fp) != dim) {
@@ -933,6 +973,14 @@ csilk_hnsw_load(const char* filepath)
             }
             node->neighbor_count[l] = deg;
             size_t cap = hnsw_layer_cap(index, l);
+            /* Taint bound: deg is a file-controlled uint16; refuse to copy
+             * more neighbors than the per-layer capacity holds. */
+            if (deg > cap) {
+                hnsw_free_node(node);
+                csilk_hnsw_index_free(index);
+                fclose(fp);
+                return NULL;
+            }
             node->neighbors[l] = malloc(cap * sizeof(uint32_t));
             if (!node->neighbors[l]) {
                 hnsw_free_node(node);

@@ -17,8 +17,10 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
         return 0;
     }
 
-    // Create a null-terminated string copy
-    char* input = malloc(size + 1);
+    // Create a null-terminated string copy.  csilk_url_decode() can expand
+    // each byte of input (invalid '%' → "%25"), so the output can reach 3x
+    // the input length; size the buffer to that worst case plus NUL.
+    char* input = malloc(size * 3 + 1);
     if (!input) {
         return 0;
     }
@@ -26,7 +28,7 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
     input[size] = '\0';
 
     // csilk_url_decode performs in-place decoding
-    csilk_url_decode(input);
+    csilk_url_decode(input, size * 3 + 1);
 
     free(input);
     return 0;
