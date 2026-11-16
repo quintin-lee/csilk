@@ -204,7 +204,82 @@ void csilk_h3_transport_destroy(csilk_h3_transport_t* t);
 int csilk_h3_set_enabled(void* server, int port);
 
 #ifdef __cplusplus
-}
+} /* extern "C" */
 #endif
+
+/* --- HTTP/3 Session (nghttp3) — v1.2+ --- */
+
+#ifdef CSILK_HAS_NGTCP2
+#include <nghttp3/nghttp3.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/** @brief Opaque handle for an HTTP/3 session (nghttp3_conn*). */
+typedef struct nghttp3_conn csilk_h3_session_t;
+
+/** @brief Per-stream user data for HTTP/3 callbacks. */
+typedef struct csilk_h3_stream_data_s {
+    uint64_t stream_id;
+    char     method[16];
+    char     path[512];
+    uint32_t num_headers;
+    char**   header_names;
+    char**   header_values;
+    char*    body_buf;
+    uint32_t body_len;
+    int      headers_complete;
+} csilk_h3_stream_data_t;
+
+/**
+ * @brief Create an HTTP/3 session for a new QUIC connection.
+ *
+ * @param stream_id   First stream ID (typically 0 for server).
+ * @param user_data   Per-connection user data.
+ * @return Newly allocated session, or NULL on failure.
+ */
+csilk_h3_session_t* csilk_h3_session_new(int64_t stream_id, void* user_data);
+
+/**
+ * @brief Destroy an HTTP/3 session.
+ */
+void csilk_h3_session_destroy(csilk_h3_session_t* session);
+
+/**
+ * @brief Submit an HTTP/3 response on a stream.
+ *
+ * @param session    HTTP/3 session.
+ * @param stream_id  Stream ID.
+ * @param status     HTTP status code.
+ * @param headers    Response headers (nghttp3_nv array).
+ * @param nheaders   Number of headers.
+ * @param body       Response body (may be NULL).
+ * @param body_len   Body length.
+ * @return 0 on success, -1 on error.
+ */
+int csilk_h3_session_send_response(csilk_h3_session_t* session,
+                                   int64_t             stream_id,
+                                   int                 status,
+                                   const nghttp3_nv*   headers,
+                                   int                 nheaders,
+                                   const uint8_t*      body,
+                                   size_t              body_len);
+
+/**
+ * @brief Allocate per-stream user data for an HTTP/3 stream.
+ */
+csilk_h3_stream_data_t* csilk_h3_stream_data_new(uint64_t stream_id);
+
+/**
+ * @brief Free per-stream user data.
+ */
+void csilk_h3_stream_data_free(csilk_h3_stream_data_t* sd);
+
+#ifdef __cplusplus
+} /* extern "C" */
+#endif
+
+#endif /* CSILK_HAS_NGTCP2 */
 
 #endif /* CSILK_PROTOCOLS_H3_H */
