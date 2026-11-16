@@ -1,12 +1,7 @@
 /**
  * @file h3.h
- * @brief HTTP/3 (RFC 9114) Frame Encoding/Decoding and RFC 9000 QUIC Varint utilities.
- *
- * @warning EXPERIMENTAL / PARTIAL SKELETON: RFC 9000 Varint and RFC 9114 frame
- *          codecs and Alt-Svc header injection are real utilities, whereas
- *          csilk_h3_listener_*() is an experimental UDP listener/ConnID parser
- *          skeleton without QUIC transport, TLS 1.3 handshake, QPACK, or stream
- *          multiplexing (full HTTP/3 via ngtcp2/nghttp3 is deferred to v1.1+).
+ * @brief HTTP/3 (RFC 9114) Frame Encoding/Decoding, RFC 9000 QUIC Varint utilities,
+ *        and full QUIC transport via ngtcp2/nghttp3.
  */
 
 #ifndef CSILK_PROTOCOLS_H3_H
@@ -121,6 +116,92 @@ int csilk_h3_listener_process_packet(csilk_h3_listener_t* listener,
  * @param listener Listener handle to release.
  */
 void csilk_h3_listener_close(csilk_h3_listener_t* listener);
+
+/* --- HTTP/3 QUIC Transport (v1.2+) --- */
+
+/** @brief Opaque handle for HTTP/3 QUIC transport. */
+struct csilk_h3_transport_s;
+typedef struct csilk_h3_transport_s csilk_h3_transport_t;
+
+/**
+ * @brief Create a new HTTP/3 QUIC transport bound to a UDP port.
+ *
+ * @param port     UDP port to bind (e.g. 443).
+ * @param cert_pem  PEM-encoded TLS certificate (NULL = no TLS, test only).
+ * @param key_pem   PEM-encoded TLS private key.
+ * @return Newly allocated transport handle, or NULL on failure.
+ */
+csilk_h3_transport_t* csilk_h3_transport_new(int port, const char* cert_pem, const char* key_pem);
+
+/**
+ * @brief Accept new QUIC connections on the transport.
+ *
+ * @param t      Transport handle.
+ * @param out_conn [out] First newly-accepted connection, or NULL.
+ * @return 0 on success, -1 on error.
+ */
+int csilk_h3_transport_accept(csilk_h3_transport_t* t, void** out_conn);
+
+/**
+ * @brief Send data on an HTTP/3 stream.
+ *
+ * @param t          Transport handle.
+ * @param conn       Connection handle.
+ * @param stream_id  HTTP/3 stream ID.
+ * @param data       Data to send.
+ * @param len        Data length.
+ * @return 0 on success, -1 on error.
+ */
+int csilk_h3_transport_send(
+    csilk_h3_transport_t* t, void* conn, uint64_t stream_id, const uint8_t* data, size_t len);
+
+/**
+ * @brief Receive data from an HTTP/3 stream.
+ *
+ * @param t        Transport handle.
+ * @param conn     Connection handle.
+ * @param stream_id  HTTP/3 stream ID.
+ * @param buf      [out] Receive buffer.
+ * @param buf_len  Buffer capacity.
+ * @return Number of bytes received, or -1 on error.
+ */
+int csilk_h3_transport_recv(
+    csilk_h3_transport_t* t, void* conn, uint64_t stream_id, uint8_t* buf, size_t buf_len);
+
+/**
+ * @brief Close an HTTP/3 stream.
+ *
+ * @param t          Transport handle.
+ * @param conn       Connection handle.
+ * @param stream_id  Stream ID to close.
+ * @return 0 on success, -1 on error.
+ */
+int csilk_h3_transport_close_stream(csilk_h3_transport_t* t, void* conn, uint64_t stream_id);
+
+/**
+ * @brief Close a QUIC connection.
+ *
+ * @param t     Transport handle.
+ * @param conn  Connection handle.
+ * @return 0 on success, -1 on error.
+ */
+int csilk_h3_transport_close_conn(csilk_h3_transport_t* t, void* conn);
+
+/**
+ * @brief Destroy the transport and release all resources.
+ *
+ * @param t  Transport handle to free.
+ */
+void csilk_h3_transport_destroy(csilk_h3_transport_t* t);
+
+/**
+ * @brief Enable HTTP/3 on a csilk_server_t.
+ *
+ * @param server  Server instance.
+ * @param port    UDP port for QUIC (e.g. 443).
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_h3_set_enabled(void* server, int port);
 
 #ifdef __cplusplus
 }

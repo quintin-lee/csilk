@@ -53,27 +53,56 @@ if(CSILK_ENABLE_WAMR)
   endif()
 endif()
 
-# ── ngtcp2 + nghttp3 (HTTP/3 QUIC groundwork) — optional ────────────────
+# ── ngtcp2 + nghttp3 (HTTP/3 QUIC) — optional ────────────────────────────
 if(CSILK_ENABLE_HTTP3)
-  message(STATUS "HTTP/3 groundwork enabled — fetching ngtcp2 + nghttp3")
-  FetchContent_Declare(
-    ngtcp2
-    GIT_REPOSITORY https://github.com/ngtcp2/ngtcp2.git
-    GIT_TAG        v1.9.0
-    GIT_SHALLOW    TRUE
-  )
-  FetchContent_Declare(
-    nghttp3
-    GIT_REPOSITORY https://github.com/ngtcp2/nghttp3.git
-    GIT_TAG        v1.9.0
-    GIT_SHALLOW    TRUE
-  )
-  # ngtcp2 requires nghttp3 headers
-  FetchContent_MakeAvailable(ngtcp2)
-  FetchContent_MakeAvailable(nghttp3)
-  if(ngtcp2_SOURCE_DIR)
+  message(STATUS "HTTP/3 enabled — locating ngtcp2 + nghttp3")
+
+  # Prefer system ngtcp2/nghttp3 when available; fall back to FetchContent.
+  find_library(NGTCP2_LIB NAMES ngtcp2 libngtcp2)
+  find_path(NGTCP2_INCLUDE_DIR ngtcp2/ngtcp2.h)
+  find_library(NGHTTP3_LIB NAMES nghttp3 libnghttp3)
+  find_path(NGHTTP3_INCLUDE_DIR nghttp3/nghttp3.h)
+  find_library(NGTCP2_CRYPTO_OSSL_LIB NAMES ngtcp2_crypto_ossl libngtcp2_crypto_ossl)
+
+  if(NGTCP2_LIB AND NGTCP2_INCLUDE_DIR AND NGHTTP3_LIB AND NGHTTP3_INCLUDE_DIR)
+    message(STATUS "Found system ngtcp2: ${NGTCP2_LIB}, nghttp3: ${NGHTTP3_LIB}")
+    if(NOT TARGET csilk::ngtcp2)
+      add_library(csilk::ngtcp2 INTERFACE IMPORTED)
+      set_target_properties(csilk::ngtcp2 PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${NGTCP2_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "${NGTCP2_LIB};${NGTCP2_CRYPTO_OSSL_LIB};${OPENSSL_LIBRARIES}"
+      )
+    endif()
+    if(NOT TARGET csilk::nghttp3)
+      add_library(csilk::nghttp3 INTERFACE IMPORTED)
+      set_target_properties(csilk::nghttp3 PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${NGHTTP3_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES "${NGHTTP3_LIB}"
+      )
+    endif()
     set(CSILK_HAS_NGTCP2 TRUE)
     add_compile_definitions(CSILK_HAS_NGTCP2=1)
+  else()
+    message(STATUS "System ngtcp2/nghttp3 not found — fetching from source")
+    FetchContent_Declare(
+      ngtcp2
+      GIT_REPOSITORY https://github.com/ngtcp2/ngtcp2.git
+      GIT_TAG        v1.9.0
+      GIT_SHALLOW    TRUE
+    )
+    FetchContent_Declare(
+      nghttp3
+      GIT_REPOSITORY https://github.com/ngtcp2/nghttp3.git
+      GIT_TAG        v1.9.0
+      GIT_SHALLOW    TRUE
+    )
+    # ngtcp2 requires nghttp3 headers
+    FetchContent_MakeAvailable(ngtcp2)
+    FetchContent_MakeAvailable(nghttp3)
+    if(ngtcp2_SOURCE_DIR)
+      set(CSILK_HAS_NGTCP2 TRUE)
+      add_compile_definitions(CSILK_HAS_NGTCP2=1)
+    endif()
   endif()
 endif()
 

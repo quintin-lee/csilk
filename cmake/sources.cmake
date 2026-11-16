@@ -141,6 +141,7 @@ set(CSILK_HTTP2_SOURCES
     src/core/http/h2_response.c
     src/core/http/h2.c
     src/protocols/h3.c
+    src/protocols/http3.c
 )
 
 # ── Vector Module (HNSW + vector DB drivers) ───────────────────────────
