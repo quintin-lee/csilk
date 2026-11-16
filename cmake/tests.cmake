@@ -310,9 +310,10 @@ set(CSILK_PROTOCOL_TESTS
     test_mcp_stdio
     test_mcp_stdio_pool
     test_mcp_sse_ext
+    test_grpc
 )
 set(CSILK_PROTOCOL_TEST_DIRS
-    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
+    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
 )
 
 # -- Security tests --
