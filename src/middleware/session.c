@@ -18,6 +18,7 @@
 
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
+#include "csilk/core/middleware.h"
 
 /** @brief Default session TTL in seconds. */
 enum { SESSION_TTL = 3600 };
@@ -35,9 +36,10 @@ enum { SESSION_TTL = 3600 };
  * a string key and an opaque void* value.
  */
 typedef struct csilk_session_data_s {
-    char*                        key;
-    void*                        value;
-    struct csilk_session_data_s* next;
+    char*                         key;
+    void*                         value;
+    csilk_session_value_cleanup_fn cleanup; /* optional; NULL = caller-owned */
+    struct csilk_session_data_s*  next;
 } csilk_session_data_t;
 
 /**
@@ -178,6 +180,8 @@ free_session(csilk_session_t* session)
     csilk_session_data_t* d = session->data;
     while (d) {
         csilk_session_data_t* next = d->next;
+        if (d->cleanup)
+            d->cleanup(d->value);
         free(d->key);
         free(d);
         d = next;
@@ -452,6 +456,63 @@ csilk_session_set(csilk_ctx_t* c, const char* key, void* value)
 }
 
 /**
+ * @brief Store a value in the session with an optional cleanup callback.
+ *
+ * Replaces the existing value for @p key (running the old value's cleanup if
+ * one was registered) or appends a new entry.  Use this instead of
+ * csilk_session_set() when the value must be released on session teardown.
+ */
+void
+csilk_session_set_ex(csilk_ctx_t* c,
+                     const char* key,
+                     void*       value,
+                     csilk_session_value_cleanup_fn cleanup)
+{
+    if (!c || !key) {
+        return;
+    }
+
+    csilk_session_t* session = csilk_get(c, "_session");
+    if (!session) {
+        return;
+    }
+
+    CSILK_LOG_T("Session: Storing key '%s' in session '%s' (cleanup=%s)",
+                key,
+                session->id,
+                cleanup ? "yes" : "no");
+
+    csilk_session_data_t* d = session->data;
+    while (d) {
+        if (strcmp(d->key, key) == 0) {
+            if (d->cleanup && d->value != value)
+                d->cleanup(d->value);
+            d->value = value;
+            d->cleanup = cleanup;
+            return;
+        }
+        d = d->next;
+    }
+
+    csilk_session_data_t* new_d = calloc(1, sizeof(csilk_session_data_t));
+    if (!new_d) {
+        CSILK_LOG_E("Session: Memory allocation failed for session key '%s'", key);
+        return;
+    }
+
+    new_d->key = strdup(key);
+    if (!new_d->key) {
+        CSILK_LOG_E("Session: failed to duplicate key '%s'", key);
+        free(new_d);
+        return;
+    }
+    new_d->value = value;
+    new_d->cleanup = cleanup;
+    new_d->next = session->data;
+    session->data = new_d;
+}
+
+/**
  * @brief Retrieve a value from the session.
  *
  * Searches the current session's data list for the given key and returns
@@ -533,6 +594,8 @@ csilk_session_destroy(csilk_ctx_t* c)
     csilk_session_data_t* d = session->data;
     while (d) {
         csilk_session_data_t* next = d->next;
+        if (d->cleanup)
+            d->cleanup(d->value);
         free(d->key);
         free(d);
         d = next;

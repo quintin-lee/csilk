@@ -380,8 +380,40 @@ void csilk_session_start(csilk_ctx_t* c);
  * @param c     The request context.
  * @param key   Key name (copied internally).
  * @param value Opaque value pointer (ownership remains with caller).
+ *
+ * @note For values that must be released when the session ends, use
+ *       csilk_session_set_ex() with a cleanup callback instead — see below.
  */
 void csilk_session_set(csilk_ctx_t* c, const char* key, void* value);
+
+/** @brief Cleanup callback for a session value.
+ *
+ * Invoked once when the owning session is destroyed (csilk_session_destroy),
+ * evicted by LRU/expiry, or when the key is re-set with a new value.  The
+ * callback receives the value pointer and may free the value (e.g. by calling
+ * free()).  Passing NULL as @p cleanup disables automatic cleanup for that
+ * entry and preserves the legacy "caller owns the value" contract.
+ */
+typedef void (*csilk_session_value_cleanup_fn)(void* value);
+
+/**
+ * @brief Store a value in the session with an optional cleanup callback.
+ *
+ * Unlike csilk_session_set(), the @p cleanup function (if non-NULL) is
+ * invoked automatically when the session entry is released — eliminating the
+ * use-after-free / dangling-pointer hazard of M3 (security audit).  The
+ * cleanup is registered per key, so replacing a key with a new value first
+ * runs the OLD value's cleanup before installing the new one.
+ *
+ * @param c       The request context.
+ * @param key     Key name (copied internally).
+ * @param value   Opaque value pointer.
+ * @param cleanup Cleanup callback invoked on session teardown, or NULL.
+ */
+void csilk_session_set_ex(csilk_ctx_t* c,
+                          const char* key,
+                          void*       value,
+                          csilk_session_value_cleanup_fn cleanup);
 
 /**
  * @brief Retrieve a value from the session.
