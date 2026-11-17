@@ -125,8 +125,22 @@ _csilk_reload_mgr_init(csilk_server_t* server)
         gen = atomic_fetch_add_explicit(&g_rcu_server_gen_seq, 1, memory_order_relaxed);
     }
     mgr->server_gen = gen;
-    atomic_store_explicit(
-        &g_active_server_gens[gen % CSILK_RCU_GEN_TABLE_SIZE], gen, memory_order_release);
+    size_t            slot = gen % CSILK_RCU_GEN_TABLE_SIZE;
+    uint32_t          prev = atomic_load_explicit(&g_active_server_gens[slot], memory_order_acquire);
+    /* Detect generation-table collision: the slot is still occupied by a
+     * different, still-alive server.  In this rare case we keep the new
+     * generation registered so the old server will be safely reclaimed; the
+     * collision only means the thread-exit destructor may skip clearing the
+     * old entry — which is safe because the old server is being freed. */
+    if (prev != 0 && prev != gen) {
+        CSILK_LOG_W("RCU: generation-table collision at slot %zu (gen %u vs old gen %u); "
+                    "proceeding with new generation",
+                    slot,
+                    gen,
+                    prev);
+    }
+    atomic_store_explicit(&g_active_server_gens[slot], gen, memory_order_release);
+    mgr->server_gen_active = true;
 
     for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
         atomic_init(&mgr->reader_slots[i].active_epoch, 0);
@@ -526,9 +540,15 @@ _csilk_reload_mgr_free(csilk_server_t* server)
     }
     csilk_reload_mgr_t* mgr = &server->reload_mgr;
     uint32_t            gen = mgr->server_gen;
-    if (gen != 0) {
-        atomic_store_explicit(
-            &g_active_server_gens[gen % CSILK_RCU_GEN_TABLE_SIZE], 0, memory_order_release);
+    if (gen != 0 && mgr->server_gen_active) {
+        size_t slot = gen % CSILK_RCU_GEN_TABLE_SIZE;
+        /* Only clear the generation slot if it still belongs to this server.
+         * If a newer server has already claimed the same slot (collision),
+         * leave the newer registration intact. */
+        if (atomic_load_explicit(&g_active_server_gens[slot], memory_order_acquire) == gen) {
+            atomic_store_explicit(&g_active_server_gens[slot], 0, memory_order_release);
+        }
+        mgr->server_gen_active = false;
     }
 
     /* Invalidate calling thread's cached TLS pointer if it refers to this server */
