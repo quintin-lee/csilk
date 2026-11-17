@@ -37,8 +37,20 @@ typedef struct {
 } atomic_ip_entry_t;
 
 static atomic_ip_entry_t ip_table[MAX_IP_ENTRIES];
-static _Atomic int       ip_saturation_policy = CSILK_RATE_SATURATION_EVICT_LRU;
-static _Atomic time_t    ratelimit_time_offset = 0;
+/** @brief Default saturation policy.
+ *
+ * EVICT_LRU is the most permissive default: when the bounded IP table is
+ * saturated, the least-recently-active slot is reclaimed and its counter
+ * reset to 0. An attacker who floods many unique IPs can thereby evict a
+ * tracked victim IP and reset its rate-limit counter (table-washing),
+ * letting the victim bypass its limit. Operators that need to defend
+ * against this must set CSILK_RATE_SATURATION_FAIL_CLOSED (reject with 429
+ * when the table is saturated, never evict a live counter) via
+ * csilk_rate_limit_set_saturation_policy(). The LRU default is preserved
+ * because flipping it to fail-closed would break legitimate high-cardinality
+ * deployments. */
+static _Atomic int    ip_saturation_policy = CSILK_RATE_SATURATION_EVICT_LRU;
+static _Atomic time_t ratelimit_time_offset = 0;
 
 /* --- Keyed rate-limit table (composite / custom keys, csilk#9a) --- */
 
