@@ -67,6 +67,24 @@ main(void)
     assert(csilk_json_array_size(res) == 0);
     csilk_json_free(res);
 
+    /* 4. Regression: an oversized savepoint base name must be rejected
+     *    (fail-fast) rather than silently truncated into a malformed /
+     *    colliding savepoint identifier used by begin/commit/rollback. */
+    assert(csilk_db_tx_scope_begin(pool, "oversized_base", &outer_scope) == 0);
+    csilk_db_tx_scope_t sp;
+    char                  long_name[200];
+    memset(long_name, 'x', sizeof(long_name) - 1);
+    long_name[sizeof(long_name) - 1] = '\0';
+    /* Inside an active transaction, the savepoint path composes "name_<seq>"
+     * into scope->name[64]; a 199-char base cannot fit -> -1. */
+    assert(csilk_db_tx_scope_begin(pool, long_name, &sp) == -1);
+    assert(sp.active == false);
+    /* A normal-length name still works in the same transaction. */
+    assert(csilk_db_tx_scope_begin(pool, "good_sp", &sp) == 0);
+    assert(sp.is_savepoint == true);
+    assert(csilk_db_tx_scope_rollback(pool, &sp) == 0);
+    assert(csilk_db_tx_scope_rollback(pool, &outer_scope) == 0);
+
     csilk_db_pool_free(pool);
     printf("test_db_tx_scope passed!\n");
     return 0;
