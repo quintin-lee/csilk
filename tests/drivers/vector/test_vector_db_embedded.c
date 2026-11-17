@@ -34,6 +34,13 @@ test_vector_db_embedded_factory(void)
     assert(res.results != nullptr);
     assert(strcmp(res.results[0].id, "doc_embedded_1") == 0);
 
+    /* Regression: the embedded HNSW index is fixed-dimensionality; a query
+     * vector whose length differs from the index dimension must be rejected
+     * (fail-fast) rather than silently misread by the distance kernels. */
+    memset(&res, 0, sizeof(res));
+    assert(csilk_vector_db_search(db, "default", vec, dim / 2, 1, &res) == -1);
+    assert(res.count == 0);
+
     csilk_vector_search_response_free(&res);
     free(vec);
     csilk_vector_db_free(db);
