@@ -234,6 +234,12 @@ on_mq_async(csilk_io_async_t* handle)
             if (chain) {
                 size_t idx = 0;
 
+                /* Snapshot the handler chain under the topics lock so a
+                 * concurrent csilk_mq_use() cannot tear the array or topic
+                 * list mid-copy. csilk_mq_next runs user handlers that may
+                 * themselves register topics, so the lock is released before
+                 * invoking it. */
+                csilk_mutex_lock(&mq->topics_mutex);
                 if (mq->global_mw_count > 0) {
                     memcpy(chain,
                            mq->global_middlewares,
@@ -249,6 +255,7 @@ on_mq_async(csilk_io_async_t* handle)
                         idx += t->handler_count;
                     }
                 }
+                csilk_mutex_unlock(&mq->topics_mutex);
 
                 CSILK_LOG_T("MQ: Executing handler chain with %zu total handlers "
                             "for topic '%s'",

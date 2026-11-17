@@ -196,10 +196,11 @@ csilk_trace_middleware(csilk_ctx_t* c)
         char* stored_span_id = csilk_arena_strdup(arena, span_id_buf);
         csilk_set(c, "otlp_trace_id", stored_trace_id);
         csilk_set(c, "otlp_span_id", stored_span_id);
-    } else {
-        csilk_set(c, "otlp_trace_id", (void*)trace_id_buf);
-        csilk_set(c, "otlp_span_id", (void*)span_id_buf);
     }
+    /* No arena (e.g. a bare context) means there is no request-scoped
+     * storage to persist the ids into, so nothing is stored. The id strings
+     * above are stack-local and must never escape the frame, so we do not
+     * register them in the context on this path. */
 
     /* Push request trace context so child spans automatically inherit trace ID */
     csilk_otlp_push_trace_context(trace_id_buf, parent_span_id[0] ? parent_span_id : NULL);

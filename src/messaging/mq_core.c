@@ -52,13 +52,16 @@ csilk_mq_get_stats(csilk_mq_t* mq, csilk_mq_stats_t* stats)
     stats->delivered_total = mq->delivered_total;
     stats->failed_total = mq->failed_total;
     stats->queue_depth = mq->queue_depth;
+    csilk_mutex_unlock(&mq->queue_mutex);
 
+    /* The topics list is guarded by topics_mutex, not queue_mutex. */
     uint32_t topics = 0;
+    csilk_mutex_lock(&mq->topics_mutex);
     for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
         topics++;
     }
+    csilk_mutex_unlock(&mq->topics_mutex);
     stats->topic_count = topics;
-    csilk_mutex_unlock(&mq->queue_mutex);
 }
 
 /**
@@ -181,6 +184,7 @@ _csilk_mq_new(csilk_io_loop_t* loop)
 
     csilk_mutex_init(&mq->queue_mutex);
     csilk_mutex_init(&mq->monitor_mutex);
+    csilk_mutex_init(&mq->topics_mutex);
     mq->loop = loop;
 
     csilk_io_async_init(loop, &mq->async_handle, on_mq_async);
@@ -210,6 +214,7 @@ on_mq_close(csilk_io_handle_t* handle)
 
     csilk_mutex_destroy(&mq->queue_mutex);
     csilk_mutex_destroy(&mq->wal_mutex);
+    csilk_mutex_destroy(&mq->topics_mutex);
 
     if (mq->wal_fd >= 0) {
         csilk_io_fs_t close_req;

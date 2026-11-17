@@ -1,9 +1,8 @@
-# csilk 全库代码分析报告
+#csilk 全库代码分析报告
 
-生成日期: 2026-11-17
-基线: `master @ 5ab5f305` + Phase 1–4 修复
-范围: `src/**`, `include/**`, `cmake/**`, `tests/**`
-验证基线: 268 tests passed, `check-format` clean, `clang-tidy` clean
+生成日期 : 2026 - 11 - 17 基线 : `master @9bfbd515` +
+    Phase 1–5 修复(Phase 5 于 `feature / concurrency - mem - fixes` worktree) 范围 : `src/**`, `include/**`, `cmake/**`, `tests/**`
+验证基线: 263/268 单测通过 (5 个环境性 ASAN leak 失败: test_json_accessor_bench/test_logger_async_bench/test_workflow_loader/test_swagger/test_openai_mock, 与主 build_asan2 一致), `check-format` clean, `clang-tidy` clean
 
 ---
 
@@ -225,6 +224,18 @@ json       ──→ yyjson
 ### Phase 4: 文档与不变式
 10. `wasm_wasi.c` stub 限制文档
 11. 各计时器调用方不变式注释 (libuv / uring 双路径对称)
+
+### Phase 5: 并发/内存安全修复 (worktree `feature/concurrency-mem-fixes`, 本会话)
+以下缺陷在独立 git worktree 中逐项实现 + ASAN 验证 + 分阶段提交:
+
+1. **P0** `ws_room.c` — COW 快照生命周期 UAF: `on_room_message` 在释放 manager 锁后无锁遍历快照, 而 join/leave 同时 `free` 旧快照。改为快照引用计数 (`ws_room_snapshot_t.refs`): 房间持基线 ref, 每个广播 reader 取/还 ref, 最后一个 ref 释放时才 free。提交 `c2beaf0e`。
+2. **P0** `otlp_trace.c` — 栈指针入 ctx UAF: 无 arena 时把栈局部 `trace_id_buf/span_id_buf` 存入 ctx, 帧销毁后越界读。改为: 无 arena 时不注册 (生产请求必带 arena, 该路径仅退化/测试), 绝不泄漏栈指针。提交 `214c1d1e`。
+3. **P1** `session.c` — `session_max` 数据竞争: 主线程写、worker LRU 驱逐读的非原子 `size_t`。改为 `atomic_size_t` + 显式 `atomic_load/store` (relaxed)。提交 `fea5725c`。
+4. **P1** `session_store.c` — Redis 后端无锁共享 `redisContext` + 静默失败: 跨 worker 并发 `redisCommand` 破坏连接, 且 `!reply` 时不告警。加 `topics_mutex` 同类的 `redis.lock` 串行化三个 op, 并 `CSILK_LOG_W` 输出 `ctx->errstr`。提交 `b18d7ea6`。
+5. **P2** `ratelimit.c` — EVICT_LRU 洗表: 饱和时回收最久未活跃槽并重置其计数, 攻击者可洗掉被跟踪 IP 的限额。保留宽松默认 (避免破坏高基数合法部署), 文档化 `CSILK_RATE_SATURATION_FAIL_CLOSED` 指引。提交 `44144683`。
+6. **P2** `mq_pubsub.c`/`mq_dispatch.c`/`mq_core.c` — topic/中间件注册无锁: `csilk_mq_use` 在 worker 线程改 global-middleware 数组与 topic 链表, 而 dispatch 在主循环读, 数据竞争。加 `topics_mutex`: 注册持锁, dispatch 快照 chain 持锁后释放再调 handler, stats 读同样持锁。提交 `9224ec21`。
+
+**未处理 (需用户决策/架构评审)**: `raft_consensus.c` 的 `apply_cb` 在 `node->mutex` 下内联调用 (5 个调用点)。彻底移出锁需深拷贝 log entry 数据 (可压缩 buffer), 属共识核心高风险改动, 单独任务处理。
 
 ---
 
