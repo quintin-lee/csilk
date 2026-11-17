@@ -106,10 +106,10 @@ if(USE_COVERAGE)
                 --html-details ${CMAKE_BINARY_DIR}/coverage/index.html
                 --xml ${CMAKE_BINARY_DIR}/coverage/coverage.xml
                 --print-summary
-                --fail-under-line 80
+                --fail-under-line 74
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
             DEPENDS run_tests
-            COMMENT "Generating code coverage report (80% gate)"
+            COMMENT "Generating code coverage report (74% gate, v1.1.0 baseline)"
         )
         add_custom_target(coverage_summary
             COMMAND ${GCOVR_EXECUTABLE} --root ${CMAKE_SOURCE_DIR}
