@@ -194,6 +194,14 @@ csilk_vector_db_search(csilk_vector_db_t*              db,
         return db->driver->search(db->state, collection, vector, dimension, limit, res);
     } else if (db->state) {
         csilk_hnsw_index_t* idx = (csilk_hnsw_index_t*)db->state;
+        /* The embedded HNSW index is fixed-dimensionality: its distance kernels
+         * always read index->dim floats per node, so a query vector whose length
+         * differs from the index dimension would be silently misinterpreted
+         * (extra floats dropped, or fewer read than allocated -> garbage
+         * scores). Reject the mismatched query up front instead. */
+        if (dimension != idx->dim) {
+            return -1;
+        }
         char**              doc_ids = NULL;
         float*              scores = NULL;
         size_t              count = 0;
