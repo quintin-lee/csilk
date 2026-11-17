@@ -25,6 +25,9 @@ struct csilk_circuit_breaker_s {
     int           consecutive_failures; /**< Counter for consecutive downstream failures */
     int           failure_threshold;    /**< Failures required to trip to OPEN */
     int           recovery_timeout_ms;  /**< Cooldown duration in ms before trying HALF_OPEN */
+    int           half_open_success_threshold; /**< HALF_OPEN successes needed to close (default 1) */
+    int           half_open_successes; /**< Consecutive HALF_OPEN probe successes */
+    int           half_open_probing;    /**< 1 if a HALF_OPEN probe is in flight (single-probe gate) */
     uint64_t      last_state_change_us; /**< Microsecond timestamp of last state transition */
     csilk_mutex_t mutex;                /**< Mutex protecting concurrent access across workers */
 };
@@ -48,6 +51,10 @@ csilk_circuit_breaker_new(const csilk_circuit_breaker_config_t* config)
         (config && config->failure_threshold > 0) ? config->failure_threshold : 5;
     cb->recovery_timeout_ms =
         (config && config->recovery_timeout_ms > 0) ? config->recovery_timeout_ms : 5000;
+    cb->half_open_success_threshold =
+        (config && config->half_open_success_threshold > 0) ? config->half_open_success_threshold : 1;
+    cb->half_open_successes = 0;
+    cb->half_open_probing = 0;
     cb->last_state_change_us = csilk_io_hrtime() / 1000;
     csilk_mutex_init(&cb->mutex);
     return cb;
@@ -73,9 +80,13 @@ csilk_circuit_breaker_middleware(csilk_ctx_t* c, csilk_circuit_breaker_t* cb)
 
     if (cb->state == 1) { // OPEN state
         if ((now_us - cb->last_state_change_us) / 1000 >= (uint64_t)cb->recovery_timeout_ms) {
-            /* Cooldown period elapsed -> transition to HALF_OPEN probe state */
+            /* Cooldown elapsed: transition to HALF_OPEN and admit exactly one probe.
+             * The single-probe gate (half_open_probing) prevents a retry storm after
+             * cooldown from flooding a still-degraded downstream with unbounded traffic. */
             cb->state = 2; // HALF_OPEN
+            cb->half_open_successes = 0;
             cb->last_state_change_us = now_us;
+            cb->half_open_probing = 1; // admit this request as THE probe
         } else {
             /* Fast-fail request with HTTP 503 */
             csilk_mutex_unlock(&cb->mutex);
@@ -84,6 +95,14 @@ csilk_circuit_breaker_middleware(csilk_ctx_t* c, csilk_circuit_breaker_t* cb)
             csilk_abort(c);
             return;
         }
+    } else if (cb->state == 2) { // HALF_OPEN, probe already admitted
+        /* Single-probe gate: while one probe is in flight, reject concurrent
+         * requests so only the probe's outcome decides the next state. */
+        csilk_mutex_unlock(&cb->mutex);
+        csilk_json_string(
+            c, 503, "{\"error\": \"Service Unavailable: Circuit Breaker HALF_OPEN probing\"}");
+        csilk_abort(c);
+        return;
     }
     csilk_mutex_unlock(&cb->mutex);
 
@@ -103,9 +122,14 @@ csilk_circuit_breaker_record_success(csilk_circuit_breaker_t* cb)
     }
     csilk_mutex_lock(&cb->mutex);
     cb->consecutive_failures = 0;
-    if (cb->state == 2) { // Transition HALF_OPEN -> CLOSED
-        cb->state = 0;
-        cb->last_state_change_us = csilk_io_hrtime() / 1000;
+    if (cb->state == 2) { // HALF_OPEN probe succeeded
+        /* Clear the single-probe gate immediately so further requests flow. */
+        cb->half_open_probing = 0;
+        cb->half_open_successes++;
+        if (cb->half_open_successes >= cb->half_open_success_threshold) {
+            cb->state = 0; // CLOSED
+            cb->last_state_change_us = csilk_io_hrtime() / 1000;
+        }
     }
     csilk_mutex_unlock(&cb->mutex);
 }
@@ -123,6 +147,16 @@ csilk_circuit_breaker_record_failure(csilk_circuit_breaker_t* cb)
     }
     csilk_mutex_lock(&cb->mutex);
     cb->consecutive_failures++;
+    /* A failed HALF_OPEN probe immediately re-opens the circuit and resets the
+     * success streak, so a still-degraded downstream is not kept half-open. */
+    if (cb->state == 2) {
+        cb->state = 1; // OPEN
+        cb->half_open_probing = 0;
+        cb->half_open_successes = 0;
+        cb->last_state_change_us = csilk_io_hrtime() / 1000;
+        csilk_mutex_unlock(&cb->mutex);
+        return;
+    }
     if (cb->consecutive_failures >= cb->failure_threshold) {
         cb->state = 1; // Transition to OPEN
         cb->last_state_change_us = csilk_io_hrtime() / 1000;
