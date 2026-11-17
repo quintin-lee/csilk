@@ -459,11 +459,16 @@ test_reader_storm(void)
     csilk_server_wait_grace_period(server);
     assert(atomic_load_explicit(&server->reload_mgr.retired_count, memory_order_relaxed) == 0);
 
-    /* csilk_server_free() owns the active router and all retired entries; the
-     * original router (r0) was already retired into the server's retired list
-     * on the first csilk_server_set_router call and is freed by the server's
-     * teardown path.  Do NOT free it again. */
+    /* Ownership contract (mirrors Tests 1-5): the caller owns the final
+     * active router installed via csilk_server_set_router; csilk_server_free()
+     * reclaims only the retired list, not the active router.  The original
+     * router (r0) was already retired on the first set_router and is reclaimed
+     * by the server's teardown path.  Capture the final active router before
+     * freeing the server, then free it here to avoid a leak. */
+    csilk_router_t* active_r = csilk_server_get_router(server);
+    assert(active_r != NULL);
     csilk_server_free(server);
+    csilk_router_free(active_r);
     printf("\n  -> Passed (%d readers × %d acquires + %d writers, 0 UAF).\n",
            READER_STORM_READERS,
            READER_STORM_ACQ_PER_READER,
