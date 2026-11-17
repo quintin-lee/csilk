@@ -459,10 +459,11 @@ test_reader_storm(void)
     csilk_server_wait_grace_period(server);
     assert(atomic_load_explicit(&server->reload_mgr.retired_count, memory_order_relaxed) == 0);
 
-    csilk_router_t* active_r = csilk_server_get_router(server);
+    /* csilk_server_free() owns the active router and all retired entries; the
+     * original router (r0) was already retired into the server's retired list
+     * on the first csilk_server_set_router call and is freed by the server's
+     * teardown path.  Do NOT free it again. */
     csilk_server_free(server);
-    csilk_router_free(active_r);
-    csilk_router_free(r0);
     printf("\n  -> Passed (%d readers × %d acquires + %d writers, 0 UAF).\n",
            READER_STORM_READERS,
            READER_STORM_ACQ_PER_READER,
