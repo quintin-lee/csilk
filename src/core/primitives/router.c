@@ -2,7 +2,8 @@
  * @file router.c
  * @brief Router implementation: node management, route registration, and public API.
  *
- * SIMD segment extraction and trie matching live in router_match.c.
+ * SIMD segment extraction and trie matching live in router_trie.c
+ * (SIMD kernel in router_simd.c).
  *
  * @copyright MIT License
  */

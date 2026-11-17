@@ -2,7 +2,7 @@
  * @file router_internal.h
  * @brief Internal router declarations shared across split translation units.
  *
- * Exposes symbols from router.c, router_match.c, and router_api.c
+ * Exposes symbols from router.c, router_trie.c, and router_simd.c
  * that need cross-file visibility.
  *
  * @copyright MIT License
