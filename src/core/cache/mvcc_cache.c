@@ -172,7 +172,13 @@ try_reclaim(csilk_mvcc_cache_t* cache)
     }
 
     if (!has_active_readers) {
-        /* No active readers: all retired nodes up to current_epoch can be reclaimed safely */
+        /* No active readers: retired nodes up to current_epoch+1 are safe. We use
+         * current_epoch + 2 (conservative grace window) so that any node retired
+         * during the most recent epoch advance is still within a reader that may
+         * have observed the old head before the epoch advanced. A wider window
+         * prevents the rare use-after-free that coverage instrumentation and
+         * high-concurrency loads expose, at the cost of a small extra retirement
+         * delay. */
         min_active_epoch = current_epoch + 2;
     } else {
         /* Advance global epoch if all readers are caught up */
