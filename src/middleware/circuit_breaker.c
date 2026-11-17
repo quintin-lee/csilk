@@ -21,15 +21,15 @@
  * @brief Internal Circuit Breaker state structure.
  */
 struct csilk_circuit_breaker_s {
-    int           state;                /**< Current state: 0 = CLOSED, 1 = OPEN, 2 = HALF_OPEN */
-    int           consecutive_failures; /**< Counter for consecutive downstream failures */
-    int           failure_threshold;    /**< Failures required to trip to OPEN */
-    int           recovery_timeout_ms;  /**< Cooldown duration in ms before trying HALF_OPEN */
-    int           half_open_success_threshold; /**< HALF_OPEN successes needed to close (default 1) */
-    int           half_open_successes; /**< Consecutive HALF_OPEN probe successes */
-    int           half_open_probing;    /**< 1 if a HALF_OPEN probe is in flight (single-probe gate) */
-    uint64_t      last_state_change_us; /**< Microsecond timestamp of last state transition */
-    csilk_mutex_t mutex;                /**< Mutex protecting concurrent access across workers */
+    int      state;                       /**< Current state: 0 = CLOSED, 1 = OPEN, 2 = HALF_OPEN */
+    int      consecutive_failures;        /**< Counter for consecutive downstream failures */
+    int      failure_threshold;           /**< Failures required to trip to OPEN */
+    int      recovery_timeout_ms;         /**< Cooldown duration in ms before trying HALF_OPEN */
+    int      half_open_success_threshold; /**< HALF_OPEN successes needed to close (default 1) */
+    int      half_open_successes;         /**< Consecutive HALF_OPEN probe successes */
+    int      half_open_probing;    /**< 1 if a HALF_OPEN probe is in flight (single-probe gate) */
+    uint64_t last_state_change_us; /**< Microsecond timestamp of last state transition */
+    csilk_mutex_t mutex;           /**< Mutex protecting concurrent access across workers */
 };
 
 /**
@@ -51,8 +51,9 @@ csilk_circuit_breaker_new(const csilk_circuit_breaker_config_t* config)
         (config && config->failure_threshold > 0) ? config->failure_threshold : 5;
     cb->recovery_timeout_ms =
         (config && config->recovery_timeout_ms > 0) ? config->recovery_timeout_ms : 5000;
-    cb->half_open_success_threshold =
-        (config && config->half_open_success_threshold > 0) ? config->half_open_success_threshold : 1;
+    cb->half_open_success_threshold = (config && config->half_open_success_threshold > 0)
+                                          ? config->half_open_success_threshold
+                                          : 1;
     cb->half_open_successes = 0;
     cb->half_open_probing = 0;
     cb->last_state_change_us = csilk_io_hrtime() / 1000;
@@ -83,7 +84,7 @@ csilk_circuit_breaker_middleware(csilk_ctx_t* c, csilk_circuit_breaker_t* cb)
             /* Cooldown elapsed: transition to HALF_OPEN and admit exactly one probe.
              * The single-probe gate (half_open_probing) prevents a retry storm after
              * cooldown from flooding a still-degraded downstream with unbounded traffic. */
-            cb->state = 2; // HALF_OPEN
+            cb->state = 2;             // HALF_OPEN
             cb->half_open_successes = 0;
             cb->last_state_change_us = now_us;
             cb->half_open_probing = 1; // admit this request as THE probe

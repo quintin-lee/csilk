@@ -72,7 +72,7 @@ main(void)
      *    colliding savepoint identifier used by begin/commit/rollback. */
     assert(csilk_db_tx_scope_begin(pool, "oversized_base", &outer_scope) == 0);
     csilk_db_tx_scope_t sp;
-    char                  long_name[200];
+    char                long_name[200];
     memset(long_name, 'x', sizeof(long_name) - 1);
     long_name[sizeof(long_name) - 1] = '\0';
     /* Inside an active transaction, the savepoint path composes "name_<seq>"

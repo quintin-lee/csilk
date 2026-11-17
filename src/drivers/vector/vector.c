@@ -202,9 +202,9 @@ csilk_vector_db_search(csilk_vector_db_t*              db,
         if (dimension != idx->dim) {
             return -1;
         }
-        char**              doc_ids = NULL;
-        float*              scores = NULL;
-        size_t              count = 0;
+        char** doc_ids = NULL;
+        float* scores = NULL;
+        size_t count = 0;
         if (csilk_hnsw_search(idx, vector, (size_t)limit, &doc_ids, &scores, &count) == 0) {
             res->count = count;
             res->results = calloc(count, sizeof(csilk_vector_search_result_t));

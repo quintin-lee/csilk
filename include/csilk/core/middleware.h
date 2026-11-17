@@ -628,8 +628,8 @@ typedef struct csilk_circuit_breaker_s csilk_circuit_breaker_t;
 
 /** @brief Circuit Breaker configuration settings. */
 typedef struct {
-    int failure_threshold;        /**< Consecutive failures before opening (default 5). */
-    int recovery_timeout_ms;      /**< Time in ms before attempting HALF_OPEN probe (default 5000ms). */
+    int failure_threshold;   /**< Consecutive failures before opening (default 5). */
+    int recovery_timeout_ms; /**< Time in ms before attempting HALF_OPEN probe (default 5000ms). */
     int half_open_success_threshold; /**< Consecutive HALF_OPEN successes needed to close (default 1). */
 } csilk_circuit_breaker_config_t;
 
