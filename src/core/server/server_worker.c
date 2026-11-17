@@ -395,9 +395,7 @@ worker_thread(void* arg)
         if (leftover->state != CSILK_CONN_CLOSING) {
             leftover->state = CSILK_CONN_CLOSING;
         }
-        extern void client_list_remove(csilk_server_t * s, csilk_client_t * c);
         client_list_remove(server, leftover);
-        extern void client_destroy(csilk_client_t * c);
         client_destroy(leftover);
     }
     csilk_arena_flush_free_list();

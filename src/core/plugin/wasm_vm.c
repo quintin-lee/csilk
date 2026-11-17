@@ -250,18 +250,31 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
         if (ret != 0) {
             /* Read the string from WAMR's linear memory. */
             wasm_memory_t mem = wasm_runtime_get_linear_memory(inst);
-            uint32_t      mem_size = wasm_runtime_get_linear_memory_size(mem);
-            if (mem && ret < mem_size) {
+            uint32_t      mem_size = mem ? wasm_runtime_get_linear_memory_size(mem) : 0;
+            if (mem && ret < mem_size && (size_t)mem_size - ret >= 1) {
                 const char* p = (const char*)mem + ret;
-                size_t      str_len = 0;
-                while (str_len < (size_t)(mem_size - ret) && p[str_len] != '\0') {
-                    str_len++;
-                }
+                size_t      str_len = strnlen(p, (size_t)(mem_size - ret));
                 /* Cap at 1 MB to prevent a corrupt offset from exhausting memory */
                 if (str_len > (size_t)(1024 * 1024)) {
                     str_len = 1024 * 1024;
                 }
-                res = strndup(p, str_len);
+                /* Verify the string is NUL-terminated within the cap */
+                if (str_len == 0 || p[str_len] != '\0') {
+                    fprintf(stderr,
+                            "[csilk][WASM] memory offset %u returned non-NUL-terminated "
+                            "string; falling back to default result\n",
+                            ret);
+                    str_len = 0;
+                }
+                if (str_len > 0) {
+                    res = strndup(p, str_len);
+                }
+            } else {
+                fprintf(stderr,
+                        "[csilk][WASM] invalid return offset %u (mem=%p, mem_size=%u)\n",
+                        ret,
+                        (void*)mem,
+                        mem_size);
             }
         }
         if (!res) {
@@ -290,6 +303,15 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
     }
 
     char* res = strdup("{\"status\":\"ok\",\"result\":\"wasm_execution_success\"}");
+    if (res == NULL) {
+        csilk_mutex_unlock(&plugin->mutex);
+        return NULL;
+    }
+    /* Stub path is not real execution — warn so users know their plugin
+     * did not actually run.  Production must enable -DCSILK_ENABLE_WAMR=ON. */
+    fprintf(stderr,
+            "[csilk][WASM] WARNING: stub execution path active "
+            "(CSILK_ENABLE_WAMR=OFF); returning canned result\n");
     csilk_mutex_unlock(&plugin->mutex);
     return res;
 }
