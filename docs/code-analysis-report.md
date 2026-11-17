@@ -1,6 +1,6 @@
 # csilk 代码库完整分析报告（当前基线）
 
-> 生成日期：2026-11-17 · 基于 `master` @ `88c1d7a7`（本轮 CI 全绿后）
+> 生成日期：2026-11-17 · §1–§10 基于早期 `88c1d7a7` 基线；§12 为 2026-11-17 全量复审（`master` @ `785aa5a7`，v1.1.0，Post-concurrency-fixes，CI 全绿）
 > 方法：全库扫描（src/include/cmake/tests）+ codegraph 语义索引 + 多模块并行审计 + 关键风险逐行复核
 > 定位：C23 轻量级 HTTP 框架，P99 ≤ 5ms @ 10K QPS；默认 libuv / 可选 io_uring 双后端。
 
@@ -148,8 +148,53 @@ TCP accept (per-worker uv_server / io_uring ring)
 
 ---
 
-## 11. 总评
+---
 
-csilk 是一个**工程密度极高**的 C23 框架：核心请求链路（RCU 读侧 handler 链、generation-tagged client 回收、arena bump 分配、双 IO 后端）设计严谨且已被 sanitizer 矩阵反复验证，所有权契约在本轮 CI 修复后已锁定（active router caller-owned）。**主要剩余风险集中在边缘功能**：WebSocket 房间广播（COW 缺 refcount）、OTLP trace（栈指针 UAF）、session/ratelimit 的并发与饱和策略。这些都是"核心跑通后、扩展路径尚未被同等强度审计"的典型遗留点，建议按 P0→P2 收敛。
+## 11. 总评（2026-11-17 @ `785aa5a7`，Post-concurrency-fixes）
 
-> 注：本文件为当前 `88c1d7a7` 基线快照；早期基线（`5ab5f305`）的分析见同目录历史文档。
+csilk 是一个**工程密度极高**的 C23 框架：核心请求链路（RCU 读侧 handler 链、generation-tagged client 回收、arena bump 分配、双 IO 后端）经逐行复核**判定健康**，并发纪律是全项目最强资产。本轮确证的 5 项边缘缺陷（向量 dim 契约 / 限流 int 溢出 / 熔断单探针 / secret 锁内回调 / savepoint 截断）**已全部修复**（`d0e966e6`/`fe0a43e6`/`0b6d22fd`/`f7f7f7c9`/`f5d33801`，各带回归测试）；上轮已修复 6 项（ws_room refcount / otlp_trace / session_max / redis lock / ratelimit doc / mq topics_mutex）已合入。遗留仅 §12.3 的 3 项 P2 架构项（WAF O(n·m)、JWT timing oracle、Raft `apply_cb` 移锁内）按风险排期。
+
+> 注：本文件 §1–§10 为早期 `88c1d7a7` 基线快照；§12 为 2026-11-17 全量复审（`785aa5a7` @ v1.1.0）；早期基线（`5ab5f305`）分析见同目录历史文档。
+
+---
+
+## 12. 2026-11-17 全量复审（`785aa5a7` @ v1.1.0，Post-concurrency-fixes）
+
+> 方法：`code_explore` 语义图 + 逐行 `read` 独立验证；子代理候选缺陷**均经复核**，驳回 3 项误报。
+> 上轮已修复的 6 项（ws_room refcount / otlp_trace / session_max / redis lock / ratelimit doc / mq topics_mutex）已合入，不在此列。
+
+### 12.1 核心层健康结论（逐行验证）
+
+- **连接回收**（`connection_close.c`）：`client_destroy` CAS(CLOSING→CLOSED) 幂等；非 owner 线程经 dispatch，回调三重判据 `generation==gen && state==CLOSING && ref<=0 && pending_io<=0`。**无 UAF/ABA 路径。**
+- **RCU**（`server_rcu.c`）：reader TLS 快照 + `seq_cst` fence；writer `config_mutex` 下 exchange+epoch++；reclaim 取 `min_active_epoch`；`_csilk_reload_mgr_free`(L584-590) **确实**统一释放 overflow 动态槽（一度怀疑为进程级泄漏，复核为非缺陷）。**实现正确自洽。**
+- **ctx 异步**（`ctx_async.c`）：`csilk_async_op_t` 带 generation/request_seq/stream_gen 三重标签 + `completed` CAS + refcount；`csilk_ctx_cleanup` 先释放 RCU 租约再 LIFO defer，顺序正确。
+
+### 12.2 本轮确证的新遗留缺陷（5 项，均在边缘，非热路径）
+
+> **状态：本轮全部已修复**（5 个独立 commit，`d0e966e6`/`fe0a43e6`/`0b6d22fd`/`f7f7f7c9`/`f5d33801`），每项含回归测试。
+
+| 级别 | 位置 | 缺陷 | 触发 / 根因 | 修复 |
+|---|---|---|---|---|
+| **P1** | `drivers/vector/vector.c:182` | embedded HNSW 的 `csilk_vector_db_search` **丢弃** `dimension` 参数 | 内核恒用 `idx->dim`；调用方传错长度查询 → 结果静默错误。**降级自子代理误报的“堆 OOB”**——多出的 float 被丢弃，不越界。 | ✅ embedded 路径校验 `dimension==idx->dim`，不符返回 -1（`0b6d22fd`） |
+| **P1** | `middleware/sliding_ratelimit.c:27-28` | 计数器 `int`(32-bit) 溢出使限流器静默失效 | `curr/prev_window_count` 有符号 32 位；单键 >2^31 次或 `weight` 中间值回绕为负 → `estimated_count>=limit` 永假 → 高流量下限流自动关闭。 | ✅ 计数器改 `uint64_t` + 0xFFFFFFFF 饱和截断，`limit` 改 `int64_t`（`d0e966e6`） |
+| **P1** | `middleware/circuit_breaker.c:74-90` | HALF_OPEN 无单探针门控 | 冷却后**每个**到达请求各自翻 HALF_OPEN 并 `csilk_next`；`record_success` 单成功即 CLOSED。重试风暴下韧性失效。 | ✅ `half_open_probing` 单探针门控 + 探针失败回 OPEN + `half_open_success_threshold` 连续成功才 CLOSED（`fe0a43e6`） |
+| **P2** | `core/config/secret.c:213-245` | 外部 secret provider 在全局锁内回调且无缓存 | `s_secret_manager(...)` 持 `s_secret_lock` 调用；vault 慢回调串行化全部 secret 读取、进程级 stall，且无负缓存。 | ✅ 回调移出锁 + 64 槽 FNV/TTL(60s) 缓存；过期用 `clock_gettime`（避免 libuv 耦合导致 OOM 测试 fork 卡死）（`f7f7f7c9`） |
+| **P2** | `drivers/db/tx_scope.c:40-44` | savepoint 名 `snprintf` 截断 | `scope->name[128]`/`sql[128]` 无截断检查；超长名 → `SAVEPOINT <trunc>;` 语法错误。begin/commit/rollback 用同一截断串，故不会误操作外层 tx（**驳回子代理 P0 误判**）。 | ✅ 基础名+seq 后缀放不下时 begin 返回 -1，不再静默截断（`f5d33801`） |
+
+### 12.3 待展开的 P2（见 §6 中间件表已有记录）
+
+- WAF body 匹配 O(n·m)（`waf.c`，1MB×22 pattern 二次方 CPU，建议 Aho-Corasick + 工作预算）。
+- JWT HS256 长度不匹配强制 `cmp_result=1` 的弱 timing oracle（`jwt.c:356-363`，建议恒定 32B `CRYPTO_memcmp`）。
+- Raft `apply_cb`/`snapshot_apply_cb` 在 `node->mutex` 内回调用户代码（已知 P2 架构项，独立立项）。
+
+### 12.4 已驳回的子代理误报（保持报告可信度）
+
+| 声称 | 复核结论 | 证据 |
+|---|---|---|
+| HNSW 3072 维查询 → 堆 OOB（P0） | 降级 P1（契约断裂非 OOB） | `csilk_hnsw_search` 内核恒用 `idx->dim`，多余 float 被丢弃不越界 |
+| AI 异步 calloc 失败 → `req_copy.messages` UAF（P1） | 误报，路径安全 | `ai.c:584-588` calloc 失败分支已正确置 `messages=NULL; message_count=0` |
+| tx_scope 截断 → 误操作外层 savepoint（P0） | 降级 P2 | begin/commit/rollback 用同一截断串，仅超长名致语法错误 |
+
+---
+
+## 11. 总评（历史快照 `88c1d7a7`）
