@@ -388,7 +388,9 @@ _mq_slot_lookup(mq_local_table_t* table, const char* session_id)
 {
     uint32_t hash = 2166136261u;
     for (const char* p = session_id; *p; p++) {
+        /* clang-format off */
         hash = (hash ^ (uint32_t)*(uint8_t*)p) * 16777619u;
+        /* clang-format on */
     }
     mq_session_entry_t* slot = &table->entries[hash % MQ_LOCAL_BUCKETS];
     if (slot->in_use && strcmp(slot->id, session_id) == 0) {
@@ -458,7 +460,9 @@ _mq_set(csilk_session_store_t* store,
 
     uint32_t hash = 2166136261u;
     for (const char* p = session_id; *p; p++) {
+        /* clang-format off */
         hash = (hash ^ (uint32_t)*(uint8_t*)p) * 16777619u;
+        /* clang-format on */
     }
     mq_session_entry_t* slot = &table->entries[hash % MQ_LOCAL_BUCKETS];
 
