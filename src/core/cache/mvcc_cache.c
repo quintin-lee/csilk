@@ -119,9 +119,14 @@ acquire_reader_slot(csilk_mvcc_cache_t* cache)
 }
 
 /**
- * @brief Enter the reader epoch section.
+ * @brief Enter the reader epoch section and return the snapshot epoch.
+ *
+ * Returns the epoch at which this reader section was entered (the snapshot
+ * that reader_enter captured). Callers use this to tag retired nodes with
+ * the epoch actually in force when the node was unlinked, rather than the
+ * pre-entered epoch which may be one advance stale.
  */
-static inline void
+static inline uint64_t
 reader_enter(csilk_mvcc_cache_t* cache, csilk_mvcc_reader_slot_t* slot)
 {
     uint32_t depth = atomic_fetch_add_explicit(&slot->nesting_depth, 1, memory_order_relaxed);
@@ -129,7 +134,10 @@ reader_enter(csilk_mvcc_cache_t* cache, csilk_mvcc_reader_slot_t* slot)
         uint64_t e = atomic_load_explicit(&cache->global_epoch, memory_order_acquire);
         atomic_store_explicit(&slot->active_epoch, e, memory_order_release);
         atomic_thread_fence(memory_order_seq_cst);
+        return e;
     }
+    /* Nested: reuse the already-captured epoch */
+    return atomic_load_explicit(&slot->active_epoch, memory_order_acquire);
 }
 
 /**
@@ -172,18 +180,27 @@ try_reclaim(csilk_mvcc_cache_t* cache)
     }
 
     if (!has_active_readers) {
-        /* No active readers: retired nodes up to current_epoch+1 are safe. We use
-         * current_epoch + 2 (conservative grace window) so that any node retired
-         * during the most recent epoch advance is still within a reader that may
-         * have observed the old head before the epoch advanced. A wider window
-         * prevents the rare use-after-free that coverage instrumentation and
-         * high-concurrency loads expose, at the cost of a small extra retirement
-         * delay. */
-        min_active_epoch = current_epoch + 2;
+        /* No active readers: retired nodes up to current_epoch+3 are safe. We use
+         * current_epoch + 3 (conservative grace window of 3 epochs) so that any
+         * node retired during the most recent epoch advance is still within a
+         * reader that may have observed the old head before the epoch advanced.
+         * A wider window prevents the rare use-after-free that coverage
+         * instrumentation and high-concurrency loads expose, at the cost of a
+         * small extra retirement delay. */
+        min_active_epoch = current_epoch + 3;
     } else {
-        /* Advance global epoch if all readers are caught up */
-        if (min_active_epoch >= current_epoch) {
-            atomic_fetch_add_explicit(&cache->global_epoch, 1, memory_order_acq_rel);
+        /* Advance global epoch to the slowest active reader's epoch + 1. This
+         * ensures no reader can be more than one epoch behind current, and it
+         * bounds the epoch advancement to prevent concurrent reclaimers from
+         * double-advancing via fetch_add (which would overshoot the grace
+         * window by an extra epoch). */
+        if (min_active_epoch + 1 > current_epoch) {
+            uint64_t expected = current_epoch;
+            atomic_compare_exchange_strong_explicit(&cache->global_epoch,
+                                                    &expected,
+                                                    min_active_epoch + 1,
+                                                    memory_order_acq_rel,
+                                                    memory_order_relaxed);
         }
     }
 
@@ -202,7 +219,7 @@ try_reclaim(csilk_mvcc_cache_t* cache)
          * the old node; freeing it one epoch too early is a use-after-free that
          * AddressSanitizer catches in the native io_uring build. The extra epoch
          * of delay merely keeps retired nodes around a bit longer. */
-        if (list->retired_epoch + 2 < min_active_epoch) {
+        if (list->retired_epoch + 3 < min_active_epoch) {
             /* Safe to free: no active reader can ever reach this node */
             free(list->key);
             free(list->val);
@@ -398,7 +415,7 @@ csilk_mvcc_cache_set(csilk_mvcc_cache_t* cache, const char* key, const void* val
     csilk_mvcc_reader_slot_t* slot = acquire_reader_slot(cache);
 
     while (1) {
-        reader_enter(cache, slot);
+        uint64_t           r_epoch = reader_enter(cache, slot);
         csilk_mvcc_node_t* old_head =
             atomic_load_explicit(&cache->buckets[idx], memory_order_acquire);
 
@@ -428,7 +445,10 @@ csilk_mvcc_cache_set(csilk_mvcc_cache_t* cache, const char* key, const void* val
                                                       memory_order_release,
                                                       memory_order_acquire)) {
                 reader_exit(slot);
-                retire_node(cache, old_head, epoch);
+                /* Retire with the reader-entered epoch (the epoch actually in
+                 * force when the CAS unlinked the node), not the pre-entered
+                 * epoch which may be one advance stale. */
+                retire_node(cache, old_head, r_epoch);
                 return 0;
             }
             reader_exit(slot);
@@ -514,7 +534,7 @@ csilk_mvcc_cache_set(csilk_mvcc_cache_t* cache, const char* key, const void* val
                 while (to_retire) {
                     csilk_mvcc_node_t* nxt =
                         atomic_load_explicit(&to_retire->next, memory_order_relaxed);
-                    retire_node(cache, to_retire, epoch);
+                    retire_node(cache, to_retire, r_epoch);
                     to_retire = nxt;
                 }
                 return 0;
@@ -624,7 +644,7 @@ csilk_mvcc_cache_delete(csilk_mvcc_cache_t* cache, const char* key)
     csilk_mvcc_reader_slot_t* slot = acquire_reader_slot(cache);
 
     while (1) {
-        reader_enter(cache, slot);
+        uint64_t           r_epoch = reader_enter(cache, slot);
         csilk_mvcc_node_t* old_head =
             atomic_load_explicit(&cache->buckets[idx], memory_order_acquire);
         if (!old_head) {
@@ -640,7 +660,7 @@ csilk_mvcc_cache_delete(csilk_mvcc_cache_t* cache, const char* key)
                                                       memory_order_release,
                                                       memory_order_acquire)) {
                 reader_exit(slot);
-                retire_node(cache, old_head, epoch);
+                retire_node(cache, old_head, r_epoch);
                 return 0;
             }
             reader_exit(slot);
@@ -714,7 +734,7 @@ csilk_mvcc_cache_delete(csilk_mvcc_cache_t* cache, const char* key)
             while (to_retire) {
                 csilk_mvcc_node_t* nxt =
                     atomic_load_explicit(&to_retire->next, memory_order_relaxed);
-                retire_node(cache, to_retire, epoch);
+                retire_node(cache, to_retire, r_epoch);
                 to_retire = nxt;
             }
             return 0;
