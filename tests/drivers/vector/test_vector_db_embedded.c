@@ -33,15 +33,18 @@ test_vector_db_embedded_factory(void)
     assert(res.count == 1);
     assert(res.results != nullptr);
     assert(strcmp(res.results[0].id, "doc_embedded_1") == 0);
+    csilk_vector_search_response_free(&res);
 
     /* Regression: the embedded HNSW index is fixed-dimensionality; a query
      * vector whose length differs from the index dimension must be rejected
-     * (fail-fast) rather than silently misread by the distance kernels. */
-    memset(&res, 0, sizeof(res));
-    assert(csilk_vector_db_search(db, "default", vec, dim / 2, 1, &res) == -1);
-    assert(res.count == 0);
-
-    csilk_vector_search_response_free(&res);
+     * (fail-fast) rather than silently misread by the distance kernels.
+     * Use a fresh response for the mismatched-dimension call so the prior
+     * result is released before we overwrite the struct. */
+    csilk_vector_search_response_t res2;
+    memset(&res2, 0, sizeof(res2));
+    assert(csilk_vector_db_search(db, "default", vec, dim / 2, 1, &res2) == -1);
+    assert(res2.count == 0);
+    csilk_vector_search_response_free(&res2);
     free(vec);
     csilk_vector_db_free(db);
     printf("test_vector_db_embedded_factory passed\n");

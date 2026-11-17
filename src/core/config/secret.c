@@ -304,17 +304,20 @@ csilk_secret_get(const char* key, char* out, size_t out_size)
     /* 2. External Secret Manager (bounded TTL cache; provider runs OUTSIDE
      *    s_secret_lock so a slow Vault/HTTP callback cannot stall every other
      *    thread that touches any secret). */
+    bool lock_held = true;
     if (s_secret_manager) {
         /* 2a. Serve from the provider-result cache if a non-expired entry
          *     exists (cache is guarded by the same s_secret_lock). */
         if (secret_cache_get(key, target_buf, target_sz)) {
             csilk_mutex_unlock(&s_secret_lock);
+            lock_held = false;
             goto validate_and_return;
         }
 
         /* 2b. Cache miss: release the lock, then invoke the provider WITHOUT
          *     holding s_secret_lock. */
         csilk_mutex_unlock(&s_secret_lock);
+        lock_held = false;
 
         int provider_rc = s_secret_manager(key, target_buf, target_sz);
         if (provider_rc == 0 && target_buf[0] != '\0') {
@@ -324,9 +327,12 @@ csilk_secret_get(const char* key, char* out, size_t out_size)
             csilk_mutex_unlock(&s_secret_lock);
             goto validate_and_return;
         }
-        /* Provider miss/failure -> fall through to the env / file providers. */
+        /* Provider miss/failure -> fall through to the env / file providers.
+         * lock_held is already false; skip the trailing unlock below. */
     }
-    csilk_mutex_unlock(&s_secret_lock);
+    if (lock_held) {
+        csilk_mutex_unlock(&s_secret_lock);
+    }
 
     /* 3. Environment Provider */
     const char* env_val = getenv(key);
