@@ -357,6 +357,119 @@ test_reload_and_shutdown(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* Test 6: Reader Storm — 1024 readers × 200 acquires + 8 writers     */
+/* ------------------------------------------------------------------ */
+
+#define READER_STORM_READERS 1024
+#define READER_STORM_ACQ_PER_READER 200
+#define READER_STORM_WRITERS 8
+#define READER_STORM_RELOADS_PER_WRITER 50
+
+typedef struct {
+    csilk_server_t* server;
+    atomic_bool     start_gate;
+    atomic_bool     stop;
+    atomic_uint     reader_done;
+    atomic_uint     writer_done;
+} storm_ctx_t;
+
+static void*
+storm_reader_worker(void* raw_arg)
+{
+    storm_ctx_t* ctx = (storm_ctx_t*)raw_arg;
+
+    while (!atomic_load_explicit(&ctx->start_gate, memory_order_acquire)) {
+        sched_yield();
+    }
+
+    for (int i = 0; i < READER_STORM_ACQ_PER_READER; i++) {
+        csilk_rcu_token_t token;
+        csilk_router_t*   r = csilk_server_router_acquire(ctx->server, &token);
+        if (!r || !token.active) {
+            continue;
+        }
+        (void)csilk_router_match(r, "GET", "/storm");
+        csilk_server_router_release(ctx->server, &token);
+    }
+    atomic_fetch_add_explicit(&ctx->reader_done, 1, memory_order_relaxed);
+    return NULL;
+}
+
+static void*
+storm_writer_worker(void* raw_arg)
+{
+    storm_ctx_t*    ctx = (storm_ctx_t*)raw_arg;
+    csilk_handler_t h = dummy_route_handler;
+
+    while (!atomic_load_explicit(&ctx->stop, memory_order_relaxed)) {
+        csilk_router_t* new_r = csilk_router_new();
+        csilk_router_add(new_r, "GET", "/storm", &h, 1);
+        csilk_server_set_router(ctx->server, new_r);
+    }
+    atomic_fetch_add_explicit(&ctx->writer_done, 1, memory_order_relaxed);
+    return NULL;
+}
+
+static void
+test_reader_storm(void)
+{
+    printf("Running Test 6: Reader Storm (%d readers × %d acquires, %d writers)...",
+           READER_STORM_READERS,
+           READER_STORM_ACQ_PER_READER,
+           READER_STORM_WRITERS);
+
+    csilk_router_t* r0 = csilk_router_new();
+    csilk_handler_t h = dummy_route_handler;
+    csilk_router_add(r0, "GET", "/storm", &h, 1);
+    csilk_server_t* server = csilk_server_new(r0);
+    assert(server != NULL);
+
+    storm_ctx_t ctx = {
+        .server = server,
+        .start_gate = false,
+        .stop = false,
+        .reader_done = 0,
+        .writer_done = 0,
+    };
+
+    pthread_t readers[READER_STORM_READERS];
+    pthread_t writers[READER_STORM_WRITERS];
+
+    for (int i = 0; i < READER_STORM_WRITERS; i++) {
+        pthread_create(&writers[i], NULL, storm_writer_worker, &ctx);
+    }
+    for (int i = 0; i < READER_STORM_READERS; i++) {
+        pthread_create(&readers[i], NULL, storm_reader_worker, &ctx);
+    }
+    atomic_store_explicit(&ctx.start_gate, true, memory_order_release);
+
+    for (int i = 0; i < READER_STORM_READERS; i++) {
+        pthread_join(readers[i], NULL);
+    }
+    atomic_store_explicit(&ctx.stop, true, memory_order_release);
+    for (int i = 0; i < READER_STORM_WRITERS; i++) {
+        pthread_join(writers[i], NULL);
+    }
+
+    atomic_uint rd = atomic_load_explicit(&ctx.reader_done, memory_order_relaxed);
+    atomic_uint wr = atomic_load_explicit(&ctx.writer_done, memory_order_relaxed);
+    assert((int)rd == READER_STORM_READERS);
+    assert((int)wr == READER_STORM_WRITERS);
+
+    csilk_server_wait_grace_period(server);
+    assert(atomic_load_explicit(&server->reload_mgr.retired_count, memory_order_relaxed) == 0);
+
+    csilk_router_t* active_r = csilk_server_get_router(server);
+    csilk_server_free(server);
+    csilk_router_free(active_r);
+    csilk_router_free(r0);
+    printf("\n  -> Passed (%d readers × %d acquires + %d writers, 0 UAF).\n",
+           READER_STORM_READERS,
+           READER_STORM_ACQ_PER_READER,
+           READER_STORM_WRITERS);
+}
+
+/* ------------------------------------------------------------------ */
 /* Main Runner                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -370,7 +483,8 @@ main(void)
     test_10000_reload_cycles();
     test_reload_and_active_requests();
     test_reload_and_shutdown();
+    test_reader_storm();
 
-    printf("\n=== All 5 Formal RCU / EBR Tests Passed 100%% Successfully! ===\n");
+    printf("\n=== All 6 Formal RCU / EBR Tests Passed 100%% Successfully! ===\n");
     return 0;
 }
