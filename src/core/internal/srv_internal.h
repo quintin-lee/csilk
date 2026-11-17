@@ -184,6 +184,7 @@ typedef struct csilk_reload_mgr_s {
     _Atomic(uint32_t) retired_count; /**< Count of retired routers. */
     _Atomic(csilk_retired_router_t*) retired_head; /**< Singly-linked list of retired routers. */
     uint32_t                         server_gen;   /**< Unique process-wide server generation ID. */
+    bool                             server_gen_active; /**< True while server_gen is registered in g_active_server_gens. */
     _Atomic(csilk_rcu_slot_t*)
                      overflow_head; /**< Lock-free linked list of dynamic overflow slots (>256). */
     csilk_rcu_slot_t reader_slots[CSILK_RELOAD_MAX_READERS]; /**< Epoch slots. */
