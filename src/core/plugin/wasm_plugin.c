@@ -27,6 +27,9 @@
 #define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
 #endif
 
+static csilk_wasm_plugin_t* g_mw_plugin = NULL;
+static char                 g_mw_func[64] = {0};
+
 static inline int
 _decode_u32_leb128(const uint8_t* p, size_t max_len, uint32_t* out_val, size_t* out_bytes_read)
 {
@@ -338,9 +341,6 @@ csilk_wasm_host_log(int level, const char* msg)
         break;
     }
 }
-
-static csilk_wasm_plugin_t* g_mw_plugin = NULL;
-static char                 g_mw_func[64] = {0};
 
 static void
 _csilk_wasm_middleware_thunk(csilk_ctx_t* ctx)

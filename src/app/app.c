@@ -55,6 +55,14 @@ static csilk_router_t* s_openapi_router = NULL;
 static csilk_mutex_t   s_app_mutex;
 static csilk_once_t    s_app_mutex_once = CSILK_ONCE_INIT;
 
+/* ---- global static-route table ---- */
+static static_route_t g_static[CSILK_MAX_STATIC];
+static int            g_static_n = 0;
+
+/* ---- global middleware thunk pool ---- */
+static mw_thunk_t s_mw_thunk_pool[CSILK_MAX_MW_THUNKS];
+static int        s_mw_thunk_used = 0;
+
 /** @brief Internal: initialize the application-level mutex (called once via
  * csilk_once). */
 static void
@@ -141,10 +149,6 @@ resolve_swagger_ui_dir(void)
     return NULL;
 #endif
 }
-
-/* ---- global static-route table ---- */
-static static_route_t g_static[CSILK_MAX_STATIC];
-static int            g_static_n = 0;
 
 /** @brief Internal: check if a path contains directory traversal sequences. */
 static int
@@ -396,8 +400,6 @@ csilk_app_log_json(csilk_app_t* app, int enable)
  * allocated in order.  Note the process-wide pool is not reclaimed when an
  * app is freed (thunks are trivial {fn, data} pairs); apps are expected to
  * call csilk_app_use_mw at startup. */
-static mw_thunk_t s_mw_thunk_pool[CSILK_MAX_MW_THUNKS];
-static int        s_mw_thunk_used = 0;
 
 /** @brief Internal: emit a distinct trampoline that dispatches to thunk slot
  * @p N.  Expands to one static function per slot. */

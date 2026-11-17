@@ -33,6 +33,21 @@
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
 #include "csilk/messaging/mq.h"
+
+#define CSILK_RCU_GEN_TABLE_SIZE 1024
+static _Atomic(uint32_t) g_active_server_gens[CSILK_RCU_GEN_TABLE_SIZE] = {0};
+static _Atomic(uint32_t) g_rcu_server_gen_seq = 1;
+
+typedef struct {
+    csilk_rcu_slot_t*   slot;
+    csilk_reload_mgr_t* mgr;
+    uint32_t            server_gen;
+} csilk_tls_rcu_t;
+
+static _Thread_local csilk_tls_rcu_t g_tls_rcu = {0};
+static csilk_key_t                   g_rcu_tls_key;
+static csilk_once_t                  g_rcu_tls_once = CSILK_ONCE_INIT;
+
 csilk_mq_t*
 csilk_server_get_mq(csilk_server_t* server)
 {
@@ -58,20 +73,6 @@ csilk_server_get_router(csilk_server_t* server)
 {
     return server ? atomic_load_explicit(&server->router, memory_order_acquire) : NULL;
 }
-
-#define CSILK_RCU_GEN_TABLE_SIZE 1024
-static _Atomic(uint32_t) g_active_server_gens[CSILK_RCU_GEN_TABLE_SIZE] = {0};
-static _Atomic(uint32_t) g_rcu_server_gen_seq = 1;
-
-typedef struct {
-    csilk_rcu_slot_t*   slot;
-    csilk_reload_mgr_t* mgr;
-    uint32_t            server_gen;
-} csilk_tls_rcu_t;
-
-static _Thread_local csilk_tls_rcu_t g_tls_rcu = {0};
-static csilk_key_t                   g_rcu_tls_key;
-static csilk_once_t                  g_rcu_tls_once = CSILK_ONCE_INIT;
 
 static void
 rcu_thread_exit_destructor(void* val)

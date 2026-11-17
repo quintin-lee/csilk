@@ -5,6 +5,7 @@
  */
 
 #include "csilk/drivers/vector.h"
+#include "vector_internal.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -36,8 +37,6 @@ csilk_vector_db_register_driver(const csilk_vector_db_driver_t* driver)
 
 extern void csilk_vector_qdrant_init(void);
 extern void csilk_vector_milvus_init(void);
-
-#include "vector_internal.h"
 
 /**
  * @brief Create an in-memory embedded vector DB backed by an HNSW index.

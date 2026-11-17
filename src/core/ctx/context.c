@@ -32,6 +32,10 @@
 #include "csilk/core/internal.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
+#include "csilk/core/sync.h"
+
+static _Thread_local csilk_body_pool_t tls_body_pool;
+static csilk_key_t                     g_body_pool_key;
 
 /** @brief Invoke the next handler in the middleware/route chain.
  *
@@ -128,11 +132,6 @@ _csilk_dispatch_request(csilk_ctx_t* c)
         _csilk_send_response(c);
     }
 }
-
-#include "csilk/core/sync.h"
-
-static _Thread_local csilk_body_pool_t tls_body_pool;
-static csilk_key_t                     g_body_pool_key;
 
 static inline int
 csilk_body_tier_index(size_t size)
