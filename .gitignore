@@ -111,3 +111,4 @@ build-*
 *.so*
 /test_*
 /example_*
+.jeikcode/codegraph/
