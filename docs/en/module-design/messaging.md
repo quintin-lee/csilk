@@ -118,6 +118,7 @@ struct csilk_mq_s {
     csilk_mq_msg_t* queue_tail;
 
     csilk_mq_topic_t* topics;      // Registered topic list
+    csilk_mutex_t topics_mutex;    // Guards topics list + global_middlewares[]
 
     csilk_mq_handler_t* global_middlewares; // Intercept every topic
     size_t global_mw_count;
@@ -203,10 +204,12 @@ on_mq_async(handle):
 
      a. Build handler chain:
         - Allocate chain[] = malloc((global_mw_count + matched_topic_handlers) * sizeof(handler_t))
+        - Lock topics_mutex
         - Copy global_middlewares into chain[]
         - For each topic t in mq->topics:
             if fnmatch(t->name, msg->topic) == 0:
                 memcpy chain[] with t->handlers[]
+        - Unlock topics_mutex   (released before csilk_mq_next so handlers may re-register)
 
      b. Create context on stack:
         csilk_mq_ctx_t ctx = {mq, msg, chain, total_handlers, -1 /* index */, 0 /* aborted */}
@@ -364,9 +367,10 @@ Events are broadcast as WebSocket text frames to all registered monitors under `
 ```
 
 - **Publish**: Thread-safe via `queue_mutex`. Blocks only during linked-list append and optional WAL write.
-- **Dispatch**: Single-threaded on the main event loop. No locks held during handler execution.
+- **Registration** (`csilk_mq_use`): Serialized by `topics_mutex`. A worker thread may register topics/middleware concurrently with dispatch; the topics list and global-middleware array are read under the same lock.
+- **Dispatch**: Single-threaded on the main event loop. The handler chain is snapshotted into `chain[]` under `topics_mutex`, then the lock is released before invoking user handlers (which may themselves re-register topics). No locks are held during handler execution.
 - **WAL**: Serialized by `wal_mutex`. Held for the duration of each `write + fsync`.
-- **Stats**: Protected by `queue_mutex`. Updated atomically under the lock.
+- **Stats**: Published/delivered/failed/queue_depth are protected by `queue_mutex`; the topic_count walk is protected by `topics_mutex`.
 - **Monitors**: Protected by `monitor_mutex`. Broadcast occurs under the lock.
 
 ---
@@ -378,7 +382,7 @@ Server startup:
   csilk_server_get_mq(server)
     └── _csilk_mq_new(loop)
           ├── calloc csilk_mq_t
-          ├── uv_mutex_init(queue_mutex, monitor_mutex, wal_mutex)
+          ├── csilk_mutex_init(queue_mutex, monitor_mutex, topics_mutex)
           ├── uv_async_init(loop, async_handle, on_mq_async)
           └── wal_fd = -1
 
@@ -391,7 +395,7 @@ Runtime:
 Server shutdown:
   _csilk_mq_free(mq)
     └── uv_close(async_handle, on_mq_close)
-          ├── uv_mutex_destroy(queue_mutex, wal_mutex)
+          ├── csilk_mutex_destroy(queue_mutex, wal_mutex, topics_mutex)
           ├── Close WAL file
           ├── Drain message queue (free all messages)
           ├── Free all topics + handler arrays
