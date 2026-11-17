@@ -123,6 +123,10 @@ test_trailer_parse(void)
     int rc = csilk_grpc_trailer_parse(headers, 3, &status, &message);
     assert(rc == 0);
     assert(status == 0);
+    if (message) {
+        free(message);
+        message = NULL;
+    }
 
     /* Error trailer */
     csilk_kv_t error_headers[] = {
