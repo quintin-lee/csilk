@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define MAX_TEST_OVERRIDES 32
 #define TLS_BUF_SIZE 2048
@@ -26,6 +27,20 @@ static test_override_t         s_test_overrides[MAX_TEST_OVERRIDES];
 static size_t                  s_override_count = 0;
 static bool                    s_test_mode = false;
 static bool                    s_test_mode_initialized = false;
+
+/* ---- External-provider result cache (bounded, TTL) ----
+ * The external Secret Manager callback may be slow (Vault/HTTP); we invoke it
+ * OUTSIDE s_secret_lock so a slow provider cannot stall every thread that
+ * touches any secret. Its results are cached here (fixed table + FNV hash +
+ * monotonic-TTL) so repeated lookups of the same key skip the provider.
+ * Cache state is guarded by s_secret_lock. */
+#define SECRET_CACHE_ENTRIES 64
+typedef struct {
+    char     key[128];
+    char     value[1024];
+    uint64_t expires_ms; /* 0 = empty slot; else monotonic-ms expiry */
+} secret_cache_entry_t;
+static secret_cache_entry_t s_secret_cache[SECRET_CACHE_ENTRIES];
 
 static _Thread_local char   s_tls_secret_ring[4][TLS_BUF_SIZE];
 static _Thread_local size_t s_tls_secret_idx = 0;
@@ -45,6 +60,57 @@ static void
 ensure_lock_init(void)
 {
     csilk_once(&s_secret_once, secret_lock_init);
+}
+
+/* Monotonic-ms clock for cache expiry (immune to wall-clock step). */
+static uint64_t
+secret_now_ms(void)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000u + (uint64_t)(ts.tv_nsec / 1000000);
+}
+
+/* FNV-1a 64-bit over the key -> cache slot. */
+static size_t
+secret_cache_slot(const char* key)
+{
+    uint64_t h = 1469598101534361881ULL;
+    for (const unsigned char* p = (const unsigned char*)key; *p; p++) {
+        h ^= (uint64_t)*p;
+        h *= 1099511628211ULL;
+    }
+    return (size_t)(h % SECRET_CACHE_ENTRIES);
+}
+
+/* Callers MUST hold s_secret_lock. Stores key/value with a TTL. */
+static void
+secret_cache_put(const char* key, const char* value, uint64_t ttl_ms)
+{
+    secret_cache_entry_t* e = &s_secret_cache[secret_cache_slot(key)];
+    strncpy(e->key, key, sizeof(e->key) - 1);
+    e->key[sizeof(e->key) - 1] = '\0';
+    strncpy(e->value, value, sizeof(e->value) - 1);
+    e->value[sizeof(e->value) - 1] = '\0';
+    e->expires_ms = secret_now_ms() + ttl_ms;
+}
+
+/* Callers MUST hold s_secret_lock. Returns true and fills [out,out_size] when
+ * a non-expired cache entry matches. */
+static bool
+secret_cache_get(const char* key, char* out, size_t out_size)
+{
+    secret_cache_entry_t* e = &s_secret_cache[secret_cache_slot(key)];
+    if (e->expires_ms == 0 || strncmp(e->key, key, sizeof(e->key)) != 0) {
+        return false;
+    }
+    if (e->expires_ms <= secret_now_ms()) {
+        e->expires_ms = 0; /* expired */
+        return false;
+    }
+    strncpy(out, e->value, out_size - 1);
+    out[out_size - 1] = '\0';
+    return true;
 }
 
 static void
@@ -235,12 +301,30 @@ csilk_secret_get(const char* key, char* out, size_t out_size)
         }
     }
 
-    /* 2. External Secret Manager */
+    /* 2. External Secret Manager (bounded TTL cache; provider runs OUTSIDE
+     *    s_secret_lock so a slow Vault/HTTP callback cannot stall every other
+     *    thread that touches any secret). */
     if (s_secret_manager) {
-        if (s_secret_manager(key, target_buf, target_sz) == 0 && target_buf[0] != '\0') {
+        /* 2a. Serve from the provider-result cache if a non-expired entry
+         *     exists (cache is guarded by the same s_secret_lock). */
+        if (secret_cache_get(key, target_buf, target_sz)) {
             csilk_mutex_unlock(&s_secret_lock);
             goto validate_and_return;
         }
+
+        /* 2b. Cache miss: release the lock, then invoke the provider WITHOUT
+         *     holding s_secret_lock. */
+        csilk_mutex_unlock(&s_secret_lock);
+
+        int provider_rc = s_secret_manager(key, target_buf, target_sz);
+        if (provider_rc == 0 && target_buf[0] != '\0') {
+            /* Cache the hit (60 s TTL) so the next lookup skips the provider. */
+            csilk_mutex_lock(&s_secret_lock);
+            secret_cache_put(key, target_buf, 60 * 1000);
+            csilk_mutex_unlock(&s_secret_lock);
+            goto validate_and_return;
+        }
+        /* Provider miss/failure -> fall through to the env / file providers. */
     }
     csilk_mutex_unlock(&s_secret_lock);
 
