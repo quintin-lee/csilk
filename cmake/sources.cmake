@@ -100,7 +100,6 @@ set(CSILK_JSON_SOURCES
     src/core/json/json_copy.c
     src/core/json/json_iterate.c
     src/core/json/json_mutate.c
-    src/core/json/json.c
 )
 
 # ── WASM Module (WASM VM & WASI sandbox plugin engine) ───────────────────

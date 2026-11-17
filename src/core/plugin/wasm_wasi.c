@@ -4,8 +4,20 @@
  *
  * Implements a tiny subset of the WebAssembly System Interface (WASI) used by
  * sandboxed plugins: a fd_write stub, a clock_time_get stub, and a host helper
- * that copies a JSON input string into plugin linear memory. These are stand-in
- * implementations so plugins linking WASI imports can load and execute.
+ * that copies a JSON input string into plugin linear memory.
+ *
+ * These are stand-in implementations so plugins linking WASI imports can load
+ * and execute without a full WASI snapshot build.  They are NOT production
+ * substitutes:
+ *
+ *   - csilk_wasi_fd_write:        discards all output (no stdout/stderr sink).
+ *   - csilk_wasi_clock_time_get:  returns a constant 1 s epoch (no real clock).
+ *   - csilk_host_get_input:       copies host JSON into plugin memory (the only
+ *                                 stub that does something useful).
+ *
+ * For production WASM plugin execution, enable -DCSILK_ENABLE_WAMR=ON to
+ * link the WAMR runtime with real WASI snapshot support; the stubs above
+ * are then replaced by WAMR's native host-call bindings.
  *
  * @copyright MIT License
  */
