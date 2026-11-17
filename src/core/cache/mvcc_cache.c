@@ -195,7 +195,14 @@ try_reclaim(csilk_mvcc_cache_t* cache)
 
     while (list) {
         csilk_mvcc_node_t* next = atomic_load_explicit(&list->retired_next, memory_order_relaxed);
-        if (list->retired_epoch + 1 < min_active_epoch) {
+        /* Conservative grace window: only free a retired node when its retirement
+         * epoch is strictly older than every active reader/writer's epoch by at
+         * least two advances. A concurrent csilk_mvcc_cache_set that loaded this
+         * bucket head before the epoch advanced still holds a live reference to
+         * the old node; freeing it one epoch too early is a use-after-free that
+         * AddressSanitizer catches in the native io_uring build. The extra epoch
+         * of delay merely keeps retired nodes around a bit longer. */
+        if (list->retired_epoch + 2 < min_active_epoch) {
             /* Safe to free: no active reader can ever reach this node */
             free(list->key);
             free(list->val);
