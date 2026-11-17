@@ -402,3 +402,109 @@ worker_thread(void* arg)
     csilk_body_pool_cleanup();
     csilk_io_loop_close(loop_ptr);
 }
+
+/* --- Worker spawning (extracted from csilk_server_run) --- */
+
+/** @brief Spawn worker threads and wait for all to bind successfully.
+ *
+ * Called from csilk_server_run() after the main-thread worker pool (index 0)
+ * is set up.  Spawns workers 1..N, waits for the barrier, and verifies
+ * that every worker completed bind_and_listen.
+ *
+ * @param server     The server instance.
+ * @param workers    Total number of worker threads (including main-thread worker).
+ * @param port       TCP port to bind on.
+ * @return 0 on success, -1 on failure (resources are cleaned up).
+ */
+CSILK_INTERNAL int
+csilk_spawn_workers(csilk_server_t* server, int workers, int port)
+{
+    int nworkers = workers - 1;
+    server->worker_tids = malloc((size_t)nworkers * sizeof(csilk_thread_t));
+    if (!server->worker_tids) {
+        CSILK_LOG_E("Server: failed to allocate memory for worker thread IDs");
+        return -1;
+    }
+
+    worker_data_t* worker_datas = calloc((size_t)nworkers, sizeof(worker_data_t));
+    if (!worker_datas) {
+        CSILK_LOG_E("Server: failed to allocate worker data array");
+        free(server->worker_tids);
+        server->worker_tids = NULL;
+        return -1;
+    }
+
+    csilk_barrier_t* barrier = calloc(1, sizeof(csilk_barrier_t));
+    int              br = csilk_barrier_init(barrier, (unsigned int)workers);
+    if (br < 0) {
+        CSILK_LOG_E("Server: failed to init worker barrier: %s", csilk_io_strerror(br));
+        free(barrier);
+        free(worker_datas);
+        free(server->worker_tids);
+        server->worker_tids = NULL;
+        return -1;
+    }
+
+    int spawned = 0;
+    for (int i = 0; i < nworkers; i++) {
+        int idx = i + 1;
+        worker_datas[i].wp = &server->worker_pools[idx];
+        worker_datas[i].port = port;
+        worker_datas[i].barrier = barrier;
+        atomic_init(&worker_datas[i].success, 0);
+
+        int tr =
+            csilk_thread_create(&server->worker_tids[spawned], worker_thread, &worker_datas[i]);
+        if (tr != 0) {
+            CSILK_LOG_E(
+                "Server: failed to create worker thread %d: %s", idx, csilk_io_strerror(tr));
+            break;
+        }
+        spawned++;
+    }
+
+    server->worker_count = spawned;
+
+    /* Compensate barrier for unspawned workers to prevent deadlock */
+    for (int k = spawned; k < nworkers; k++) {
+        csilk_barrier_wait(barrier);
+    }
+
+    /* Wait for all spawned workers to complete bind_and_listen */
+    csilk_barrier_wait(barrier);
+    server->worker_barrier = barrier;
+
+    /* Check whether all requested workers were spawned and bound successfully */
+    bool all_ok = (spawned == nworkers);
+    if (all_ok) {
+        for (int i = 0; i < spawned; i++) {
+            if (!atomic_load_explicit(&worker_datas[i].success, memory_order_acquire)) {
+                all_ok = false;
+                break;
+            }
+        }
+    }
+
+    if (!all_ok) {
+        CSILK_LOG_E("Server: worker startup failed (spawned %d of %d)", spawned, nworkers);
+        /* Stop and join any spawned workers that entered their event loop */
+        for (int i = 0; i < spawned; i++) {
+            if (atomic_load_explicit(&worker_datas[i].success, memory_order_acquire)) {
+                int idx = i + 1;
+                csilk_io_async_send(&server->worker_pools[idx].stop_async);
+            }
+        }
+        free(worker_datas);
+        for (int i = 0; i < spawned; i++) {
+            csilk_thread_join(&server->worker_tids[i]);
+        }
+        free(server->worker_tids);
+        server->worker_tids = NULL;
+        server->worker_count = 0;
+        return -1;
+    }
+
+    free(worker_datas);
+    CSILK_LOG_I("Server: all %d worker threads spawned and ready", spawned);
+    return 0;
+}
