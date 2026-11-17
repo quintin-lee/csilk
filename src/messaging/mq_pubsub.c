@@ -63,6 +63,10 @@ csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
         CSILK_LOG_E("MQ: Failed to register handler: invalid arguments");
         return;
     }
+
+    /* Register under the topics lock so a concurrent dispatch on the main loop
+     * cannot observe a torn global-middleware array or a half-inserted topic. */
+    csilk_mutex_lock(&mq->topics_mutex);
     if (!topic) {
         if (mq->global_mw_count >= mq->global_mw_capacity) {
             size_t new_cap;
@@ -70,17 +74,20 @@ csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
                 new_cap = 4;
             } else {
                 if (mq->global_mw_capacity > SIZE_MAX / 2) {
+                    csilk_mutex_unlock(&mq->topics_mutex);
                     return;
                 }
                 new_cap = mq->global_mw_capacity * 2;
             }
             if (new_cap > SIZE_MAX / sizeof(csilk_mq_handler_t)) {
+                csilk_mutex_unlock(&mq->topics_mutex);
                 return;
             }
             csilk_mq_handler_t* new_mw =
                 realloc(mq->global_middlewares, new_cap * sizeof(csilk_mq_handler_t));
             if (!new_mw) {
                 CSILK_LOG_E("MQ: Failed to allocate memory for global middleware");
+                csilk_mutex_unlock(&mq->topics_mutex);
                 return;
             }
             mq->global_middlewares = new_mw;
@@ -97,11 +104,13 @@ csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
                     new_cap = 4;
                 } else {
                     if (t->handler_capacity > SIZE_MAX / 2) {
+                        csilk_mutex_unlock(&mq->topics_mutex);
                         return;
                     }
                     new_cap = t->handler_capacity * 2;
                 }
                 if (new_cap > SIZE_MAX / sizeof(csilk_mq_handler_t)) {
+                    csilk_mutex_unlock(&mq->topics_mutex);
                     return;
                 }
                 csilk_mq_handler_t* new_h =
@@ -110,6 +119,7 @@ csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
                     CSILK_LOG_E("MQ: Failed to allocate memory for handler on "
                                 "topic '%s'",
                                 topic);
+                    csilk_mutex_unlock(&mq->topics_mutex);
                     return;
                 }
                 t->handlers = new_h;
@@ -121,6 +131,7 @@ csilk_mq_use(csilk_mq_t* mq, const char* topic, csilk_mq_handler_t middleware)
                         topic);
         }
     }
+    csilk_mutex_unlock(&mq->topics_mutex);
 }
 
 /**
