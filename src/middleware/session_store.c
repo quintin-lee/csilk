@@ -14,7 +14,7 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
+#include <csilk/core/sync.h>
 
 #ifdef HAS_REDIS
 #include <hiredis/hiredis.h>
@@ -355,7 +355,7 @@ csilk_session_store_new_redis(const char* host, int port, const char* prefix)
  */
 
 #include <time.h>
-#include <pthread.h>
+#include <csilk/core/sync.h>
 
 #define MQ_LOCAL_BUCKETS 256
 
@@ -368,7 +368,7 @@ typedef struct {
 } mq_session_entry_t;
 
 typedef struct mq_local_table_s {
-    pthread_mutex_t    lock;
+    csilk_mutex_t      lock;
     mq_session_entry_t entries[MQ_LOCAL_BUCKETS];
 } mq_local_table_t;
 
@@ -394,7 +394,7 @@ _mq_get(csilk_session_store_t* store, const char* session_id, char** out_data, s
         return -1;
     }
 
-    pthread_mutex_lock(&table->lock);
+    csilk_mutex_lock(&table->lock);
     mq_session_entry_t* slot = _mq_slot_lookup(table, session_id);
     if (slot && slot->in_use) {
         int64_t now = time(NULL);
@@ -402,7 +402,7 @@ _mq_get(csilk_session_store_t* store, const char* session_id, char** out_data, s
             slot->in_use = 0;
             free(slot->data);
             slot->data = NULL;
-            pthread_mutex_unlock(&table->lock);
+            csilk_mutex_unlock(&table->lock);
             if (out_data) {
                 *out_data = NULL;
             }
@@ -417,10 +417,10 @@ _mq_get(csilk_session_store_t* store, const char* session_id, char** out_data, s
         if (out_len) {
             *out_len = slot->len;
         }
-        pthread_mutex_unlock(&table->lock);
+        csilk_mutex_unlock(&table->lock);
         return 0;
     }
-    pthread_mutex_unlock(&table->lock);
+    csilk_mutex_unlock(&table->lock);
 
     if (out_data) {
         *out_data = NULL;
@@ -443,7 +443,7 @@ _mq_set(csilk_session_store_t* store,
         return -1;
     }
 
-    pthread_mutex_lock(&table->lock);
+    csilk_mutex_lock(&table->lock);
 
     uint32_t hash = 2166136261u;
     for (const char* p = session_id; *p; p++) {
@@ -462,7 +462,7 @@ _mq_set(csilk_session_store_t* store,
     slot->data = malloc(len + 1);
     if (!slot->data) {
         slot->in_use = 0;
-        pthread_mutex_unlock(&table->lock);
+        csilk_mutex_unlock(&table->lock);
         return -1;
     }
     memcpy(slot->data, data, len);
@@ -471,7 +471,7 @@ _mq_set(csilk_session_store_t* store,
     slot->expire_at = (ttl_sec > 0) ? (int64_t)time(NULL) + ttl_sec : 0;
     slot->in_use = 1;
 
-    pthread_mutex_unlock(&table->lock);
+    csilk_mutex_unlock(&table->lock);
 
     /* Publish to MQ for cross-node replication */
     (void)store->mq.mq;
@@ -487,14 +487,14 @@ _mq_del(csilk_session_store_t* store, const char* session_id)
         return -1;
     }
 
-    pthread_mutex_lock(&table->lock);
+    csilk_mutex_lock(&table->lock);
     mq_session_entry_t* slot = _mq_slot_lookup(table, session_id);
     if (slot && slot->in_use) {
         free(slot->data);
         slot->data = NULL;
         slot->in_use = 0;
     }
-    pthread_mutex_unlock(&table->lock);
+    csilk_mutex_unlock(&table->lock);
     return 0;
 }
 
@@ -502,7 +502,7 @@ static void
 _mq_destroy(csilk_session_store_t* store)
 {
     if (store->mq.table) {
-        pthread_mutex_destroy(&store->mq.table->lock);
+        csilk_mutex_destroy(&store->mq.table->lock);
         for (int i = 0; i < MQ_LOCAL_BUCKETS; i++) {
             if (store->mq.table->entries[i].in_use) {
                 free(store->mq.table->entries[i].data);
@@ -532,7 +532,7 @@ csilk_session_store_new_mq(void* mq, const char* prefix)
         free(store);
         return NULL;
     }
-    pthread_mutex_init(&store->mq.table->lock, NULL);
+    csilk_mutex_init(&store->mq.table->lock);
 
     store->ops = (csilk_session_store_ops_t){
         .get = _mq_get,
