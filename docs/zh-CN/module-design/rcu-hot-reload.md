@@ -247,6 +247,7 @@ static _Thread_local tls_rcu_t g_tls_rcu = {NULL, NULL, 0};
 3. **10,000 次高频热重载**：验证单调 Epoch 不断递增下的内存回收与 RSS 稳定性。
 4. **热重载与服务器关机并发**：验证 `server_free` / `grace_period` 与热重载并发触发时的内存安全。
 5. **热重载与活跃路由匹配并发**：保证旧读者永远访问有效路由，新读者无缝切换到新路由。
+6. **Reader Storm (1024 读者 × 200 次 acquire + 8 写者)**：高强度 reader storm 配合持续写者热重载，验证 EBR 宽限期在高争用下的安全性。
 
 ---
 
@@ -254,6 +255,6 @@ static _Thread_local tls_rcu_t g_tls_rcu = {NULL, NULL, 0};
 
 | 文件 | 关键函数 / 用途 |
 |------|-----------------|
-| `src/core/server/server_lifecycle.c` | `csilk_server_router_acquire`, `csilk_server_router_release`, `csilk_server_set_router_full`, `_csilk_reload_try_reclaim` |
+| `src/core/server/server_rcu.c` | `csilk_server_router_acquire`, `csilk_server_router_release`, `csilk_server_set_router_full`, `_csilk_reload_try_reclaim` |
 | `include/csilk/core/hot_reload.h` | 动态热重载公共 API |
-| `tests/core/test_rcu_lifecycle_stress.c` | 512 读者与 10K 短生命周期线程形式化验证 |
+| `tests/core/test_rcu_lifecycle_stress.c` | 6 个场景的形式化验证套件 (512 读者, 10K 短命线程, 10K 重载, 活跃读者, 关机, reader storm) |

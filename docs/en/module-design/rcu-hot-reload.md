@@ -246,6 +246,7 @@ static _Thread_local tls_rcu_t g_tls_rcu = {NULL, NULL, 0};
 3. **10,000 Rapid Hot Reloads**: Verifies monotonic epoch progression and steady memory RSS without unbounded growth.
 4. **Concurrent Hot-Reload & Server Shutdown**: Verifies memory safety during graceful draining and final cleanup.
 5. **Concurrent Route Lookup During Swaps**: Proves old readers observe consistent routing while new readers seamlessly match newly registered endpoints.
+6. **Reader Storm (1024 readers × 200 acquires + 8 writers)**: High-intensity reader storm with continuous writer reloads; validates EBR grace-period safety under heavy contention.
 
 ---
 
@@ -253,6 +254,6 @@ static _Thread_local tls_rcu_t g_tls_rcu = {NULL, NULL, 0};
 
 | File | Purpose |
 |------|---------|
-| `src/core/server/server_lifecycle.c` | `csilk_server_router_acquire`, `csilk_server_router_release`, `csilk_server_set_router_full`, `_csilk_reload_try_reclaim` |
+| `src/core/server/server_rcu.c` | `csilk_server_router_acquire`, `csilk_server_router_release`, `csilk_server_set_router_full`, `_csilk_reload_try_reclaim` |
 | `include/csilk/core/hot_reload.h` | Dynamic hot reload public API |
-| `tests/core/test_rcu_lifecycle_stress.c` | 512-reader and 10k short-lived thread formal stress suite |
+| `tests/core/test_rcu_lifecycle_stress.c` | 6-scenario formal stress suite (512 readers, 10k short-lived threads, 10k reloads, active readers, shutdown, reader storm) |
