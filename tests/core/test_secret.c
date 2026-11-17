@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -82,6 +83,43 @@ test_external_manager(void)
     csilk_secret_set_manager(NULL);
 }
 
+/* Mock that counts how many times the provider is actually invoked. */
+static atomic_int s_mock_provider_calls;
+
+static int
+counting_secret_manager(const char* key, char* out, size_t out_size)
+{
+    atomic_fetch_add_explicit(&s_mock_provider_calls, 1, memory_order_relaxed);
+    if (strcmp(key, "COUNTED_KEY") == 0) {
+        snprintf(out, out_size, "counted-value");
+        return 0;
+    }
+    return -1;
+}
+
+/**
+ * Regression: provider results are cached, so a repeated lookup of the same
+ * key must NOT re-invoke the (possibly slow) external provider. */
+static void
+test_external_manager_cached(void)
+{
+    s_mock_provider_calls = 0;
+    csilk_secret_set_manager(counting_secret_manager);
+
+    char        buf[128];
+    const char* val = csilk_secret_get("COUNTED_KEY", buf, sizeof(buf));
+    assert(val != NULL && strcmp(val, "counted-value") == 0);
+    assert(atomic_load_explicit(&s_mock_provider_calls, memory_order_relaxed) == 1);
+
+    /* Second lookup of the same key must be served from the cache -> the
+     * provider call count must remain 1. */
+    val = csilk_secret_get("COUNTED_KEY", buf, sizeof(buf));
+    assert(val != NULL && strcmp(val, "counted-value") == 0);
+    assert(atomic_load_explicit(&s_mock_provider_calls, memory_order_relaxed) == 1);
+
+    csilk_secret_set_manager(NULL);
+}
+
 static void
 test_safety_circuit_breaker(void)
 {
@@ -121,6 +159,7 @@ main(void)
     test_test_overrides();
     test_env_and_file_provider();
     test_external_manager();
+    test_external_manager_cached();
     test_safety_circuit_breaker();
     test_env_get_fallback();
     return 0;
