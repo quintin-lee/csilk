@@ -289,12 +289,12 @@ csilk_h3_session_new(int64_t stream_id, void* user_data)
 
     nghttp3_conn* ng3 = NULL;
     int           rc = nghttp3_conn_server_new_versioned(&ng3,
-                                               NGHTTP3_CALLBACKS_VERSION,
-                                               &callbacks,
-                                               NGHTTP3_SETTINGS_VERSION,
-                                               &settings,
-                                               NULL, /* mem */
-                                               user_data);
+                                                         NGHTTP3_CALLBACKS_VERSION,
+                                                         &callbacks,
+                                                         NGHTTP3_SETTINGS_VERSION,
+                                                         &settings,
+                                                         NULL, /* mem */
+                                                         user_data);
     if (rc != 0) {
         return NULL;
     }
