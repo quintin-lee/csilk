@@ -39,9 +39,7 @@ node_new(const char* segment, csilk_node_type_t type)
     node->type = type;
     node->children_cap = CSILK_ROUTER_INLINE_CHILDREN;
     node->children_count = 0;
-    for (size_t i = 0; i < 256; i++) {
-        node->static_first[i] = -1;
-    }
+    node->static_first = NULL; /* Lazily allocated on first static-child insertion */
     node->overflow_children = NULL;
     CSILK_LOG_T("Router: allocated new node (segment: '%s', type: %d)", segment, type);
     return node;
@@ -122,14 +120,27 @@ node_add_child(csilk_router_node_t* parent, csilk_router_node_t* child, int inse
     children[insert_pos] = child;
     parent->children_count++;
     if (child->type == CSILK_NODE_STATIC && child->segment_len > 0) {
-        unsigned char first = (unsigned char)child->segment[0];
-        for (int i = 0; i < 256; i++) {
-            if (parent->static_first[i] >= insert_pos) {
-                parent->static_first[i]++;
+        /* Lazily allocate the 256-entry static_first lookup table on first
+         * static-child insertion.  Saves 512 B per node for parameter-only
+         * or wildcard-only subtrees. */
+        if (!parent->static_first) {
+            parent->static_first = (int16_t*)malloc(256 * sizeof(int16_t));
+            if (parent->static_first) {
+                for (size_t i = 0; i < 256; i++) {
+                    parent->static_first[i] = -1;
+                }
             }
         }
-        if (parent->static_first[first] < 0) {
-            parent->static_first[first] = (int16_t)insert_pos;
+        if (parent->static_first) {
+            unsigned char first = (unsigned char)child->segment[0];
+            for (int i = 0; i < 256; i++) {
+                if (parent->static_first[i] >= insert_pos) {
+                    parent->static_first[i]++;
+                }
+            }
+            if (parent->static_first[first] < 0) {
+                parent->static_first[first] = (int16_t)insert_pos;
+            }
         }
     }
     return 0;
@@ -166,6 +177,7 @@ node_free(csilk_router_node_t* node)
         free(node->overflow_children);
         node->overflow_children = NULL;
     }
+    free(node->static_first);
     free(node);
 }
 
