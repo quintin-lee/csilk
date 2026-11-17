@@ -182,15 +182,16 @@ The callback is invoked from `csilk_ws_parse_frame()` on the event loop thread w
 ws_room_manager_t:
   ├── rooms[] → ws_room_t:
   │               ├── room_name (strdup'd)
-  │               ├── clients[] (csilk_ctx_t* pointers)
-  │               ├── clients_count / clients_capacity
+  │               ├── snapshot (ws_room_snapshot_t*, COW + atomic refcount)
+  │               │     └── clients[] + refs (_Atomic int)
   └── mutex (uv_mutex_t, serializes all room ops)
 ```
 
 - Rooms are created lazily on first `csilk_ws_join_room()` call.
 - Each room creates an MQ subscriber on topic `ws.room.<name>` that broadcasts to all clients in the room.
-- Client removal uses swap-to-end for O(1) deletion.
-- Thread-safe via `g_room_manager.mutex`.
+- The client list is stored as an **immutable COW snapshot** (`ws_room_snapshot_t`) with an atomic strong refcount. join/leave never mutate the live array; they allocate a new snapshot, publish it, and release the old one's baseline ref.
+- The owning room holds one baseline ref on its current snapshot; each in-flight broadcast reader takes/releases a ref. The snapshot is freed only when the last ref drops.
+- Thread-safe via `g_room_manager.mutex` (writers) and snapshot refcounting (readers).
 
 ### Broadcast Flow
 
@@ -199,11 +200,14 @@ csilk_ws_broadcast_room(ctx, "chat", "hello"):
   1. csilk_mq_publish(mq, "ws.room.chat", "hello", 5)
   2. MQ dispatch → on_room_message(mq_ctx):
      a. Extract room name from topic (skip "ws.room." prefix)
-     b. Lock room manager mutex
-     c. Find room by name
-     d. For each client: csilk_ws_send(client, payload, len, 0x1)
-     e. Unlock room manager mutex
+     b. Lock room manager mutex; load the room's snapshot pointer
+     c. Take a strong ref on the snapshot (while still under the lock)
+     d. Unlock the manager mutex
+     e. For each client in the snapshot: csilk_ws_send(client, payload, len, 0x1)
+     f. Release the reader's ref (frees the snapshot only if it was the last)
 ```
+
+A concurrent `csilk_ws_join_room`/`csilk_ws_leave_room` cannot free a snapshot that a reader still holds: writers transfer the room's baseline ref to the new snapshot and release the old one, so it is freed only after every in-flight reader has released its ref.
 
 ---
 
@@ -306,7 +310,7 @@ When `ctx->is_websocket` is set (after handshake), incoming TCP data is routed d
 ## 8. Concurrency
 
 - **WebSocket I/O** — All frame writes and reads happen on the event loop thread. No concurrent access to the client stream.
-- **Rooms** — Protected by `g_room_manager.mutex`. Room operations (join/leave) and broadcasts serialize through the same lock. The actual broadcast work (ws_send) is done under the lock.
+- **Rooms** — Writers (join/leave) serialize through `g_room_manager.mutex`. The client list is an immutable COW snapshot with an atomic refcount; a broadcast reader takes a ref under the manager lock, walks the snapshot lock-free, then releases it. join/leave transfer the room's baseline ref to a fresh snapshot and release the old, so a snapshot is freed only when its last ref drops — no use-after-free even when a join/leave races a broadcast.
 - **SSE** — Single-threaded on the event loop. Each `sse_send()` allocates, writes, and frees on the same thread.
 - **Swagger** — Stateless handler serving static HTML. No concurrency concerns.
 

@@ -63,14 +63,18 @@ typedef struct csilk_mq_topic_s {
  * Not intended for direct manipulation by user code.
  */
 struct csilk_mq_s {
-    csilk_io_loop_t* loop;         /**< Event loop */
-    csilk_io_async_t async_handle; /**< Async handle for bridging worker-thread
+    csilk_io_loop_t* loop;          /**< Event loop */
+    csilk_io_async_t async_handle;  /**< Async handle for bridging worker-thread
                                  publishes into the main loop. */
-    csilk_mutex_t    queue_mutex;  /**< Mutex guarding the message linked list. */
-    csilk_mq_msg_t*  queue_head;   /**< Head of the pending-message linked list. */
-    csilk_mq_msg_t*  queue_tail;   /**< Tail of the pending-message linked list. */
+    csilk_mutex_t    queue_mutex;   /**< Mutex guarding the message linked list. */
+    csilk_mq_msg_t*  queue_head;    /**< Head of the pending-message linked list. */
+    csilk_mq_msg_t*  queue_tail;    /**< Tail of the pending-message linked list. */
 
-    csilk_mq_topic_t* topics;      /**< Linked list of registered topics. */
+    csilk_mq_topic_t* topics;       /**< Linked list of registered topics. */
+    csilk_mutex_t     topics_mutex; /**< Guards the topics list + global middleware
+                                    *   array. csilk_mq_use may run on a worker
+                                    *   thread concurrently with dispatch on the
+                                    *   main loop, so both sides must hold this. */
 
     /* Global middlewares */
     csilk_mq_handler_t* global_middlewares; /**< Array of global middleware

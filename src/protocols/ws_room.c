@@ -18,7 +18,36 @@
 typedef struct {
     csilk_ctx_t** clients;
     int           count;
+    _Atomic int   refs; /**< Strong refs held: one by the owning room + N by in-flight readers. */
 } ws_room_snapshot_t;
+
+/** @brief Take a strong reference to a COW snapshot. @return 1 on success. */
+static int
+ws_room_snap_acquire(ws_room_snapshot_t* snap)
+{
+    if (!snap) {
+        return 0;
+    }
+    atomic_fetch_add_explicit(&snap->refs, 1, memory_order_acquire);
+    return 1;
+}
+
+/** @brief Drop one strong reference; frees the snapshot when the last ref goes away. */
+static void
+ws_room_snap_release(ws_room_snapshot_t* snap)
+{
+    if (!snap) {
+        return;
+    }
+    int prev = atomic_fetch_sub_explicit(&snap->refs, 1, memory_order_acq_rel);
+    atomic_thread_fence(memory_order_seq_cst);
+    if (prev == 1) {
+        if (snap->clients) {
+            free(snap->clients);
+        }
+        free(snap);
+    }
+}
 
 typedef struct {
     char*                        room_name;
@@ -48,12 +77,9 @@ ws_room_manager_cleanup(void)
         ws_room_t* room = g_room_manager.rooms[i];
         if (room) {
             ws_room_snapshot_t* snap = atomic_load(&room->snapshot);
-            if (snap) {
-                if (snap->clients) {
-                    free(snap->clients);
-                }
-                free(snap);
-            }
+            /* At teardown all in-flight readers have completed, so the room's
+             * baseline ref is the last strong reference and release frees it. */
+            ws_room_snap_release(snap);
             free(room->room_name);
             csilk_mutex_destroy(&room->mutex);
             free(room);
@@ -112,10 +138,14 @@ on_room_message(csilk_mq_ctx_t* ctx)
     ws_room_snapshot_t* snap = NULL;
     if (room) {
         snap = atomic_load(&room->snapshot);
+        /* Take a strong ref while still under the manager lock so a
+         * concurrent join/leave cannot drop the last reference to this
+         * snapshot before we finish walking it. */
+        ws_room_snap_acquire(snap);
     }
     csilk_mutex_unlock(&g_room_manager.mutex);
 
-    /* Broadcast using COW snapshot without holding manager lock */
+    /* Broadcast using the COW snapshot without holding the manager lock. */
     if (snap && snap->clients) {
         for (int i = 0; i < snap->count; i++) {
             if (snap->clients[i]) {
@@ -123,6 +153,9 @@ on_room_message(csilk_mq_ctx_t* ctx)
             }
         }
     }
+    /* Release our reader ref; the snapshot is freed only when the owning
+     * room's baseline ref and every other in-flight reader have released. */
+    ws_room_snap_release(snap);
 }
 
 /**
@@ -159,6 +192,8 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
         csilk_mutex_init(&room->mutex);
 
         ws_room_snapshot_t* empty_snap = calloc(1, sizeof(ws_room_snapshot_t));
+        /* Room holds the baseline strong ref to its snapshot (refs starts at 1). */
+        atomic_init(&empty_snap->refs, 1);
         atomic_init(&room->snapshot, empty_snap);
 
         g_room_manager.rooms[g_room_manager.rooms_count++] = room;
@@ -174,7 +209,10 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
     csilk_mutex_lock(&room->mutex);
 
     ws_room_snapshot_t* old_snap = atomic_load(&room->snapshot);
-    int                 count = old_snap ? old_snap->count : 0;
+    /* The room always holds a baseline strong ref to its current snapshot.
+     * old_snap == NULL only at room creation, when the empty snapshot was
+     * published with refs==1 and the room owns that single ref. */
+    int count = old_snap ? old_snap->count : 0;
 
     /* Check if already in room */
     for (int i = 0; i < count; i++) {
@@ -185,22 +223,21 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
         }
     }
 
-    /* Allocate new COW snapshot */
+    /* Allocate new COW snapshot; it inherits the room's baseline ref. */
     ws_room_snapshot_t* new_snap = calloc(1, sizeof(ws_room_snapshot_t));
     new_snap->count = count + 1;
     new_snap->clients = malloc(sizeof(csilk_ctx_t*) * new_snap->count);
+    atomic_init(&new_snap->refs, 1);
     if (old_snap && old_snap->clients && count > 0) {
         memcpy(new_snap->clients, old_snap->clients, sizeof(csilk_ctx_t*) * count);
     }
     new_snap->clients[count] = c;
 
     atomic_store(&room->snapshot, new_snap);
-    if (old_snap) {
-        if (old_snap->clients) {
-            free(old_snap->clients);
-        }
-        free(old_snap);
-    }
+    /* Release the baseline ref the room held on old_snap. In-flight readers
+     * (on_room_message) that already acquired old_snap keep their own ref,
+     * so it is only freed once every reader releases. */
+    ws_room_snap_release(old_snap);
 
     csilk_mutex_unlock(&room->mutex);
     csilk_mutex_unlock(&g_room_manager.mutex);
@@ -251,11 +288,12 @@ csilk_ws_leave_room(csilk_ctx_t* c, const char* room_name)
                         }
                     }
                 }
+                /* new_snap inherits the room's baseline strong ref. */
+                atomic_init(&new_snap->refs, 1);
                 atomic_store(&room->snapshot, new_snap);
-                if (old_snap->clients) {
-                    free(old_snap->clients);
-                }
-                free(old_snap);
+                /* Release the baseline ref the room held on old_snap; in-flight
+                 * readers keep their own refs so it is freed safely. */
+                ws_room_snap_release(old_snap);
             }
         }
 

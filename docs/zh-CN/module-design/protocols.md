@@ -182,15 +182,16 @@ void ws_handler(csilk_ctx_t* ctx) {
 ws_room_manager_t:
   ├── rooms[] → ws_room_t:
   │               ├── room_name (strdup'd)
-  │               ├── clients[] (csilk_ctx_t* 指针)
-  │               ├── clients_count / clients_capacity
+  │               ├── snapshot (ws_room_snapshot_t*, COW + 原子引用计数)
+  │               │     └── clients[] + refs (_Atomic int)
   └── mutex (uv_mutex_t, 序列化所有房间操作)
 ```
 
 - 房间在第一次 `csilk_ws_join_room()` 调用时延迟创建。
 - 每个房间在主题 `ws.room.<name>` 上创建一个 MQ 订阅者，将消息广播到房间内的所有客户端。
-- 客户端移除使用交换到末尾实现 O(1) 删除。
-- 通过 `g_room_manager.mutex` 实现线程安全。
+- 客户端列表存储为**不可变 COW 快照**（`ws_room_snapshot_t`）带原子强引用计数。join/leave 从不修改活数组；它们分配新快照、发布、然后释放旧快照的基线 ref。
+- 持有房间对其当前快照持有一个基线 ref；每个在途广播 reader 取/还一个 ref。快照仅在最后一个 ref 释放时才 `free`。
+- 通过 `g_room_manager.mutex`（写者）与快照引用计数（读者）实现线程安全。
 
 ### 广播流程
 
@@ -199,11 +200,14 @@ csilk_ws_broadcast_room(ctx, "chat", "hello"):
   1. csilk_mq_publish(mq, "ws.room.chat", "hello", 5)
   2. MQ 分发 → on_room_message(mq_ctx):
      a. 从主题提取房间名称（跳过 "ws.room." 前缀）
-     b. 锁定房间管理器互斥锁
-     c. 按名称查找房间
-     d. 对于每个客户端: csilk_ws_send(client, payload, len, 0x1)
-     e. 解锁房间管理器互斥锁
+     b. 锁定房间管理器互斥锁；加载房间快照指针
+     c. 在锁内取快照的一个强 ref
+     d. 解锁房间管理器互斥锁
+     e. 对快照中每个客户端: csilk_ws_send(client, payload, len, 0x1)
+     f. 释放 reader 的 ref（若为最后一个则 free）
 ```
+
+并发 `csilk_ws_join_room`/`csilk_ws_leave_room` 无法 free 一个读者仍持有的快照：写者将房间基线 ref 转移到新快照并释放旧者，因此快照仅在所有在途读者释放其 ref 后才被 free。
 
 ---
 
@@ -305,7 +309,7 @@ on_read(stream, nread, buf):
 ## 8. 并发模型
 
 - **WebSocket I/O** — 所有帧写入和读取都发生在事件循环线程上。没有并发访问客户端流。
-- **房间** — 由 `g_room_manager.mutex` 保护。房间操作（加入/离开）和广播都通过同一个锁序列化。实际的广播工作（ws_send）在锁下完成。
+- **房间** — 写者（加入/离开）通过 `g_room_manager.mutex` 串行化。客户端列表是带原子引用计数的不可变 COW 快照；广播 reader 在管理器锁内取一个 ref，无锁遍历快照，然后释放。join/leave 将房间基线 ref 转移到新快照并释放旧者，因此快照仅在最后一个 ref 释放时才 free —— 即使加入/离开与广播竞态也不会 use-after-free。
 - **SSE** — 事件循环上的单线程。每个 `sse_send()` 分配、写入和释放都在同一个线程上进行。
 - **Swagger** — 提供静态 HTML 的无状态处理程序。没有并发问题。
 
