@@ -32,11 +32,12 @@ struct csilk_session_store_s {
     csilk_session_store_ops_t ops;
     /* Backend-specific state */
     struct {
-        void* redis_ctx; /* redisContext* */
-        char  prefix[128];
+        void*         redis_ctx; /* redisContext* */
+        char          prefix[128];
+        csilk_mutex_t lock;      /* Serializes ops: a hiredis redisContext is not thread-safe. */
     } redis;
     struct {
-        void*             mq; /* csilk_mq_t* */
+        void*             mq;    /* csilk_mq_t* */
         char              prefix[128];
         mq_local_table_t* table;
     } mq;
@@ -120,16 +121,22 @@ _redis_get(csilk_session_store_t* store, const char* session_id, char** out_data
         return -1;
     }
 
+    /* Serialize the shared redisContext (hiredis is not thread-safe) and
+     * surface I/O errors instead of silently returning -1. */
+    csilk_mutex_lock(&store->redis.lock);
     size_t keylen = strlen(store->redis.prefix) + strlen(session_id);
     char*  key = malloc(keylen + 1);
     if (!key) {
+        csilk_mutex_unlock(&store->redis.lock);
         return -1;
     }
     snprintf(key, keylen + 1, "%s%s", store->redis.prefix, session_id);
 
     redisReply* reply = (redisReply*)redisCommand(ctx, "GET %s", key);
     free(key);
+    csilk_mutex_unlock(&store->redis.lock);
     if (!reply) {
+        CSILK_LOG_W("SessionStore(redis): GET %s failed: %s", session_id, ctx->errstr);
         return -1;
     }
 
@@ -174,9 +181,12 @@ _redis_set(csilk_session_store_t* store,
         return -1;
     }
 
+    /* Serialize the shared redisContext and surface I/O errors. */
+    csilk_mutex_lock(&store->redis.lock);
     size_t keylen = strlen(store->redis.prefix) + strlen(session_id);
     char*  key = malloc(keylen + 1);
     if (!key) {
+        csilk_mutex_unlock(&store->redis.lock);
         return -1;
     }
     snprintf(key, keylen + 1, "%s%s", store->redis.prefix, session_id);
@@ -194,7 +204,9 @@ _redis_set(csilk_session_store_t* store,
         reply = (redisReply*)redisCommandArgv(ctx, 3, argv, argvlen);
     }
     free(key);
+    csilk_mutex_unlock(&store->redis.lock);
     if (!reply) {
+        CSILK_LOG_W("SessionStore(redis): SET %s failed: %s", session_id, ctx->errstr);
         return -1;
     }
 
@@ -211,16 +223,21 @@ _redis_del(csilk_session_store_t* store, const char* session_id)
         return -1;
     }
 
+    /* Serialize the shared redisContext and surface I/O errors. */
+    csilk_mutex_lock(&store->redis.lock);
     size_t keylen = strlen(store->redis.prefix) + strlen(session_id);
     char*  key = malloc(keylen + 1);
     if (!key) {
+        csilk_mutex_unlock(&store->redis.lock);
         return -1;
     }
     snprintf(key, keylen + 1, "%s%s", store->redis.prefix, session_id);
 
     redisReply* reply = (redisReply*)redisCommand(ctx, "DEL %s", key);
     free(key);
+    csilk_mutex_unlock(&store->redis.lock);
     if (!reply) {
+        CSILK_LOG_W("SessionStore(redis): DEL %s failed: %s", session_id, ctx->errstr);
         return -1;
     }
 
@@ -236,6 +253,7 @@ _redis_destroy(csilk_session_store_t* store)
         redisFree((redisContext*)store->redis.redis_ctx);
         store->redis.redis_ctx = NULL;
     }
+    csilk_mutex_destroy(&store->redis.lock);
 }
 
 csilk_session_store_t*
@@ -251,6 +269,7 @@ csilk_session_store_new_redis(const char* host, int port, const char* prefix)
     }
 
     snprintf(store->redis.prefix, sizeof(store->redis.prefix), "%s", prefix);
+    csilk_mutex_init(&store->redis.lock);
 
     struct timeval tv = {5, 0};
     redisContext*  ctx = redisConnectWithTimeout(host ? host : "127.0.0.1", port ? port : 6379, tv);
