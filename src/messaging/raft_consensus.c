@@ -20,7 +20,10 @@
 #include "raft_internal.h"
 
 #define RAFT_MAX_ENTRIES_PER_AE 32U
-#define RAFT_AE_SAFE_MTU_BYTES 48000U
+#ifndef CSILK_RAFT_MTU_BYTES
+#define CSILK_RAFT_MTU_BYTES 1400U /* Safe for 1500B Ethernet MTU, no IP fragmentation */
+#endif
+#define RAFT_AE_SAFE_MTU_BYTES CSILK_RAFT_MTU_BYTES
 
 static uint32_t
 raft_rng_next(uint32_t* state)
@@ -173,24 +176,35 @@ raft_find_peer_locked(csilk_raft_node_t*        node,
     return NULL;
 }
 
-static void
+static int
 raft_send_packet_locked(csilk_raft_node_t* node,
                         csilk_raft_peer_t* peer,
                         const uint8_t*     pkt,
                         size_t             pkt_len)
 {
     if (node->listen_fd < 0 || !pkt || pkt_len == 0) {
-        return;
+        return -1;
     }
     if (raft_ensure_peer_resolved_locked(peer) != 0) {
-        return;
+        return -1;
     }
-    (void)sendto(node->listen_fd,
-                 pkt,
-                 pkt_len,
-                 0,
-                 (const struct sockaddr*)&peer->addr_in,
-                 sizeof(peer->addr_in));
+    int r = sendto(node->listen_fd,
+                   pkt,
+                   pkt_len,
+                   0,
+                   (const struct sockaddr*)&peer->addr_in,
+                   sizeof(peer->addr_in));
+    if (r < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        /* Network error — back off peer's next_index to trigger resend on
+         * the next heartbeat cycle.  This handles UDP packet loss and
+         * transient host unreachable conditions without crashing the
+         * consensus loop. */
+        if (peer->next_index > 1) {
+            peer->next_index--;
+        }
+        return -1;
+    }
+    return 0;
 }
 
 static void
