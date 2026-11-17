@@ -17,6 +17,7 @@
 #include "csilk/protocols/h3.h"
 #include "csilk/csilk.h"
 #include "http3_internal.h"
+#include "core/internal/srv_internal.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -289,12 +290,12 @@ csilk_h3_session_new(int64_t stream_id, void* user_data)
 
     nghttp3_conn* ng3 = NULL;
     int           rc = nghttp3_conn_server_new_versioned(&ng3,
-                                               NGHTTP3_CALLBACKS_VERSION,
-                                               &callbacks,
-                                               NGHTTP3_SETTINGS_VERSION,
-                                               &settings,
-                                               NULL, /* mem */
-                                               user_data);
+                                                         NGHTTP3_CALLBACKS_VERSION,
+                                                         &callbacks,
+                                                         NGHTTP3_SETTINGS_VERSION,
+                                                         &settings,
+                                                         NULL, /* mem */
+                                                         user_data);
     if (rc != 0) {
         return NULL;
     }
@@ -393,8 +394,6 @@ csilk_h3_session_send_response(nghttp3_conn*     session,
  * @param sd      The completed stream data (headers_complete == 1).
  * @return 0 on success, -1 if the stream data is incomplete.
  */
-#include "core/internal/srv_internal.h"
-
 int
 csilk_h3_dispatch_stream(csilk_client_t* client, csilk_h3_stream_data_t* sd)
 {

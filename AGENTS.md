@@ -82,6 +82,14 @@ Use these rules whenever performing work in this repository. They ensure correct
 - **Never** include `messaging/mq_internal.h` transitively through `include/csilk/core/internal.h` — add explicit includes only where needed.
 - **Never** assert bcrypt/hash equality without `#ifdef TEST_OOM` guard (tests use `/dev/urandom` salts by default).
 
+### Declaration placement
+
+- **All `#include` directives** must appear at the top of the file, before any function definition or global variable declaration. Conditional includes (`#ifdef HAS_X` → `#include <x.h>`) are allowed only within the top include block, before the first function body.
+- **All global/file-scope `static` variable declarations** (including `static _Thread_local`, `static _Atomic`, and `static const` table/array) must be placed in the top declaration block, i.e., after `#include` directives and typedefs but **before** the first function definition (including `static inline` functions). Do not sprinkle static variables between or after function bodies.
+- **Exception**: `#include` inside a top-level `#ifdef` guard that protects an entire function group (e.g. `#ifdef CSILK_HAS_NGTCP2 … #endif` wrapping multiple function bodies) is permissible when the guarded functions use types from that header; move the `#include` into the top block if no guarded function exists.
+
+**Rationale**: Consistent declaration placement enables fast IDE/clangd navigation, makes the file’s global state surface at the top for review, and prevents accidental ODR issues from late declarations. It also makes code-review diffs cleaner: new globals are visible at the top of the diff rather than buried mid-file.
+
 ## Architecture & Data Flow
 
 ### High-level request lifecycle

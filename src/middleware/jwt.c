@@ -10,15 +10,15 @@
 #include <time.h>
 
 #include "csilk/core/internal.h"
+#include "csilk/crypto/crypto.h"
+#include "csilk/drivers/cipher.h"
+#include <openssl/crypto.h>
 
 static void
 _csilk_jwt_json_free(void* value)
 {
     csilk_json_free((csilk_json_t*)value);
 }
-#include "csilk/crypto/crypto.h"
-#include "csilk/drivers/cipher.h"
-#include <openssl/crypto.h>
 
 /**
  * @brief Map a JWT algorithm to its RFC 7518 "alg" header value.

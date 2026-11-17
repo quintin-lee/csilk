@@ -11,10 +11,11 @@
 
 #include "csilk/core/session_store.h"
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 
 #include <stdlib.h>
 #include <string.h>
-#include <csilk/core/sync.h>
+#include <time.h>
 
 #ifdef HAS_REDIS
 #include <hiredis/hiredis.h>
@@ -364,9 +365,6 @@ csilk_session_store_new_redis(const char* host, int port, const char* prefix)
  * to the MQ topic for cross-node replication. A local fallback
  * hash table ensures availability when the MQ is unavailable.
  */
-
-#include <time.h>
-#include <csilk/core/sync.h>
 
 #define MQ_LOCAL_BUCKETS 256
 

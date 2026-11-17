@@ -48,6 +48,10 @@ static size_t        g_ai_monitor_count = 0;
 static csilk_mutex_t g_ai_monitor_mutex;
 static atomic_int    g_ai_monitor_init = 0;
 
+/* --- Global AI driver registry --- */
+static const csilk_ai_driver_t* g_drivers[MAX_DRIVERS];
+static size_t                   g_driver_count = 0;
+
 /* Weak fallback when csilk_http (websocket) is not linked */
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((weak)) int
@@ -222,10 +226,7 @@ csilk_ai_unregister_monitor(void* c)
  *  the built-in drivers (OpenAI, Ollama). Not thread-safe for concurrent
  *  registration — all registration happens during the single-threaded
  *  startup phase. */
-static const csilk_ai_driver_t* g_drivers[MAX_DRIVERS];
-static size_t                   g_driver_count = 0;
-
-/** @brief Opaper AI engine handle wrapping a single driver backend.
+/** @brief Opaque AI engine handle wrapping a single driver backend.
  *  Each instance pairs a driver vtable with its private initialization
  *  state (API credentials, connection pool, etc.). Created via
  *  csilk_ai_new() and freed via csilk_ai_free(). Not thread-safe for
