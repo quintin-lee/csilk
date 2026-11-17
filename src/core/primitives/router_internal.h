@@ -27,13 +27,14 @@ typedef enum { CSILK_NODE_STATIC, CSILK_NODE_PARAM, CSILK_NODE_WILDCARD } csilk_
 
 /** @brief Node in the router trie — represents a URL path segment. */
 struct csilk_router_node_s {
-    char*                        segment;
-    size_t                       segment_len;
-    csilk_node_type_t            type;
-    csilk_method_handler_t*      handlers;
-    uint16_t                     children_count;
-    uint16_t                     children_cap;
-    int16_t*                     static_first;  /**< Heap-allocated on first use (NULL initially). Saves 512 B per node. */
+    char*                   segment;
+    size_t                  segment_len;
+    csilk_node_type_t       type;
+    csilk_method_handler_t* handlers;
+    uint16_t                children_count;
+    uint16_t                children_cap;
+    int16_t*
+        static_first; /**< Heap-allocated on first use (NULL initially). Saves 512 B per node. */
     struct csilk_router_node_s*  inline_children[CSILK_ROUTER_INLINE_CHILDREN];
     struct csilk_router_node_s** overflow_children;
 };

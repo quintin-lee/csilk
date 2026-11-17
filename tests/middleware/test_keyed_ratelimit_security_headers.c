@@ -6,7 +6,6 @@
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 
-
 /*
  * P4 regression tests for csilk#9a (keyed rate limiting).
  *

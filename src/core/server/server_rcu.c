@@ -125,8 +125,8 @@ _csilk_reload_mgr_init(csilk_server_t* server)
         gen = atomic_fetch_add_explicit(&g_rcu_server_gen_seq, 1, memory_order_relaxed);
     }
     mgr->server_gen = gen;
-    size_t            slot = gen % CSILK_RCU_GEN_TABLE_SIZE;
-    uint32_t          prev = atomic_load_explicit(&g_active_server_gens[slot], memory_order_acquire);
+    size_t   slot = gen % CSILK_RCU_GEN_TABLE_SIZE;
+    uint32_t prev = atomic_load_explicit(&g_active_server_gens[slot], memory_order_acquire);
     /* Detect generation-table collision: the slot is still occupied by a
      * different, still-alive server.  In this rare case we keep the new
      * generation registered so the old server will be safely reclaimed; the
