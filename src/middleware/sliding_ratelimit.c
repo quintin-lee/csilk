@@ -21,12 +21,12 @@
  * @brief Internal Sliding Window Rate Limiter structure.
  */
 struct csilk_sliding_limiter_s {
-    int64_t     limit_per_window;        /**< Maximum permitted requests per window */
-    uint64_t    window_ms;               /**< Window duration in milliseconds */
-    uint64_t    current_window_start_ms; /**< Start timestamp of current window */
-    uint64_t    prev_window_count;       /**< Request count in previous window (saturated) */
-    uint64_t    curr_window_count;       /**< Request count in current window (saturated) */
-    csilk_mutex_t mutex;                 /**< Mutex protecting counter state */
+    int64_t       limit_per_window;        /**< Maximum permitted requests per window */
+    uint64_t      window_ms;               /**< Window duration in milliseconds */
+    uint64_t      current_window_start_ms; /**< Start timestamp of current window */
+    uint64_t      prev_window_count;       /**< Request count in previous window (saturated) */
+    uint64_t      curr_window_count;       /**< Request count in current window (saturated) */
+    csilk_mutex_t mutex;                   /**< Mutex protecting counter state */
 };
 
 /**
