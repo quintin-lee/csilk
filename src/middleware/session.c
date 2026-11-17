@@ -78,8 +78,13 @@ static csilk_once_t session_init_once = CSILK_ONCE_INIT;
 /** @brief Total active session count (atomic, for LRU eviction). */
 static atomic_size_t session_count = 0;
 
-/** @brief Maximum session count limit (0 = unlimited). */
-static size_t session_max = SESSION_MAX_DEFAULT;
+/** @brief Maximum session count limit (0 = unlimited).
+ *
+ * Atomic because csilk_session_set_max() writes it from the configuration
+ * thread while worker threads read it during LRU eviction; a plain size_t
+ * would be a data race. The read in the eviction path is relaxed, so the
+ * ordering only matters for visibility of the new limit, not sequencing. */
+static atomic_size_t session_max = SESSION_MAX_DEFAULT;
 
 /**
  * @brief Initialize all bucket mutexes (called once via csilk_once).
@@ -212,7 +217,8 @@ add_session_locked(csilk_session_t* session)
     atomic_fetch_add_explicit(&session_count, 1, memory_order_relaxed);
 
     /* LRU eviction: if over limit, find and evict the least-recently-accessed session */
-    if (atomic_load_explicit(&session_count, memory_order_relaxed) > session_max) {
+    if (atomic_load_explicit(&session_count, memory_order_relaxed) >
+        atomic_load_explicit(&session_max, memory_order_relaxed)) {
         /* Find the session with the oldest last_access across all buckets */
         csilk_session_t* victim = NULL;
         time_t           victim_ts = 0;
@@ -319,7 +325,7 @@ cleanup_expired(void)
 void
 csilk_session_set_max(size_t max)
 {
-    session_max = max;
+    atomic_store_explicit(&session_max, max, memory_order_relaxed);
     CSILK_LOG_I("Session: Max sessions set to %zu", max);
 }
 
