@@ -203,28 +203,42 @@ spa_fallback_handler(csilk_ctx_t* c)
 
 /* --- Server configuration --- */
 
-/** @brief Set a custom handler for unmatched routes (404 Not Found). */
+/** @brief Set a custom handler for unmatched routes (404 Not Found).
+ *
+ * Locks the config mutex so that concurrent updates from
+ * csilk_server_set_spa_fallback cannot race on not_found_handler.
+ */
 void
 csilk_server_set_not_found_handler(csilk_server_t* server, csilk_handler_t handler)
 {
     if (!server) {
         return;
     }
+    csilk_mutex_lock(&server->config_mutex);
     server->not_found_handler = handler;
+    csilk_mutex_unlock(&server->config_mutex);
 }
 
-/** @brief Enable SPA fallback: all unmatched GET requests serve index.html. */
+/** @brief Enable SPA fallback: all unmatched GET requests serve index.html.
+ *
+ * Protects the free/strdup of spa_doc_root and the not_found_handler update
+ * with the config mutex so that concurrent worker threads reading
+ * spa_doc_root in spa_fallback_handler cannot observe a freed pointer.
+ */
 void
 csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
 {
     if (!server || !doc_root) {
         return;
     }
-    free(server->spa_doc_root);
-    server->spa_doc_root = strdup(doc_root);
-    if (server->spa_doc_root) {
+    csilk_mutex_lock(&server->config_mutex);
+    char* new_root = strdup(doc_root);
+    if (new_root) {
+        free(server->spa_doc_root);
+        server->spa_doc_root = new_root;
         server->not_found_handler = spa_fallback_handler;
     }
+    csilk_mutex_unlock(&server->config_mutex);
 }
 
 /** @brief Register a global middleware handler that runs before every request. */
