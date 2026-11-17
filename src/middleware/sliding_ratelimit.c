@@ -21,12 +21,12 @@
  * @brief Internal Sliding Window Rate Limiter structure.
  */
 struct csilk_sliding_limiter_s {
-    int           limit_per_window;        /**< Maximum permitted requests per window */
-    uint64_t      window_ms;               /**< Window duration in milliseconds */
-    uint64_t      current_window_start_ms; /**< Start timestamp of current window */
-    int           prev_window_count;       /**< Request count in previous window */
-    int           curr_window_count;       /**< Request count in current window */
-    csilk_mutex_t mutex;                   /**< Mutex protecting counter state */
+    int64_t     limit_per_window;        /**< Maximum permitted requests per window */
+    uint64_t    window_ms;               /**< Window duration in milliseconds */
+    uint64_t    current_window_start_ms; /**< Start timestamp of current window */
+    uint64_t    prev_window_count;       /**< Request count in previous window (saturated) */
+    uint64_t    curr_window_count;       /**< Request count in current window (saturated) */
+    csilk_mutex_t mutex;                 /**< Mutex protecting counter state */
 };
 
 /**
@@ -43,7 +43,7 @@ csilk_sliding_limiter_new(int limit_per_window, uint64_t window_ms)
     if (!lim) {
         return NULL;
     }
-    lim->limit_per_window = limit_per_window > 0 ? limit_per_window : 60;
+    lim->limit_per_window = limit_per_window > 0 ? (int64_t)limit_per_window : 60;
     lim->window_ms = window_ms > 0 ? window_ms : 60000;
     lim->current_window_start_ms = csilk_io_hrtime() / 1000000;
     lim->prev_window_count = 0;
@@ -101,6 +101,12 @@ csilk_sliding_rate_limit_middleware(csilk_ctx_t* c, csilk_sliding_limiter_t* lim
     }
 
     limiter->curr_window_count++;
+    /* Saturate to keep the limiter enforceable even under extreme sustained load:
+     * a 32-bit wrap would make estimated_count negative and silently disable the
+     * limiter exactly when traffic is highest. */
+    if (limiter->curr_window_count > 0xFFFFFFFFuLL) {
+        limiter->curr_window_count = 0xFFFFFFFFuLL;
+    }
     csilk_mutex_unlock(&limiter->mutex);
 
     csilk_next(c);
