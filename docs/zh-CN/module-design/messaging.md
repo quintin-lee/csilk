@@ -118,6 +118,7 @@ struct csilk_mq_s {
     csilk_mq_msg_t* queue_tail;
 
     csilk_mq_topic_t* topics;      // 注册主题列表
+    csilk_mutex_t topics_mutex;    // 保护 topics 列表 + global_middlewares[]
 
     csilk_mq_handler_t* global_middlewares; // 拦截每个主题
     size_t global_mw_count;
@@ -201,10 +202,12 @@ on_mq_async(handle):
 
      a. 构建处理器链:
         - 分配 chain[] = malloc((global_mw_count + matched_topic_handlers) * sizeof(handler_t))
+        - 加锁 topics_mutex
         - 将 global_middlewares 复制到 chain[]
         - For each topic t in mq->topics:
              if fnmatch(t->name, msg->topic) == 0:
                  memcpy chain[] with t->handlers[]
+        - 解锁 topics_mutex   (在 csilk_mq_next 前释放，以便 handler 可再注册)
 
      b. 创建堆栈上下文:
         csilk_mq_ctx_t ctx = {mq, msg, chain, total_handlers, -1 /* index */, 0 /* aborted */}
@@ -362,9 +365,10 @@ WebSocket 客户端可通过 `csilk_mq_register_monitor(mq, ctx)` 注册为 MQ �
 ```
 
 - **发布**: 通过 `queue_mutex` 线程安全。仅在链表追加和可选 WAL 写入期间阻塞。
-- **分发**: 单线程在主事件循环上。处理器执行期间不持有锁。
+- **注册** (`csilk_mq_use`): 由 `topics_mutex` 串行化。worker 线程可与 dispatch 并发注册主题/中间件；主题列表与全局中间件数组在同一锁下读取。
+- **分发**: 单线程在主事件循环上。处理器链在 `topics_mutex` 下快照到 `chain[]`，然后释放锁再调用用户 handler（handler 本身可再注册主题）。处理器执行期间不持有锁。
 - **WAL**: 由 `wal_mutex` 序列化。在每个 `write + fsync` 持有锁。
-- **指标**: 由 `queue_mutex` 保护。在锁下更新原子。
+- **指标**: published/delivered/failed/queue_depth 由 `queue_mutex` 保护；topic_count 遍历由 `topics_mutex` 保护。
 - **监控**: 由 `monitor_mutex` 保护。在锁下广播。
 
 ---
@@ -376,7 +380,7 @@ Server startup:
   csilk_server_get_mq(server)
     └── _csilk_mq_new(loop)
           ├── calloc csilk_mq_t
-          ├── uv_mutex_init(queue_mutex, monitor_mutex, wal_mutex)
+          ├── csilk_mutex_init(queue_mutex, monitor_mutex, topics_mutex)
           ├── uv_async_init(loop, async_handle, on_mq_async)
           └── wal_fd = -1
 
@@ -389,7 +393,7 @@ Runtime:
 Server shutdown:
   _csilk_mq_free(mq)
     └── uv_close(async_handle, on_mq_close)
-          ├── uv_mutex_destroy(queue_mutex, wal_mutex)
+          ├── csilk_mutex_destroy(queue_mutex, wal_mutex, topics_mutex)
           ├── 关闭 WAL 文件
           ├── 排空消息队列 (释放所有消息)
           ├── 释放所有主题 + 处理器数组
