@@ -37,6 +37,14 @@ csilk_db_tx_scope_begin(csilk_db_pool_t* pool, const char* name, csilk_db_tx_sco
     int in_tx = csilk_db_in_transaction(pool);
     if (in_tx > 0) {
         uint64_t seq = atomic_fetch_add(&g_csilk_sp_seq, 1);
+        /* Reserve capacity for the "_<seq>" suffix; if the base name is too
+         * long to fit, reject up front rather than silently truncating
+         * scope->name (begin/commit/rollback would then run against a
+         * truncated, possibly-colliding or malformed savepoint name). */
+        int needed = (int)strlen(name) + 32; /* "+_" + up to 20 digits + slack */
+        if (needed >= (int)sizeof(scope->name)) {
+            return -1;
+        }
         snprintf(scope->name, sizeof(scope->name), "%s_%llu", name, (unsigned long long)seq);
         scope->is_savepoint = true;
 
