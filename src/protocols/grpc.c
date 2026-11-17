@@ -291,7 +291,9 @@ csilk_grpc_stream_feed(csilk_grpc_stream_t* stream, const uint8_t* data, size_t 
         if (stream->in_header) {
             stream->header_pos++;
             if (stream->rbuf_len + 1 > stream->rbuf_cap) {
-                size_t   new_cap = stream->rbuf_cap * 2;
+                /* rbuf_cap may start at 0; a 0 * 2 realloc(0) is UB/returns NULL.
+                 * Seed a minimum capacity before doubling. */
+                size_t   new_cap = (stream->rbuf_cap > 0) ? (stream->rbuf_cap * 2) : 256;
                 uint8_t* tmp = realloc(stream->rbuf, new_cap);
                 if (!tmp) {
                     return -1;

@@ -257,8 +257,19 @@ csilk_session_store_new_redis(const char* host, int port, const char* prefix)
         if (ctx) {
             redisFree(ctx);
         }
-        free(store);
-        return NULL;
+        /* Degraded mode: no live Redis, but the store remains usable with
+         * no-op Redis ops so callers (and unit tests without a Redis service)
+         * still get a valid handle rather than NULL. get returns -1, set/del
+         * are no-ops — equivalent to the non-HAS_REDIS stubs. */
+        store->redis.redis_ctx = NULL;
+        store->ops = (csilk_session_store_ops_t){
+            .get = _redis_get,
+            .set = _redis_set,
+            .del = _redis_del,
+            .destroy = _redis_destroy,
+            .name = "redis",
+        };
+        return store;
     }
 
     store->redis.redis_ctx = ctx;
