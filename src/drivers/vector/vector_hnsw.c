@@ -891,11 +891,10 @@ csilk_hnsw_load(const char* filepath)
             fclose(fp);
             return NULL;
         }
-        csilk_hnsw_node_t** new_nodes = realloc(
-            index->nodes,
-            new_cap *
-                sizeof(
-                    csilk_hnsw_node_t*)); // NOLINT(clang-analyzer-optin.taint.TaintedAlloc) /* new_cap bounded by HNSW_MAX_NODES + 64 */
+        csilk_hnsw_node_t** new_nodes =
+            realloc( // NOLINT(clang-analyzer-optin.taint.TaintedAlloc) /* new_cap bounded by HNSW_MAX_NODES + 64 */
+                index->nodes,
+                new_cap * sizeof(csilk_hnsw_node_t*));
         if (!new_nodes) {
             csilk_hnsw_index_free(index);
             fclose(fp);
@@ -941,8 +940,8 @@ csilk_hnsw_load(const char* filepath)
             fclose(fp);
             return NULL;
         }
-        node->doc_id[doc_len] =
-            '\0'; // NOLINT(clang-analyzer-security.ArrayBound) /* doc_id allocated with doc_len+1, doc_len bounded by HNSW_MAX_DOC_LEN */
+        node->doc_id // NOLINT(clang-analyzer-security.ArrayBound) /* doc_id allocated with doc_len+1, doc_len bounded by HNSW_MAX_DOC_LEN */
+            [doc_len] = '\0';
 
         node->vector = csilk_aligned_alloc(32, (size_t)dim * sizeof(float));
         if (!node->vector || fread(node->vector, sizeof(float), dim, fp) != dim) {
