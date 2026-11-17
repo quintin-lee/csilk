@@ -37,6 +37,7 @@ typedef struct {
 static const abi_field_desc_t f_circuit_breaker_config[] = {
     ABI_FIELD(csilk_circuit_breaker_config_t, failure_threshold),
     ABI_FIELD(csilk_circuit_breaker_config_t, recovery_timeout_ms),
+    ABI_FIELD(csilk_circuit_breaker_config_t, half_open_success_threshold),
 };
 
 static const abi_field_desc_t f_cors_config[] = {
