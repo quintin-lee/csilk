@@ -8,11 +8,17 @@ from csilk.lib import get_bindings, CsilkCircuitBreakerConfig
 class CircuitBreaker:
     """High-level Python wrapper for csilk C Circuit Breaker."""
 
-    def __init__(self, failure_threshold: int = 5, recovery_timeout_ms: int = 5000):
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        recovery_timeout_ms: int = 5000,
+        half_open_success_threshold: int = 0,
+    ):
         self._lib = get_bindings()
         cfg = CsilkCircuitBreakerConfig(
             failure_threshold=failure_threshold,
-            recovery_timeout_ms=recovery_timeout_ms
+            recovery_timeout_ms=recovery_timeout_ms,
+            half_open_success_threshold=half_open_success_threshold,
         )
         self._cb = self._lib.csilk_circuit_breaker_new(cfg)
         if not self._cb:

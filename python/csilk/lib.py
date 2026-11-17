@@ -32,7 +32,8 @@ CsilkCircuitBreakerPtr = ctypes.POINTER(CsilkCircuitBreaker)
 class CsilkCircuitBreakerConfig(ctypes.Structure):
     _fields_ = [
         ("failure_threshold", ctypes.c_int),
-        ("recovery_timeout_ms", ctypes.c_int)
+        ("recovery_timeout_ms", ctypes.c_int),
+        ("half_open_success_threshold", ctypes.c_int),
     ]
 CsilkCircuitBreakerConfigPtr = ctypes.POINTER(CsilkCircuitBreakerConfig)
 
