@@ -33,6 +33,7 @@ extern "C" {
 
 #ifdef CSILK_HAS_NGTCP2
 #include <ngtcp2/ngtcp2.h>
+#include <ngtcp2/ngtcp2_crypto.h>
 #include <ngtcp2/ngtcp2_crypto_ossl.h>
 #include <nghttp3/nghttp3.h>
 #include <openssl/ssl.h>
@@ -51,23 +52,51 @@ struct csilk_h3_stream_s {
 struct csilk_h3_conn_s {
 #ifdef CSILK_HAS_NGTCP2
     ngtcp2_conn*            ngtcp2_conn;
-    ngtcp2_crypto_ossl_ctx* crypto_ctx;
+    ngtcp2_crypto_ossl_ctx* crypto_ctx;   /* per-conn TLS (OpenSSL QUIC adapter) */
     SSL*                    ssl;
     nghttp3_conn*           nghttp3_conn;
+    ngtcp2_crypto_conn_ref  ssl_conn_ref; /* bridges SSL <-> ngtcp2_conn */
+    /* Packet-protection AEAD + HKDF digest objects shared by the crypto
+     * callbacks (encrypt/decrypt/hp_mask + key rotation). Native handles
+     * point at the OpenSSL AES-GCM EVP_CIPHER / EVP_MD singletons. */
+    ngtcp2_crypto_aead       aead;
+    ngtcp2_crypto_cipher     hp; /* header-protection cipher (AES-GCM in v1) */
+    ngtcp2_crypto_md         md; /* HKDF digest (SHA-256) */
+    ngtcp2_crypto_aead_ctx   initial_tx_aead;
+    ngtcp2_crypto_aead_ctx   initial_rx_aead;
+    ngtcp2_crypto_cipher_ctx initial_tx_hp;
+    ngtcp2_crypto_cipher_ctx initial_rx_hp;
+    uint8_t                  initial_tx_iv[12];
+    uint8_t                  initial_rx_iv[12];
 #endif
     struct csilk_h3_stream_s streams[CSILK_H3_MAX_STREAMS];
     int                      stream_count;
-    void*                    client; /* csilk_client_t* (owner worker) */
+    void*                    client;                       /* csilk_client_t* (owner worker) */
     int                      is_server;
-    uint64_t                 dcid;
+    uint8_t                  dcid_data[NGTCP2_MAX_CIDLEN]; /* DCID bytes (max 20) */
+    size_t                   dcid_len;
+    /* Remote address for UDP reply. */
+    struct sockaddr_storage remote;
+    socklen_t               remote_len;
+    /* Connection state: 0=new, 1=handshake, 2=established, 3=closed. */
+    int state;
+    /* Per-connection scratch buffer for response NVs (replaces the
+     * file-scope static in h3_session.c). */
+#ifdef CSILK_HAS_NGTCP2
+    nghttp3_nv resp_nv[64];
+    int        resp_nv_alloc;
+#endif
 };
 
 /** @brief QUIC transport handle. */
 struct csilk_h3_transport_s {
 #ifdef CSILK_HAS_NGTCP2
     int      udp_fd;
+    int      udp_nonblocking;
     SSL_CTX* ssl_ctx;
     char     addr[64];
+    /* Recv buffer (reused across recvfrom calls). */
+    uint8_t recv_buf[65536];
 #endif
     struct csilk_h3_conn_s* conns[CSILK_H3_MAX_CONNS];
     int                     conn_count;

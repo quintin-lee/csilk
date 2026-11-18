@@ -115,6 +115,7 @@ set(CSILK_BYPASS_SOURCES
     src/core/io/af_xdp_zerocopy.c
     src/core/io/dpdk_pmd.c
     src/core/io/io_perf_probe.c
+    src/core/io/udp.c
 )
 
 # ── HTTP/1 Module ─────────────────────────────────────────────────────────

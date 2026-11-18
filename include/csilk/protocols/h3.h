@@ -275,6 +275,20 @@ int csilk_h3_session_send_response(csilk_h3_session_t* session,
                                    size_t              body_len);
 
 /**
+ * @brief Send HTTP/3 body data on a stream (for streaming responses).
+ *
+ * @param session    HTTP/3 session.
+ * @param stream_id  Stream ID.
+ * @param body       Body data.
+ * @param body_len   Body length.
+ * @return 0 on success, -1 on error.
+ */
+int csilk_h3_session_send_body(csilk_h3_session_t* session,
+                               int64_t             stream_id,
+                               const uint8_t*      body,
+                               size_t              body_len);
+
+/**
  * @brief Create a QUIC-enabled SSL object for ngtcp2's OpenSSL crypto adapter.
  *
  * Configures TLS 1.3 only (RFC 9001 mandates TLS 1.3 for QUIC).
