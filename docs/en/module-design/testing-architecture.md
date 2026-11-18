@@ -1,6 +1,6 @@
 # Testing Architecture Deep Dive
 
-> **Version**: 1.1.0 | **Last updated**: 2026-11-16
+> **Version**: 1.1.1 | **Last updated**: 2026-11-18
 
 csilk features a 200+ test suite covering unit tests, integration tests, fuzzing, OOM fault injection, formal lifecycle stress suites, and sanitizer jobs (ASan, TSan, UBSan).
 

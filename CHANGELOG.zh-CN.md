@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-18
+
 ### 新增
 
 - **HTTP/3 (QUIC) 传输层**（`-DCSILK_ENABLE_HTTP3=ON`，默认 OFF）：基于 ngtcp2/nghttp3 的真实 QUIC 引擎，配合新的 `csilk_io_*` UDP 抽象（libuv inline + io_uring 双后端）。`csilk_h3_transport_new` 现在完成 TLS 1.3 + QUIC 握手并多路复用 HTTP/3 帧；ngtcp2 不可用时构建 fail-closed。
