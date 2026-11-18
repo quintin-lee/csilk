@@ -438,7 +438,7 @@ ai_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
             .temperature = config->temperature > 0 ? config->temperature : 0.7,
             .max_tokens = config->max_tokens > 0 ? config->max_tokens : 1024,
             .tools = tools,
-            .tool_count = ctx->wf->tool_count,
+            .tool_count = total_tools,
             .on_chunk = config->stream ? on_ai_stream : NULL,
             .user_data = config->stream ? &s_ctx : NULL};
         csilk_ai_chat_response_t res;
