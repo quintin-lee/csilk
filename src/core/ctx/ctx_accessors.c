@@ -412,6 +412,10 @@ csilk_ctx_acquire_async(csilk_ctx_t* c)
         c->request_seq = 1;
     }
     _csilk_ctx_async_ref_incr(c);
+    /* Pin the H2 stream ctx as well: a bare client ref does not keep a stream
+     * context alive across stream/connection close, which would leave the token
+     * pointing at a physically-recycled ctx (UAF in token_validate/release). */
+    _csilk_stream_ref(c);
     token.ctx = c;
     token.request_seq = c->request_seq;
     return token;
@@ -446,6 +450,7 @@ csilk_ctx_release_async(const csilk_async_token_t* token)
         return;
     }
     _csilk_ctx_async_ref_decr(token->ctx);
+    _csilk_stream_unref(token->ctx);
 }
 
 /**
