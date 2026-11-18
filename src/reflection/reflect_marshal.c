@@ -16,11 +16,14 @@
 #include <string.h>
 
 /* Forward declaration — struct_to_cjson_internal is mutually recursive with
- * serialize_scalar (nested struct fields trigger recursion). */
+ * serialize_scalar (nested struct fields trigger recursion). A depth
+ * argument bounds the recursion so a cyclic registered type cannot overflow
+ * the stack when its struct is serialized. */
 static void struct_to_cjson_internal(csilk_json_t*             obj,
                                      const void*               struct_ptr,
                                      const csilk_field_desc_t* descs,
-                                     size_t                    field_count);
+                                     size_t                    field_count,
+                                     int                       depth);
 
 /** @brief Internal: serialize a single struct field value to a cJSON node.
  *
@@ -34,8 +37,13 @@ static void struct_to_cjson_internal(csilk_json_t*             obj,
  * @return cJSON node (owned by caller), or csilk_json_null() on failure.
  * @note The caller must free the returned cJSON node with csilk_json_free(). */
 static csilk_json_t*
-serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
+serialize_scalar(const void* addr, const csilk_field_desc_t* desc, int depth)
 {
+    /* Bound recursion: a cyclic registered type would otherwise recurse until
+     * the stack overflows. 32 levels matches csilk_struct_free_reflect. */
+    if (depth >= 32) {
+        return csilk_json_null();
+    }
     /*
    * Dispatch on field type to produce the matching cJSON node:
    *
@@ -99,7 +107,7 @@ serialize_scalar(const void* addr, const csilk_field_desc_t* desc)
         if (!sub_obj) {
             return NULL;
         }
-        struct_to_cjson_internal(sub_obj, struct_addr, entry->fields, entry->count);
+        struct_to_cjson_internal(sub_obj, struct_addr, entry->fields, entry->count, depth + 1);
         return sub_obj;
     }
     }
@@ -122,8 +130,12 @@ static void
 struct_to_cjson_internal(csilk_json_t*             obj,
                          const void*               struct_ptr,
                          const csilk_field_desc_t* descs,
-                         size_t                    field_count)
+                         size_t                    field_count,
+                         int                       depth)
 {
+    if (depth >= 32) {
+        return;
+    }
     /*
    * Walk every field descriptor for this struct type.  For each field:
    *
@@ -150,11 +162,12 @@ struct_to_cjson_internal(csilk_json_t*             obj,
             }
             for (size_t j = 0; j < descs[i].array_length; j++) {
                 const char* item_addr = field_addr + (j * descs[i].size);
-                csilk_json_array_append(arr, serialize_scalar(item_addr, &descs[i]));
+                csilk_json_array_append(arr, serialize_scalar(item_addr, &descs[i], depth + 1));
             }
             csilk_json_add_object(obj, descs[i].json_key, arr);
         } else {
-            csilk_json_add_object(obj, descs[i].json_key, serialize_scalar(field_addr, &descs[i]));
+            csilk_json_add_object(
+                obj, descs[i].json_key, serialize_scalar(field_addr, &descs[i], depth + 1));
         }
     }
 }
@@ -188,7 +201,7 @@ csilk_json_marshal(const char* type_name, const void* ptr)
    */
     csilk_field_desc_t basic_desc;
     if (get_basic_type(type_name, &basic_desc)) {
-        csilk_json_t* node = serialize_scalar(ptr, &basic_desc);
+        csilk_json_t* node = serialize_scalar(ptr, &basic_desc, 0);
         if (!node) {
             return NULL;
         }
@@ -207,7 +220,7 @@ csilk_json_marshal(const char* type_name, const void* ptr)
         return NULL;
     }
 
-    struct_to_cjson_internal(root, ptr, entry->fields, entry->count);
+    struct_to_cjson_internal(root, ptr, entry->fields, entry->count, 0);
     char* out = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
     return out;
