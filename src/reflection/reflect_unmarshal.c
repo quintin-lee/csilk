@@ -16,11 +16,17 @@
 #include <string.h>
 
 /* Forward declaration — cjson_to_struct_internal is mutually recursive with
- * deserialize_scalar (nested struct fields trigger recursion). */
+ * deserialize_scalar (nested struct fields trigger recursion). A depth
+ * argument bounds the recursion so a cyclic registered type plus a deeply
+ * nested JSON document cannot overflow the stack. */
 static void cjson_to_struct_internal(const csilk_json_t*       obj,
                                      void*                     struct_ptr,
                                      const csilk_field_desc_t* descs,
-                                     size_t                    field_count);
+                                     size_t                    field_count,
+                                     int                       depth);
+
+static void
+deserialize_scalar(const csilk_json_t* item, void* addr, const csilk_field_desc_t* desc, int depth);
 
 /** @brief Internal: deserialize a cJSON value into a single struct field.
  *
@@ -36,8 +42,14 @@ static void cjson_to_struct_internal(const csilk_json_t*       obj,
  * @note For pointer string fields, any existing allocation is freed before
  *       the new value is assigned. */
 static void
-deserialize_scalar(const csilk_json_t* item, void* addr, const csilk_field_desc_t* desc)
+deserialize_scalar(const csilk_json_t* item, void* addr, const csilk_field_desc_t* desc, int depth)
 {
+    /* Bound recursion: a cyclic registered type plus a deeply nested JSON
+     * document would otherwise recurse until the stack overflows. 32 levels
+     * matches the cap used by csilk_struct_free_reflect. */
+    if (depth >= 32) {
+        return;
+    }
     /*
    * Skip null/missing JSON values — the field retains whatever it currently
    * holds (typically zero-initialized from calloc).
@@ -122,7 +134,8 @@ deserialize_scalar(const csilk_json_t* item, void* addr, const csilk_field_desc_
             if (struct_addr) {
                 const csilk_reflect_entry_t* entry = csilk_reflect_find(desc->nested_type_name);
                 if (entry) {
-                    cjson_to_struct_internal(item, struct_addr, entry->fields, entry->count);
+                    cjson_to_struct_internal(
+                        item, struct_addr, entry->fields, entry->count, depth + 1);
                 }
             }
         }
@@ -145,8 +158,12 @@ static void
 cjson_to_struct_internal(const csilk_json_t*       obj,
                          void*                     struct_ptr,
                          const csilk_field_desc_t* descs,
-                         size_t                    field_count)
+                         size_t                    field_count,
+                         int                       depth)
 {
+    if (depth >= 32) {
+        return;
+    }
     /*
    * Walk all field descriptors and match each against a JSON key in the
    * parsed object.  csilk_json_get() does a string-key
@@ -176,10 +193,10 @@ cjson_to_struct_internal(const csilk_json_t*       obj,
 
             for (size_t j = 0; j < limit; j++) {
                 char* item_addr = field_addr + (j * descs[i].size);
-                deserialize_scalar(csilk_json_array_get(item, j), item_addr, &descs[i]);
+                deserialize_scalar(csilk_json_array_get(item, j), item_addr, &descs[i], depth + 1);
             }
         } else {
-            deserialize_scalar(item, field_addr, &descs[i]);
+            deserialize_scalar(item, field_addr, &descs[i], depth + 1);
         }
     }
 }
@@ -218,7 +235,7 @@ csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
         if (!root) {
             return 0;
         }
-        deserialize_scalar(root, ptr, &basic_desc);
+        deserialize_scalar(root, ptr, &basic_desc, 0);
         csilk_json_free(root);
         return 1;
     }
@@ -233,7 +250,7 @@ csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
         return 0;
     }
 
-    cjson_to_struct_internal(root, ptr, entry->fields, entry->count);
+    cjson_to_struct_internal(root, ptr, entry->fields, entry->count, 0);
     csilk_json_free(root);
     return 1;
 }
