@@ -101,11 +101,18 @@ worker_routine(void* arg)
             entry.work_cb(entry.work);
         }
 
-        /* Push to the completion queue. */
+        /* Push to the completion queue. Reject (drop) the entry if the done
+         * ring is full so a lagging consumer can never be overwritten: tail
+         * and head are monotonic ints and the consumer only advances head,
+         * so an unbounded tail would eventually wrap past the head slot and
+         * clobber a not-yet-drained entry (lost after_cb / data race). */
         csilk_mutex_lock(&tp->done_mutex);
-        int done_idx = atomic_load(&tp->done_tail) % URING_TP_MAX_WORK;
-        tp->done[done_idx] = entry;
-        atomic_fetch_add(&tp->done_tail, 1);
+        int done_count = atomic_load(&tp->done_tail) - atomic_load(&tp->done_head);
+        if (done_count < URING_TP_MAX_WORK) {
+            int done_idx = atomic_load(&tp->done_tail) % URING_TP_MAX_WORK;
+            tp->done[done_idx] = entry;
+            atomic_fetch_add(&tp->done_tail, 1);
+        }
         csilk_mutex_unlock(&tp->done_mutex);
 
         /* Wake the event loop. */
@@ -162,8 +169,26 @@ uring_tp_init(int nthreads)
         return NULL;
     }
 
+    int created = 0;
     for (int i = 0; i < nthreads; i++) {
-        csilk_thread_create(&tp->threads[i], worker_routine, tp);
+        int rc = csilk_thread_create(&tp->threads[i], worker_routine, tp);
+        if (rc != 0) {
+            /* Thread creation failed (EAGAIN/OOM): join whatever we already
+             * spawned and tear down, returning NULL so callers do not enqueue
+             * work into a pool that has fewer workers than expected (which
+             * would stall the queue). */
+            for (int j = 0; j < created; j++) {
+                csilk_thread_join(&tp->threads[j]);
+            }
+            free(tp->threads);
+            close(tp->wakeup_fd);
+            csilk_mutex_destroy(&tp->queue_mutex);
+            csilk_cond_destroy(&tp->queue_cond);
+            csilk_mutex_destroy(&tp->done_mutex);
+            free(tp);
+            return NULL;
+        }
+        created = i + 1;
     }
 
     return tp;
