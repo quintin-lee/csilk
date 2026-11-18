@@ -863,9 +863,11 @@ csilk_hnsw_load(const char* filepath)
 
     /* Taint bounds: the header fields are read straight from a file that may
      * be attacker-controlled.  Reject out-of-range values before they drive
-     * any allocation (dim / node_count / m) or array index (level, doc_len). */
+     * any allocation (dim / node_count / m) or array index (level, doc_len).
+     * enter_node_id indexes nodes[enter_node_id] in search; it must be a valid
+     * slot within [0, node_count) or later traversal dereferences OOB. */
     if (dim == 0 || dim > HNSW_MAX_DIM || m == 0 || m > HNSW_MAX_M || node_count > HNSW_MAX_NODES ||
-        (uint32_t)max_level > HNSW_MAX_LEVEL) {
+        (uint32_t)max_level > HNSW_MAX_LEVEL || enter_id >= node_count) {
         fclose(fp);
         return NULL;
     }
@@ -916,8 +918,11 @@ csilk_hnsw_load(const char* filepath)
 
         /* Per-node taint bounds: level indexes node->neighbors[level]; a
          * negative or oversized level would corrupt the neighbor array.  doc_len
-         * sizes the doc_id allocation; an unbounded value is a DoS vector. */
-        if (level < 0 || (uint32_t)level > HNSW_MAX_LEVEL || doc_len > HNSW_MAX_DOC_LEN) {
+         * sizes the doc_id allocation; an unbounded value is a DoS vector.
+         * id must equal the array slot i: search traverses by node->id as an
+         * index into nodes[], so a mismatch corrupts graph navigation. */
+        if (level < 0 || (uint32_t)level > HNSW_MAX_LEVEL || doc_len > HNSW_MAX_DOC_LEN ||
+            id != i) {
             csilk_hnsw_index_free(index);
             fclose(fp);
             return NULL;
