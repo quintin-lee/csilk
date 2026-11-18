@@ -1089,6 +1089,12 @@ csilk_raft_node_listen(csilk_raft_node_t* node, const char* bind_addr)
     }
 
     csilk_mutex_lock(&node->mutex);
+    /* Re-binding closes the old listen fd. If the transport thread is running
+     * and still holds a stale copy of that fd outside the lock, closing it
+     * underneath would let it poll/recv/send on a number that the OS may
+     * reuse. Stop the transport before touching the fd, matching the teardown
+     * order used by csilk_raft_node_stop. */
+    int rebind_transport_running = node->transport_running;
     if (node->listen_fd >= 0) {
         close(node->listen_fd);
     }
@@ -1096,6 +1102,26 @@ csilk_raft_node_listen(csilk_raft_node_t* node, const char* bind_addr)
     node->listen_port = ntohs(bound.sin_port);
     snprintf(node->listen_addr, sizeof(node->listen_addr), "%s", bind_addr);
     csilk_mutex_unlock(&node->mutex);
+
+    if (rebind_transport_running) {
+        csilk_mutex_lock(&node->mutex);
+        node->transport_stop = 1;
+        node->started = 0;
+        csilk_cond_broadcast(&node->commit_cond);
+        csilk_mutex_unlock(&node->mutex);
+        (void)csilk_thread_join(&node->transport_thread);
+
+        /* Restart the transport against the freshly-bound fd. */
+        csilk_mutex_lock(&node->mutex);
+        node->transport_running = 0;
+        node->transport_stop = 0;
+        if (node->listen_fd >= 0 && !node->transport_running) {
+            if (csilk_thread_create(&node->transport_thread, raft_transport_loop, node) == 0) {
+                node->transport_running = 1;
+            }
+        }
+        csilk_mutex_unlock(&node->mutex);
+    }
     return 0;
 }
 
