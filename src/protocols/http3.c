@@ -643,7 +643,6 @@ csilk_h3_transport_new(int port, const char* cert_pem, const char* key_pem)
     }
 
     t->conn_count = 0;
-    t->udp_fd = -1;
 
 #ifdef CSILK_HAS_NGTCP2
     t->udp_fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
@@ -708,6 +707,7 @@ csilk_h3_transport_accept(csilk_h3_transport_t* t, void** out_conn)
     }
 
     struct csilk_h3_conn_s* first_new = NULL;
+    int                     rc = 0;
 
 #ifdef CSILK_HAS_NGTCP2
     if (t->udp_fd < 0) {
@@ -716,7 +716,6 @@ csilk_h3_transport_accept(csilk_h3_transport_t* t, void** out_conn)
 
     struct sockaddr_storage from;
     socklen_t               fromlen;
-    int                     rc = 0;
 
     while (1) {
         fromlen = sizeof(from);
@@ -946,6 +945,7 @@ csilk_h3_transport_destroy(csilk_h3_transport_t* t)
  * TLS setup helper
  * =================================================================== */
 
+#ifdef CSILK_HAS_NGTCP2
 static int
 _h3_init_ssl_ctx(csilk_h3_transport_t* t, const char* cert_pem, const char* key_pem)
 {
@@ -980,6 +980,7 @@ _h3_init_ssl_ctx(csilk_h3_transport_t* t, const char* cert_pem, const char* key_
     BIO_free_all(key_bio);
     return rc;
 }
+#endif /* CSILK_HAS_NGTCP2 */
 
 /**
  * @brief Create a QUIC-enabled SSL object for ngtcp2's OpenSSL crypto adapter.
@@ -994,6 +995,7 @@ _h3_init_ssl_ctx(csilk_h3_transport_t* t, const char* cert_pem, const char* key_
  * @param ssl_ctx  TLS context (from csilk_h3_transport_new).
  * @return A new SSL* configured for QUIC, or NULL on failure.
  */
+#ifdef CSILK_HAS_NGTCP2
 SSL*
 csilk_h3_quic_tls_new(SSL_CTX* ssl_ctx)
 {
@@ -1012,6 +1014,7 @@ csilk_h3_quic_tls_new(SSL_CTX* ssl_ctx)
 
     return ssl;
 }
+#endif /* CSILK_HAS_NGTCP2 */
 
 /* ===================================================================
  * vtable registration (matches csilk_quic_transport_t from server.h)
