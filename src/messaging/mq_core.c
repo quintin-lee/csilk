@@ -220,6 +220,9 @@ on_mq_close(csilk_io_handle_t* handle)
         csilk_io_fs_t close_req;
         csilk_io_fs_close(handle->loop, &close_req, mq->wal_fd, NULL);
         csilk_io_fs_req_cleanup(&close_req);
+        /* Mark the slot closed so any stale publisher that still holds this
+         * pointer cannot enqueue a WAL write through the (now-closed) fd. */
+        mq->wal_fd = -1;
     }
     if (mq->wal_path) {
         free(mq->wal_path);
