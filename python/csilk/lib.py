@@ -37,6 +37,13 @@ class CsilkCircuitBreakerConfig(ctypes.Structure):
     ]
 CsilkCircuitBreakerConfigPtr = ctypes.POINTER(CsilkCircuitBreakerConfig)
 
+class CsilkAsyncToken(ctypes.Structure):
+    _fields_ = [
+        ("ctx", CsilkCtxPtr),
+        ("request_seq", ctypes.c_uint64),
+    ]
+CsilkAsyncTokenPtr = ctypes.POINTER(CsilkAsyncToken)
+
 class CsilkSlidingLimiter(ctypes.Structure):
     pass
 CsilkSlidingLimiterPtr = ctypes.POINTER(CsilkSlidingLimiter)
@@ -543,6 +550,15 @@ def get_bindings():
 
     lib.csilk_ctx_set_async.restype = None
     lib.csilk_ctx_set_async.argtypes = [CsilkCtxPtr, ctypes.c_int]
+
+    lib.csilk_ctx_acquire_async.restype = CsilkAsyncToken
+    lib.csilk_ctx_acquire_async.argtypes = [CsilkCtxPtr]
+
+    lib.csilk_ctx_release_async.restype = None
+    lib.csilk_ctx_release_async.argtypes = [ctypes.POINTER(CsilkAsyncToken)]
+
+    lib.csilk_async_token_validate.restype = ctypes.c_int
+    lib.csilk_async_token_validate.argtypes = [ctypes.POINTER(CsilkAsyncToken)]
 
     lib.csilk_is_async.restype = ctypes.c_int
     lib.csilk_is_async.argtypes = [CsilkCtxPtr]

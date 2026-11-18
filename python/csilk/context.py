@@ -499,21 +499,30 @@ class Context:
 
         self.is_async = True
         self._lib.csilk_ctx_set_async(self._ctx, 1)
+        # Hold a C async lease (client ref + H2 stream ref) for the lifetime of
+        # the coroutine so the underlying context/connection cannot be recycled
+        # while a dispatched response callback is still pending. Released once
+        # the dispatch callback has run (see _send / _send_error).
+        _token = self._lib.csilk_ctx_acquire_async(self._ctx)
+        _token_ptr = ctypes.pointer(_token)
 
         async def _runner():
             try:
                 response_data = await coro(self)
 
                 def _send():
-                    if isinstance(response_data, dict):
-                        import json
-                        self.set_header("Content-Type", "application/json")
-                        self.status_code = 200
-                        self.response_write(json.dumps(response_data))
-                    elif response_data is not None:
-                        self.status_code = 200
-                        self.response_write(str(response_data))
-                    self.response_end()
+                    try:
+                        if isinstance(response_data, dict):
+                            import json
+                            self.set_header("Content-Type", "application/json")
+                            self.status_code = 200
+                            self.response_write(json.dumps(response_data))
+                        elif response_data is not None:
+                            self.status_code = 200
+                            self.response_write(str(response_data))
+                        self.response_end()
+                    finally:
+                        self._lib.csilk_ctx_release_async(_token_ptr)
 
                 self.dispatch(_send)
             except Exception as e:
@@ -522,10 +531,13 @@ class Context:
                 error_msg = str(e)
 
                 def _send_error():
-                    self.set_header("Content-Type", "text/plain")
-                    self.status_code = 500
-                    self.response_write(f"Internal Server Error: {error_msg}")
-                    self.response_end()
+                    try:
+                        self.set_header("Content-Type", "text/plain")
+                        self.status_code = 500
+                        self.response_write(f"Internal Server Error: {error_msg}")
+                        self.response_end()
+                    finally:
+                        self._lib.csilk_ctx_release_async(_token_ptr)
 
                 self.dispatch(_send_error)
 
