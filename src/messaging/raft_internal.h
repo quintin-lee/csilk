@@ -199,6 +199,12 @@ struct csilk_raft_node_s {
     csilk_raft_apply_cb_t          apply_cb;
     csilk_raft_snapshot_apply_cb_t snapshot_apply_cb;
     void*                          apply_user_data;
+
+    /* Flag set when apply_cb/snapshot_apply_cb must be invoked after the
+     * node->mutex is released (to avoid blocking the consensus state
+     * machine on slow user I/O inside the lock). */
+    int apply_cb_pending;
+    int snapshot_apply_cb_pending;
 };
 
 /* --- Shared WAL durability helpers (wal_common.c) --- */
@@ -272,6 +278,7 @@ int _raft_rpc_decode_is_resp(const uint8_t* buf, size_t len, csilk_raft_is_resp_
 
 /* --- Raft Consensus step/dispatch (raft_consensus.c) --- */
 void _raft_apply_committed_locked(csilk_raft_node_t* node);
+void _raft_flush_apply_callbacks(csilk_raft_node_t* node);
 int  _raft_handle_rpc_packet(csilk_raft_node_t*        node,
                              const uint8_t*            pkt,
                              size_t                    pkt_len,

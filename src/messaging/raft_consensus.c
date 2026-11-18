@@ -235,7 +235,63 @@ _raft_apply_committed_locked(csilk_raft_node_t* node)
         }
         node->last_applied = next_idx;
         if (node->apply_cb) {
-            node->apply_cb(ent->index, ent->term, ent->data, ent->len, node->apply_user_data);
+            /* Defer the user callback: record the pending flag so the
+             * caller can invoke apply_cb AFTER releasing node->mutex.
+             * This prevents a slow user I/O from blocking the entire
+             * consensus state machine (election, log replication, heartbeat). */
+            node->apply_cb_pending = 1;
+            /* Store the entry data pointer indirectly via last_applied so
+             * the deferred call can re-read it from the log. */
+        }
+    }
+}
+
+/**
+ * @brief Invoke any pending apply_cb / snapshot_apply_cb outside the lock.
+ * Must be called after csilk_mutex_unlock(&node->mutex).
+ * Safe to call unconditionally; no-ops if nothing is pending.
+ */
+void
+_raft_flush_apply_callbacks(csilk_raft_node_t* node)
+{
+    if (!node) {
+        return;
+    }
+
+    /* Deferred log-entry apply callback */
+    if (node->apply_cb_pending) {
+        csilk_mutex_lock(&node->mutex);
+        uint64_t                      idx = node->last_applied;
+        uint64_t                      term = 0;
+        uint8_t*                      data = NULL;
+        size_t                        len = 0;
+        const csilk_raft_log_entry_t* ent = _raft_log_get_locked(node, idx);
+        if (ent) {
+            term = ent->term;
+            data = (uint8_t*)ent->data;
+            len = ent->len;
+        }
+        node->apply_cb_pending = 0;
+        csilk_mutex_unlock(&node->mutex);
+
+        if (data && node->apply_cb) {
+            node->apply_cb(idx, term, data, len, node->apply_user_data);
+        }
+    }
+
+    /* Deferred snapshot apply callback */
+    if (node->snapshot_apply_cb_pending) {
+        csilk_mutex_lock(&node->mutex);
+        uint64_t snap_idx = node->snapshot_last_index;
+        uint64_t snap_term = node->snapshot_last_term;
+        uint8_t* snap_data = (uint8_t*)node->snapshot_data;
+        size_t   snap_len = node->snapshot_len;
+        node->snapshot_apply_cb_pending = 0;
+        csilk_mutex_unlock(&node->mutex);
+
+        if (snap_data && node->snapshot_apply_cb) {
+            node->snapshot_apply_cb(
+                snap_idx, snap_term, snap_data, snap_len, node->apply_user_data);
         }
     }
 }
@@ -814,11 +870,9 @@ raft_handle_is_req_locked(csilk_raft_node_t* node,
         } else {
             node->last_applied = node->snap_rx_index;
             if (node->snapshot_apply_cb && node->snapshot_data) {
-                node->snapshot_apply_cb(node->snapshot_last_index,
-                                        node->snapshot_last_term,
-                                        node->snapshot_data,
-                                        node->snapshot_len,
-                                        node->apply_user_data);
+                /* Defer the snapshot callback: record the pending flag so the
+                 * caller can invoke snapshot_apply_cb AFTER releasing mutex. */
+                node->snapshot_apply_cb_pending = 1;
             }
             csilk_cond_broadcast(&node->commit_cond);
         }
@@ -932,6 +986,7 @@ _raft_handle_rpc_packet(csilk_raft_node_t*        node,
         break;
     }
     csilk_mutex_unlock(&node->mutex);
+    _raft_flush_apply_callbacks(node);
 
     if (out_reply_len) {
         *out_reply_len = local_reply_len;
@@ -1264,6 +1319,7 @@ csilk_raft_replicate_wait(csilk_raft_node_t* node,
             *out_index = target_idx;
         }
         csilk_mutex_unlock(&node->mutex);
+        _raft_flush_apply_callbacks(node);
         return 0;
     }
 
@@ -1291,6 +1347,7 @@ csilk_raft_replicate_wait(csilk_raft_node_t* node,
         *out_index = target_idx;
     }
     csilk_mutex_unlock(&node->mutex);
+    _raft_flush_apply_callbacks(node);
     return ok;
 }
 
@@ -1322,14 +1379,11 @@ csilk_raft_replay_committed(csilk_raft_node_t* node)
         node->last_applied < node->snapshot_last_index) {
         node->last_applied = node->snapshot_last_index;
         if (node->snapshot_apply_cb) {
-            node->snapshot_apply_cb(node->snapshot_last_index,
-                                    node->snapshot_last_term,
-                                    node->snapshot_data,
-                                    node->snapshot_len,
-                                    node->apply_user_data);
+            node->snapshot_apply_cb_pending = 1;
         }
     }
     _raft_apply_committed_locked(node);
     csilk_mutex_unlock(&node->mutex);
+    _raft_flush_apply_callbacks(node);
     return 0;
 }
