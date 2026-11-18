@@ -7,6 +7,32 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **HTTP/3 (QUIC) 传输层**（`-DCSILK_ENABLE_HTTP3=ON`，默认 OFF）：基于 ngtcp2/nghttp3 的真实 QUIC 引擎，配合新的 `csilk_io_*` UDP 抽象（libuv inline + io_uring 双后端）。`csilk_h3_transport_new` 现在完成 TLS 1.3 + QUIC 握手并多路复用 HTTP/3 帧；ngtcp2 不可用时构建 fail-closed。
+
+### 变更
+
+- **JWT HS256 签名改为常量时间比较** —— 中间件不再从签名比较泄露时序侧信道。
+- **Secret 提供器调用移出全局锁**，并引入 60 s 有界结果缓存：慢速 Vault/HTTP 提供器不再阻塞其他读取 secret 的线程。
+- **滑动窗口限流器改用 64 位饱和计数器**，消除高 QPS 下 32 位溢出导致的预算静默重置。
+- **熔断器 HALF_OPEN 状态仅允许单个探针通过**，防止对抖动感知的后端形成恢复请求风暴。
+- **会话存储串行化 Redis I/O 并外溢 I/O 错误**，不再静默丢弃更新。
+
+### 修复
+
+- **Redis 存储驱动**（`src/drivers/db/redis_storage.c`）：用户可控 key/value 现在作为 RESP 参数传递，而非拼接进格式串，关闭了值含 `%` 或分隔符时的命令注入 / 越界读。
+- **数据库连接池销毁**（`src/drivers/db/db.c`）：通过捕获的驱动指针释放连接池，消除驱动 `disconnect` 改写自身 vtable 时可能触发的 use-after-free。
+- **MongoDB 查询 OOM 路径**（`src/drivers/db/mongodb.c`）：内存不足时的分配被检测并干净回滚，不再写入 NULL 指针。
+- **HNSW 索引加载**（`src/drivers/vector/vector_hnsw.c`）：构造的 `.hnsw` 文件在入口点或节点 id 越界时被拒绝，避免搜索时越界读。
+- **数据库事务作用域**（`src/drivers/db/tx_scope.c`）：savepoint 名校验为 SQL 安全标识符，阻断 SQL 注入；超长或非法名快速失败并保证作用域处于已知（未激活）状态。
+- **MVCC 缓存宽限窗口拓宽至 +3** 并锁定 SPA 回退，消除两条数据竞争 / use-after-free 路径。
+- **多项 sanitizer 发现**（向量测试泄漏、secret 双重解锁、OTLP 栈局部 trace id、COW 快照 use-after-free、会话 `max` 数据竞争）。
+
+### 测试
+
+- H3-ON/OFF 全量 266/266 通过；CI 矩阵（ubuntu/macos × Debug/Release + ASAN/TSAN/Fuzz/ARM64）全绿。
+
 ## [1.1.0] - 2026-11-16
 
 ## [1.0.0] - 2026-11-15

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **HTTP/3 (QUIC) transport layer** (`-DCSILK_ENABLE_HTTP3=ON`, default OFF): a real ngtcp2/nghttp3 QUIC engine with a new `csilk_io_*` UDP abstraction (libuv inline + io_uring backends). `csilk_h3_transport_new` now does TLS 1.3 + QUIC handshake and streams HTTP/3 frames; the build fails closed when ngtcp2 is unavailable.
+
+### Changed
+
+- **JWT HS256 signatures are compared in constant time** — the middleware no longer leaks a timing side-channel from the signature comparison.
+- **Secret provider invocations now run outside the global lock** with a bounded 60 s result cache, so a slow Vault/HTTP provider no longer stalls every other thread that reads a secret.
+- **Sliding rate limiter uses 64-bit saturated counters**, removing the 32-bit wraparound that silently reset budgets under high QPS.
+- **Circuit breaker HALF_OPEN state admits a single probe**, preventing a storm of recovery attempts from flooding a flapping dependency.
+- **Session store serializes Redis I/O and surfaces I/O errors** instead of silently dropping updates.
+
+### Fixed
+
+- **Redis storage driver** (`src/drivers/db/redis_storage.c`): user-supplied keys/values are now passed as RESP arguments instead of being interpolated into a format string, closing a command-injection / out-of-bounds read when a value contains `%` or a delimiter.
+- **DB connection-pool teardown** (`src/drivers/db/db.c`): the pool is freed through a captured driver pointer, removing a use-after-free that could fire when a driver’s `disconnect` mutated its own vtable.
+- **MongoDB query OOM path** (`src/drivers/db/mongodb.c`): out-of-memory allocations are now detected and cleanly unwound instead of writing through a NULL pointer.
+- **HNSW index loading** (`src/drivers/vector/vector_hnsw.c`): crafted `.hnsw` files are rejected when the entry point or a node id is out of range, preventing out-of-bounds reads during search.
+- **DB transaction scopes** (`src/drivers/db/tx_scope.c`): savepoint names are validated as SQL-safe identifiers, blocking SQL injection; oversized or invalid names fail fast and leave the scope in a known (inactive) state.
+- **MVCC cache grace window widened to +3** and the SPA fallback is now locked, removing two data-race / use-after-free paths.
+- **Several sanitizer findings** (vector test leak, secret double-unlock, OTLP stack-local trace id, COW snapshot use-after-free, session `max` data race).
+
+### Tests
+
+- Full suite 266/266 green across H3-ON/OFF; CI matrix (ubuntu/macos × Debug/Release + ASAN/TSAN/Fuzz/ARM64) passing.
+
 ## [1.1.0] - 2026-11-16
 
 ### Added
