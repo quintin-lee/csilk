@@ -68,21 +68,23 @@ struct csilk_h3_conn_s {
     ngtcp2_crypto_cipher_ctx initial_rx_hp;
     uint8_t                  initial_tx_iv[12];
     uint8_t                  initial_rx_iv[12];
+    /* DCID bytes (max 20) + length; used by the ngtcp2 crypto callbacks
+     * to derive packet-protection keys. Only meaningful under ngtcp2. */
+    uint8_t dcid_data[NGTCP2_MAX_CIDLEN];
+    size_t  dcid_len;
 #endif
     struct csilk_h3_stream_s streams[CSILK_H3_MAX_STREAMS];
     int                      stream_count;
-    void*                    client;                       /* csilk_client_t* (owner worker) */
+    void*                    client; /* csilk_client_t* (owner worker) */
     int                      is_server;
-    uint8_t                  dcid_data[NGTCP2_MAX_CIDLEN]; /* DCID bytes (max 20) */
-    size_t                   dcid_len;
     /* Remote address for UDP reply. */
     struct sockaddr_storage remote;
     socklen_t               remote_len;
     /* Connection state: 0=new, 1=handshake, 2=established, 3=closed. */
     int state;
+#ifdef CSILK_HAS_NGTCP2
     /* Per-connection scratch buffer for response NVs (replaces the
      * file-scope static in h3_session.c). */
-#ifdef CSILK_HAS_NGTCP2
     nghttp3_nv resp_nv[64];
     int        resp_nv_alloc;
 #endif
