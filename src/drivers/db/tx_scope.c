@@ -14,6 +14,39 @@
 
 static atomic_uint_fast64_t g_csilk_sp_seq = 0;
 
+/* Maximum savepoint/transaction name length accepted by the SQL layer.  The
+ * name is concatenated into SAVEPOINT/RELEASE/ROLLBACK statements; a longer
+ * name risks truncation (silent collision) and, if unvalidated, SQL-injection
+ * via embedded delimiters/quotes. */
+#define CSILK_TX_NAME_MAX 32
+
+/** @brief Validate that `name` is a SQL-safe identifier.
+ *
+ * Only `[A-Za-z0-9_]` is permitted, bounded to CSILK_TX_NAME_MAX.  This blocks
+ * any delimiter/quote injection into the SAVEPOINT/RELEASE/ROLLBACK SQL that
+ * the scope guard builds by string concatenation.
+ *
+ * @return 0 if valid, -1 otherwise. */
+static int
+_csilk_tx_name_valid(const char* name)
+{
+    if (!name || !name[0]) {
+        return -1;
+    }
+    size_t len = strlen(name);
+    if (len == 0 || len >= CSILK_TX_NAME_MAX) {
+        return -1;
+    }
+    for (size_t i = 0; i < len; i++) {
+        char ch = name[i];
+        if ((ch < '0' || ch > '9') && (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') &&
+            ch != '_') {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int
 csilk_db_in_transaction(csilk_db_pool_t* pool)
 {
@@ -30,6 +63,12 @@ int
 csilk_db_tx_scope_begin(csilk_db_pool_t* pool, const char* name, csilk_db_tx_scope_t* scope)
 {
     if (!pool || !scope || !name || !name[0]) {
+        return -1;
+    }
+    /* Reject names that are not safe SQL identifiers: this guards the
+     * SAVEPOINT/RELEASE/ROLLBACK concatenation against injection and bounds
+     * the length so scope->name can never be truncated. */
+    if (_csilk_tx_name_valid(name) != 0) {
         return -1;
     }
     memset(scope, 0, sizeof(*scope));
