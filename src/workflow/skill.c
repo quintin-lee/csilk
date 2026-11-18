@@ -1163,7 +1163,13 @@ csilk_skill_exec_local(
             /* Already absolute. */
             snprintf(abspath, sizeof(abspath), "%s", argv[0]);
         } else {
-            /* Relative to the exec root — child is already chdir'd here. */
+            /* Relative to the exec root — child is already chdir'd here.
+             * Reject paths whose joined form would not fit: a silent
+             * truncation here would make execve target the wrong file. */
+            size_t joined = strlen(sk->exec_cfg.root) + 1 + strlen(argv[0]);
+            if (joined >= sizeof(abspath)) {
+                _exit(126);
+            }
             snprintf(abspath, sizeof(abspath), "%s/%s", sk->exec_cfg.root, argv[0]);
         }
         execve(abspath, argv, (char* const*)envp);
