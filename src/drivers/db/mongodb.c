@@ -269,11 +269,14 @@ mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
         if (row->values) {
             for (int i = 0; i < row->count; i++) {
                 bson_iter_t iter;
-                if (bson_iter_init_find(&iter, doc, result->column_names[i])) {
-                    row->values[i] = bson_val_to_str(&iter);
-                } else {
-                    row->values[i] = strdup("");
+                char*       v = bson_iter_init_find(&iter, doc, result->column_names[i])
+                                    ? bson_val_to_str(&iter)
+                                    : strdup("");
+                if (!v) {
+                    oom = true;
+                    break;
                 }
+                row->values[i] = v;
             }
         } else {
             oom = true;
