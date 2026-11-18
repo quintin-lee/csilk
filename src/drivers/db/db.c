@@ -612,11 +612,15 @@ csilk_db_pool_free(csilk_db_pool_t* pool)
     CSILK_LOG_D("Freeing database pool (%d conn) for driver '%s'",
                 n,
                 pool->driver ? pool->driver->name : "unknown");
-    if (pool->driver && pool->driver->disconnect) {
+    /* Capture the driver vtable pointer before the loop: a driver's disconnect
+     * may NULL out pool->driver (or the vtable) as part of teardown, and the
+     * next iteration must not re-read a stale/dangling vtable pointer. */
+    const csilk_db_driver_t* drv = pool->driver;
+    if (drv && drv->disconnect) {
         for (int i = 0; i < n; i++) {
             if (pool->connections[i]) {
                 pool->connection = pool->connections[i];
-                pool->driver->disconnect(pool);
+                drv->disconnect(pool);
             }
         }
     }
