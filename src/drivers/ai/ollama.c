@@ -495,6 +495,14 @@ ollama_embeddings(void*                           state_ptr,
             dim = csilk_json_array_size(embedding);
             if (res->dimension == 0) {
                 res->dimension = dim;
+            } else if (dim != res->dimension) {
+                /* Reject responses whose vector dimension drifts from the first:
+                 * values are sized for res->dimension, filling with a larger dim
+                 * would overflow the allocation. */
+                csilk_json_free(resp);
+                curl_easy_cleanup(curl);
+                res->error_message = strdup("embedding dimension mismatch");
+                return -1;
             }
             size_t new_count = res->count + 1;
             float* new_values = realloc(res->values, sizeof(float) * new_count * res->dimension);
