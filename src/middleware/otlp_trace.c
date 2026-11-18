@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
 
 #include <openssl/rand.h>
 #include "csilk/core/internal.h"
@@ -176,8 +177,24 @@ csilk_trace_middleware(csilk_ctx_t* c)
     char        parent_span_id[17] = {0};
 
     if (tp && strlen(tp) >= 55 && tp[0] == '0' && tp[1] == '0' && tp[2] == '-') {
-        memcpy(trace_id_buf, tp + 3, 32);
-        memcpy(parent_span_id, tp + 36, 16);
+        /* Reject non-hex trace/span ids: the 32/16 byte ids are later emitted
+         * verbatim into response headers (X-Trace-Id, traceparent) and into the
+         * APM spans JSON, so a hostile traceparent carrying CRLF or other
+         * control bytes would inject headers / forge JSON. Fall back to random
+         * ids unless every byte is a hex digit. */
+        int hex_ok = 1;
+        for (int i = 0; i < 32; i++) {
+            hex_ok = hex_ok && isxdigit((unsigned char)tp[3 + i]);
+        }
+        for (int i = 0; i < 16 && hex_ok; i++) {
+            hex_ok = hex_ok && isxdigit((unsigned char)tp[36 + i]);
+        }
+        if (hex_ok) {
+            memcpy(trace_id_buf, tp + 3, 32);
+            memcpy(parent_span_id, tp + 36, 16);
+        } else {
+            _csilk_generate_hex_id(trace_id_buf, 16);
+        }
     } else {
         _csilk_generate_hex_id(trace_id_buf, 16);
     }
