@@ -127,6 +127,24 @@ mongodb_free_result(csilk_db_result_t* result)
     result->column_count = 0;
 }
 
+/** @brief Free a single row (and its value strings) not yet linked into a result.
+ * Used on the OOM path in mongodb_query where a row has been fully built but
+ * has not yet been appended to result->rows. */
+static void
+mongodb_free_result_row(csilk_db_row_t* row)
+{
+    if (!row) {
+        return;
+    }
+    if (row->values) {
+        for (int j = 0; j < row->count; j++) {
+            free(row->values[j]);
+        }
+        free(row->values);
+    }
+    free(row);
+}
+
 /** @brief Helper: Convert a BSON value to a string representation. */
 static char*
 bson_val_to_str(const bson_iter_t* iter)
@@ -214,34 +232,80 @@ mongodb_query(csilk_db_pool_t* pool, const char* sql, csilk_db_result_t* result)
     }
 
     const bson_t* doc;
+    bool          oom = false;
     while (mongoc_cursor_next(cursor, &doc)) {
         if (result->column_count == 0) {
             // Use first document to define columns
             bson_iter_t iter;
             if (bson_iter_init(&iter, doc)) {
                 while (bson_iter_next(&iter)) {
-                    result->column_names =
+                    char** new_names =
                         realloc(result->column_names, (result->column_count + 1) * sizeof(char*));
-                    result->column_names[result->column_count++] = strdup(bson_iter_key(&iter));
+                    if (!new_names) {
+                        oom = true;
+                        break;
+                    }
+                    result->column_names = new_names;
+                    char* col_name = strdup(bson_iter_key(&iter));
+                    if (!col_name) {
+                        oom = true;
+                        break;
+                    }
+                    result->column_names[result->column_count++] = col_name;
                 }
             }
         }
-
-        csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
-        row->count = result->column_count;
-        row->values = calloc(row->count, sizeof(char*));
-
-        for (int i = 0; i < row->count; i++) {
-            bson_iter_t iter;
-            if (bson_iter_init_find(&iter, doc, result->column_names[i])) {
-                row->values[i] = bson_val_to_str(&iter);
-            } else {
-                row->values[i] = strdup("");
-            }
+        if (oom) {
+            break;
         }
 
-        result->rows = realloc(result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
+        csilk_db_row_t* row = calloc(1, sizeof(csilk_db_row_t));
+        if (!row) {
+            oom = true;
+            break;
+        }
+        row->count = result->column_count;
+        row->values = calloc(row->count, sizeof(char*));
+        if (row->values) {
+            for (int i = 0; i < row->count; i++) {
+                bson_iter_t iter;
+                if (bson_iter_init_find(&iter, doc, result->column_names[i])) {
+                    row->values[i] = bson_val_to_str(&iter);
+                } else {
+                    row->values[i] = strdup("");
+                }
+            }
+        } else {
+            oom = true;
+        }
+
+        if (oom) {
+            mongodb_free_result_row(row); /* free row + its values */
+            break;
+        }
+
+        csilk_db_row_t** new_rows =
+            realloc(result->rows, (result->row_count + 1) * sizeof(csilk_db_row_t*));
+        if (!new_rows) {
+            oom = true;
+            mongodb_free_result_row(row);
+            break;
+        }
+        result->rows = new_rows;
         result->rows[result->row_count++] = row;
+    }
+
+    if (oom) {
+        CSILK_LOG_E("csilk_db_mongodb: out of memory building query result");
+        mongoc_cursor_destroy(cursor);
+        if (cmd) {
+            bson_destroy(cmd);
+        }
+        if (coll) {
+            mongoc_collection_destroy(coll);
+        }
+        mongodb_free_result(result);
+        return -1;
     }
 
     if (mongoc_cursor_error(cursor, &error)) {
