@@ -8,6 +8,7 @@
 
 #include "csilk/app/workflow.h"
 #include "csilk/core/config/config.h"
+#include "csilk/core/ctx/context.h"
 #include "csilk/core/middleware.h"
 #include "csilk/core/types.h"
 #include "csilk/drivers/ai.h"
@@ -38,6 +39,11 @@ static const abi_field_desc_t f_circuit_breaker_config[] = {
     ABI_FIELD(csilk_circuit_breaker_config_t, failure_threshold),
     ABI_FIELD(csilk_circuit_breaker_config_t, recovery_timeout_ms),
     ABI_FIELD(csilk_circuit_breaker_config_t, half_open_success_threshold),
+};
+
+static const abi_field_desc_t f_async_token[] = {
+    ABI_FIELD(csilk_async_token_t, ctx),
+    ABI_FIELD(csilk_async_token_t, request_seq),
 };
 
 static const abi_field_desc_t f_cors_config[] = {
@@ -258,6 +264,7 @@ static const abi_field_desc_t f_server_config[] = {
 
 static const abi_struct_desc_t g_abi_structs[] = {
     ABI_STRUCT(CsilkCircuitBreakerConfig, csilk_circuit_breaker_config_t, f_circuit_breaker_config),
+    ABI_STRUCT(CsilkAsyncToken, csilk_async_token_t, f_async_token),
     ABI_STRUCT(CsilkCorsConfig, csilk_cors_config_t, f_cors_config),
     ABI_STRUCT(CsilkData, csilk_data_t, f_data),
     ABI_STRUCT(CsilkAiMeta, csilk_ai_meta_t, f_ai_meta),
@@ -311,7 +318,7 @@ static void
 verify_c_invariants(void)
 {
     size_t n = sizeof(g_abi_structs) / sizeof(g_abi_structs[0]);
-    assert(n == 23);
+    assert(n == 24);
     for (size_t i = 0; i < n; i++) {
         const abi_struct_desc_t* s = &g_abi_structs[i];
         assert(s->size > 0);
