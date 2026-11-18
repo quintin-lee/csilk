@@ -65,13 +65,15 @@ csilk_db_tx_scope_begin(csilk_db_pool_t* pool, const char* name, csilk_db_tx_sco
     if (!pool || !scope || !name || !name[0]) {
         return -1;
     }
+    /* Zero-init first so every rejection path below leaves the scope in a
+     * known state (active == false) rather than leaving stack garbage. */
+    memset(scope, 0, sizeof(*scope));
     /* Reject names that are not safe SQL identifiers: this guards the
      * SAVEPOINT/RELEASE/ROLLBACK concatenation against injection and bounds
      * the length so scope->name can never be truncated. */
     if (_csilk_tx_name_valid(name) != 0) {
         return -1;
     }
-    memset(scope, 0, sizeof(*scope));
 
     int in_tx = csilk_db_in_transaction(pool);
     if (in_tx > 0) {
