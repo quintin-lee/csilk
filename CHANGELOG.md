@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-18
+
 ### Added
 
 - **HTTP/3 (QUIC) transport layer** (`-DCSILK_ENABLE_HTTP3=ON`, default OFF): a real ngtcp2/nghttp3 QUIC engine with a new `csilk_io_*` UDP abstraction (libuv inline + io_uring backends). `csilk_h3_transport_new` now does TLS 1.3 + QUIC handshake and streams HTTP/3 frames; the build fails closed when ngtcp2 is unavailable.

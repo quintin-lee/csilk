@@ -1,6 +1,6 @@
 # 安全中间件深度解析
 
-> **Version**: 1.1.0 | **Last updated**: 2026-11-16
+> **Version**: 1.1.1 | **Last updated**: 2026-11-18
 
 本文档深入解析 csilk 的安全中间件实现：熔断器、限流器、WAF 和 eBPF XDP 防火墙。
 

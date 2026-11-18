@@ -1,6 +1,6 @@
 # csilk 官方性能基准对比白皮书 (v1.0 LTS)
 
-> **基准报告版本**: 1.1.0-rc | **发布日期**: 2026-11-14  
+> **基准报告版本**: 1.1.1-rc | **发布日期**: 2026-11-14  
 > [English](../../en/design/comparative-benchmark-whitepaper.md) | [中文](comparative-benchmark-whitepaper.md)  
 > 详见根目录技术白皮书：[benchmarks/COMPARATIVE_BENCHMARK_WHITEPAPER.md](../../../benchmarks/COMPARATIVE_BENCHMARK_WHITEPAPER.md)
 

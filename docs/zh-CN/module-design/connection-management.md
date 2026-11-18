@@ -1,6 +1,6 @@
 # 连接管理深度解析
 
-> **Version**: 1.1.0 | **Last updated**: 2026-11-16
+> **Version**: 1.1.1 | **Last updated**: 2026-11-18
 
 csilk 的连接管理系统负责 TCP 连接的接受、维护、复用和关闭。
 
