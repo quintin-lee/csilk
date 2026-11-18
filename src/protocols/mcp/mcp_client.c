@@ -419,7 +419,12 @@ csilk_mcp_client_free(csilk_mcp_client_t* client)
             usleep(10000);
             if (waitpid(client->child_pid, &st, WNOHANG) != client->child_pid) {
                 kill(client->child_pid, SIGKILL);
-                waitpid(client->child_pid, &st, 0);
+                /* Blocking waitpid: loop on EINTR so a signal here cannot leave
+                 * the child un-reaped (zombie). */
+                int w = waitpid(client->child_pid, &st, 0);
+                while (w < 0 && errno == EINTR) {
+                    w = waitpid(client->child_pid, &st, 0);
+                }
             }
         }
         client->child_pid = 0;
