@@ -433,6 +433,10 @@ anthropic_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_cha
     headers = curl_slist_append(headers, "anthropic-beta: " ANTHROPIC_BETA_FEATURES);
 
     curl_easy_setopt(curl, CURLOPT_URL, url);
+    /* base_url is user-supplied (csilk_ai_new); restrict to http/https to
+     * prevent SSRF to other schemes (file://, gopher://, ...). */
+    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
