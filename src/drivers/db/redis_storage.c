@@ -47,7 +47,10 @@ redis_storage_set(csilk_ctx_t* c, const char* key, void* value)
         return;
     }
 
-    redisReply* reply = redisCommand(conn->c, "SET %s %s", key, (const char*)value);
+    /* Pass argv to avoid % format-string interpretation and delimiter injection. */
+    const char* argv[] = {"SET", key, value};
+    size_t      lens[] = {3, strlen(key), strlen(value)};
+    redisReply* reply = redisCommandArgv(conn->c, 3, argv, lens);
     if (reply) {
         freeReplyObject(reply);
     }
@@ -78,7 +81,9 @@ redis_storage_get(csilk_ctx_t* c, const char* key)
     }
 
     void*       result = NULL;
-    redisReply* reply = redisCommand(conn->c, "GET %s", key);
+    const char* argv[] = {"GET", key};
+    size_t      lens[] = {3, strlen(key)};
+    redisReply* reply = redisCommandArgv(conn->c, 2, argv, lens);
     if (reply) {
         if (reply->type == REDIS_REPLY_STRING && reply->str && c->arena) {
             result = csilk_arena_strdup(c->arena, reply->str);
@@ -124,11 +129,18 @@ redis_storage_set_string(csilk_ctx_t* c, const char* key, const char* value, int
         return -1;
     }
 
+    /* Pass argv to avoid % format-string interpretation and delimiter injection. */
+    char        ttl_buf[32];
+    int         ttl_len = snprintf(ttl_buf, sizeof(ttl_buf), "%d", ttl_sec);
     redisReply* reply = NULL;
     if (ttl_sec > 0) {
-        reply = redisCommand(conn->c, "SET %s %s EX %d", key, value, ttl_sec);
+        const char* argv[] = {"SET", key, value, "EX", ttl_buf};
+        size_t      lens[] = {3, strlen(key), strlen(value), 2, (size_t)ttl_len};
+        reply = redisCommandArgv(conn->c, 5, argv, lens);
     } else {
-        reply = redisCommand(conn->c, "SET %s %s", key, value);
+        const char* argv[] = {"SET", key, value};
+        size_t      lens[] = {3, strlen(key), strlen(value)};
+        reply = redisCommandArgv(conn->c, 3, argv, lens);
     }
 
     int rc = 0;
@@ -167,7 +179,9 @@ redis_storage_get_string(csilk_ctx_t* c, const char* key)
     }
 
     char*       result = NULL;
-    redisReply* reply = redisCommand(conn->c, "GET %s", key);
+    const char* argv[] = {"GET", key};
+    size_t      lens[] = {3, strlen(key)};
+    redisReply* reply = redisCommandArgv(conn->c, 2, argv, lens);
     if (reply) {
         if (reply->type == REDIS_REPLY_STRING && reply->str) {
             result = strdup(reply->str); /* Heap-allocated as per API */
@@ -218,7 +232,13 @@ redis_storage_incr_with_ttl(csilk_ctx_t* c, const char* key, int ttl_sec, long l
     long long val = -1;
     long long ttl_ms = (long long)ttl_sec * 1000;
 
-    redisReply* reply = redisCommand(conn->c, "EVAL %s 1 %s %d", lua_incr_ttl, key, ttl_sec);
+    /* Pass argv to avoid % format-string interpretation and delimiter injection.
+     * EVAL script 1 <key> <ttl>: 5 argv elements. */
+    char        ttl_buf[32];
+    int         ttl_len = snprintf(ttl_buf, sizeof(ttl_buf), "%d", ttl_sec);
+    const char* argv[] = {"EVAL", lua_incr_ttl, "1", key, ttl_buf};
+    size_t      lens[] = {4, strlen(lua_incr_ttl), 1, strlen(key), (size_t)ttl_len};
+    redisReply* reply = redisCommandArgv(conn->c, 5, argv, lens);
     if (reply) {
         if (reply->type == REDIS_REPLY_ARRAY && reply->elements >= 2) {
             if (reply->element[0]->type == REDIS_REPLY_INTEGER) {
@@ -238,12 +258,18 @@ redis_storage_incr_with_ttl(csilk_ctx_t* c, const char* key, int ttl_sec, long l
 
     /* Fallback if EVAL failed (e.g. redis permissions or older server) */
     if (val < 0) {
-        reply = redisCommand(conn->c, "INCR %s", key);
+        const char* argv[] = {"INCR", key};
+        size_t      lens[] = {4, strlen(key)};
+        reply = redisCommandArgv(conn->c, 2, argv, lens);
         if (reply) {
             if (reply->type == REDIS_REPLY_INTEGER) {
                 val = reply->integer;
                 if (val == 1 && ttl_sec > 0) {
-                    redisReply* exp_reply = redisCommand(conn->c, "EXPIRE %s %d", key, ttl_sec);
+                    char        ttl2_buf[32];
+                    int         ttl2_len = snprintf(ttl2_buf, sizeof(ttl2_buf), "%d", ttl_sec);
+                    const char* exp_argv[] = {"EXPIRE", key, ttl2_buf};
+                    size_t      exp_lens[] = {6, strlen(key), (size_t)ttl2_len};
+                    redisReply* exp_reply = redisCommandArgv(conn->c, 3, exp_argv, exp_lens);
                     if (exp_reply) {
                         freeReplyObject(exp_reply);
                     }
@@ -289,11 +315,19 @@ redis_storage_sync_state(csilk_ctx_t* c, const char* key, int state, int ttl_sec
         return -1;
     }
 
+    /* Pass argv to avoid % format-string interpretation and delimiter injection. */
+    char        state_buf[32], ttl_buf[32];
+    int         state_len = snprintf(state_buf, sizeof(state_buf), "%d", state);
+    int         ttl_len = snprintf(ttl_buf, sizeof(ttl_buf), "%d", ttl_sec);
     redisReply* reply = NULL;
     if (ttl_sec > 0) {
-        reply = redisCommand(conn->c, "SET %s %d EX %d", key, state, ttl_sec);
+        const char* argv[] = {"SET", key, state_buf, "EX", ttl_buf};
+        size_t      lens[] = {3, strlen(key), (size_t)state_len, 2, (size_t)ttl_len};
+        reply = redisCommandArgv(conn->c, 5, argv, lens);
     } else {
-        reply = redisCommand(conn->c, "SET %s %d", key, state);
+        const char* argv[] = {"SET", key, state_buf};
+        size_t      lens[] = {3, strlen(key), (size_t)state_len};
+        reply = redisCommandArgv(conn->c, 3, argv, lens);
     }
 
     int rc = 0;
