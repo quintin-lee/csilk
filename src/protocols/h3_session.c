@@ -262,7 +262,10 @@ _h3_deferred_consume_cb(nghttp3_conn* conn,
  * @brief Create an HTTP/3 session for a new QUIC connection.
  *
  * @param stream_id   First stream ID (typically 0 for server).
- * @param user_data   Per-connection user data.
+ * @param user_data   Per-connection user data. Passed to nghttp3 as the
+ *                    session's user_data, so nghttp3_conn_get_user_data() on
+ *                    the returned session returns @p user_data. In production
+ *                    this is a csilk_h3_conn_s*.
  * @return Newly allocated nghttp3_conn* session, or NULL on failure.
  */
 nghttp3_conn*
@@ -290,15 +293,21 @@ csilk_h3_session_new(int64_t stream_id, void* user_data)
 
     nghttp3_conn* ng3 = NULL;
     int           rc = nghttp3_conn_server_new_versioned(&ng3,
-                                               NGHTTP3_CALLBACKS_VERSION,
-                                               &callbacks,
-                                               NGHTTP3_SETTINGS_VERSION,
-                                               &settings,
-                                               NULL, /* mem */
-                                               user_data);
+                                                         NGHTTP3_CALLBACKS_VERSION,
+                                                         &callbacks,
+                                                         NGHTTP3_SETTINGS_VERSION,
+                                                         &settings,
+                                                         NULL, /* mem */
+                                                         user_data);
     if (rc != 0) {
+        CSILK_LOG_E("H3: nghttp3_conn_server_new_versioned failed: %s", nghttp3_strerror(rc));
         return NULL;
     }
+
+    /* The nghttp3 user_data is retrieved via nghttp3_conn_get_stream_user_data
+     * (per-stream). The connection-level user_data is set at session creation
+     * and accessible via the nghttp3_conn internals. No validation needed here. */
+
     return ng3;
 }
 
@@ -340,9 +349,16 @@ csilk_h3_session_send_response(nghttp3_conn*     session,
         return -1;
     }
 
+    /* Per-connection scratch buffer (thread-safe: one array per H3 connection).
+     * The nghttp3 session was created with user_data = csilk_h3_conn_s*.
+     * Since nghttp3 has no public getter for the connection-level user_data,
+     * we use a stack-allocated buffer. This is thread-safe because each H3
+     * connection is serviced by a single worker thread. */
+    nghttp3_nv resp_nv[64];
+    int        resp_nv_cap = 64;
+
     /* Build response headers: :status pseudo-header */
-    static nghttp3_nv resp_nv[64];
-    int               resp_nvlen = 0;
+    int resp_nvlen = 0;
 
     char status_buf[16];
     int  status_len = snprintf(status_buf, sizeof(status_buf), "%d", status);
@@ -354,7 +370,7 @@ csilk_h3_session_send_response(nghttp3_conn*     session,
 
     /* User-provided headers */
     if (headers && nheaders > 0) {
-        int max_copy = (nheaders < 63) ? nheaders : 63;
+        int max_copy = (nheaders < resp_nv_cap - 1) ? nheaders : (resp_nv_cap - 1);
         for (int i = 0; i < max_copy; i++) {
             resp_nv[resp_nvlen] = headers[i];
             resp_nvlen++;
@@ -364,17 +380,63 @@ csilk_h3_session_send_response(nghttp3_conn*     session,
     nghttp3_data_reader reader = {0};
     int rc = nghttp3_conn_submit_response(session, stream_id, resp_nv, (size_t)resp_nvlen, &reader);
     if (rc != 0) {
+        CSILK_LOG_E("H3: nghttp3_conn_submit_response failed: %s", nghttp3_strerror(rc));
         return -1;
     }
 
+    /* Push the response body (if any) via nghttp3_conn_writev_stream. */
     if (body && body_len > 0) {
         nghttp3_vec iov;
         iov.base = (uint8_t*)body;
         iov.len = body_len;
 
-        int64_t out_stream_id = 0;
-        int     out_fin = 0;
-        nghttp3_conn_writev_stream(session, &out_stream_id, &out_fin, &iov, 1);
+        int64_t       out_stream_id = 0;
+        int           out_fin = 0;
+        nghttp3_ssize written =
+            nghttp3_conn_writev_stream(session, &out_stream_id, &out_fin, &iov, 1);
+        if (written < 0) {
+            CSILK_LOG_E("H3: nghttp3_conn_writev_stream failed: %s",
+                        nghttp3_strerror((int)written));
+            return -1;
+        }
+    }
+    return 0;
+}
+
+/**
+ * @brief Push body data on an existing HTTP/3 stream.
+ *
+ * Intended for streaming responses: after calling csilk_h3_session_send_response
+ * with body=NULL, repeatedly call this to emit body chunks. The caller is
+ * responsible for sending the resulting QUIC packets (see _h3_send_quic_packets).
+ *
+ * @param session    HTTP/3 session (nghttp3_conn*).
+ * @param stream_id  Target stream ID.
+ * @param body       Body chunk to send.
+ * @param body_len   Length of the chunk.
+ * @return 0 on success, -1 on error.
+ */
+int
+csilk_h3_session_send_body(nghttp3_conn*  session,
+                           int64_t        stream_id,
+                           const uint8_t* body,
+                           size_t         body_len)
+{
+    if (!session || !body || body_len == 0) {
+        return -1;
+    }
+
+    nghttp3_vec iov;
+    iov.base = (uint8_t*)body;
+    iov.len = body_len;
+
+    int64_t       out_stream_id = stream_id;
+    int           out_fin = 0;
+    nghttp3_ssize written = nghttp3_conn_writev_stream(session, &out_stream_id, &out_fin, &iov, 1);
+    if (written < 0) {
+        CSILK_LOG_E("H3: nghttp3_conn_writev_stream (body) failed: %s",
+                    nghttp3_strerror((int)written));
+        return -1;
     }
     return 0;
 }

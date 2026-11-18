@@ -21,6 +21,7 @@
 #include <liburing.h>
 #include <stdatomic.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include <sys/eventfd.h>
 #ifdef __linux__
 #include <sys/sendfile.h>
@@ -54,6 +55,7 @@ csilk_io_buf_init(char* base, unsigned int len)
 typedef enum {
     CSILK_IO_HANDLE_UNKNOWN = 0,
     CSILK_IO_HANDLE_TCP,
+    CSILK_IO_HANDLE_UDP,
     CSILK_IO_HANDLE_TIMER,
     CSILK_IO_HANDLE_ASYNC,
     CSILK_IO_HANDLE_SIGNAL,
@@ -376,6 +378,90 @@ struct csilk_io_timer_s {
     struct io_uring*     ring; /**< io_uring ring (alias of &loop->ring). */
     csilk_io_timer_op_t* op;   /**< Active op wrapper, or NULL when not started. */
 };
+
+/** @brief UDP receive callback.
+ * @param[in,out] handle UDP handle that received the datagram.
+ * @param[in] nread 0 when the underlying read failed; bytes received otherwise.
+ * @param[in] buf  Buffer containing the datagram payload (valid only on return).
+ * @param[in] addr Remote address of the sender (may be NULL when nread == 0).
+ */
+typedef struct csilk_io_udp_s csilk_io_udp_t;
+typedef void (*csilk_io_udp_recv_cb)(csilk_io_udp_t*        handle,
+                                     size_t                 nread,
+                                     const csilk_io_buf_t*  buf,
+                                     const struct sockaddr* addr);
+
+/** @brief UDP datagram handle (io_uring: raw socket + eventfd signal).
+ *
+ * The handle owns a non-blocking datagram socket plus a repeating timer that
+ * drives level-triggered `recvfrom()` polls on the loop thread. The remote
+ * address of the most recently received datagram is cached in `remote`. */
+struct csilk_io_udp_s {
+    CSILK_IO_HANDLE_FIELDS
+    csilk_io_udp_recv_cb cb;              /**< Receive callback (set by csilk_io_udp_recv_start). */
+    csilk_io_timer_t     recv_timer;      /**< Timer handle used to poll the socket. */
+    int                  recv_started;    /**< 1 when the poll timer is armed. */
+    char                 recv_buf[65536]; /**< Scratch datagram buffer. */
+    struct sockaddr_in   remote;          /**< Remote address of last received datagram. */
+    int                  remote_len;      /**< Length of `remote` for sendto (0 when unset). */
+};
+
+typedef struct csilk_io_udp_s csilk_io_udp_t;
+
+/**
+ * @brief Initialize a UDP datagram handle on the loop.
+ * @param[in,out] loop Event loop that owns the handle.
+ * @param[in,out] handle UDP handle to initialize.
+ * @return 0 on success, or a negative error code.
+ */
+int csilk_io_udp_init(csilk_io_loop_t* loop, csilk_io_udp_t* handle);
+/**
+ * @brief Open an existing UDP socket onto a handle.
+ * @param[in,out] handle UDP handle.
+ * @param[in] sock Pre-created datagram file descriptor.
+ * @return 0 on success, or a negative error code.
+ */
+int csilk_io_udp_open(csilk_io_udp_t* handle, csilk_io_os_sock_t sock);
+/**
+ * @brief Bind the handle's socket to an address.
+ * @param[in,out] handle UDP handle.
+ * @param[in] addr Target address (AF_INET or AF_INET6).
+ * @return 0 on success, or a negative error code.
+ */
+int csilk_io_udp_bind(csilk_io_udp_t* handle, const struct sockaddr* addr);
+/**
+ * @brief Begin level-triggered datagram polling on the handle.
+ * @param[in,out] handle UDP handle (must have been opened or bound).
+ * @param[in] cb Receive callback invoked from the loop thread on each datagram.
+ * @return 0 on success, or a negative error code.
+ */
+int csilk_io_udp_recv_start(csilk_io_udp_t* handle, csilk_io_udp_recv_cb cb);
+/**
+ * @brief Send a datagram synchronously.
+ * @param[in,out] handle UDP handle.
+ * @param[in] req Unused (kept for API uniformity with the libuv backend; pass NULL).
+ * @param[in] bufs Array of datagram fragments to send via sendmsg.
+ * @param[in] nbufs Number of fragments in @p bufs.
+ * @param[in] addr Destination address (NULL = last received address).
+ * @return Number of bytes sent, or a negative error code.
+ */
+int csilk_io_udp_send(csilk_io_udp_t*        handle,
+                      void*                  req,
+                      const csilk_io_buf_t   bufs[],
+                      unsigned int           nbufs,
+                      const struct sockaddr* addr);
+/**
+ * @brief Stop datagram polling on the handle.
+ * @param[in,out] handle UDP handle.
+ * @return 0 on success, or a negative error code.
+ */
+int csilk_io_udp_recv_stop(csilk_io_udp_t* handle);
+/**
+ * @brief Close the UDP handle and release its socket.
+ * @param[in,out] handle UDP handle.
+ * @return 0 on success, or a negative error code.
+ */
+int                             csilk_io_udp_close(csilk_io_udp_t* handle);
 typedef struct csilk_io_async_s csilk_io_async_t;
 
 typedef void (*csilk_io_async_cb)(csilk_io_async_t* handle);
@@ -574,6 +660,7 @@ csilk_io_err_name(int err)
 #define _GNU_SOURCE 1
 #endif
 #include <pthread.h>
+#include <stdlib.h>
 #include <uv.h>
 /** @brief Event loop type (libuv loop). */
 typedef uv_loop_t csilk_io_loop_t;
@@ -616,6 +703,137 @@ typedef uv_file csilk_io_file_t;
 typedef uv_fs_event_t csilk_io_fs_event_t;
 /** @brief Timer callback type (libuv timer callback). */
 typedef uv_timer_cb csilk_io_timer_cb;
+
+/** @brief UDP datagram handle (libuv udp handle). */
+typedef uv_udp_t csilk_io_udp_t;
+/** @brief UDP send request (libuv udp send request). */
+typedef uv_udp_send_t csilk_io_udp_send_t;
+
+/** @brief UDP receive callback.
+ * @param[in,out] handle UDP handle that received the datagram.
+ * @param[in] nread 0 when the underlying read failed; bytes received otherwise.
+ * @param[in] buf  Buffer containing the datagram payload (valid only on return).
+ * @param[in] addr Remote address of the sender.
+ */
+typedef void (*csilk_io_udp_recv_cb)(csilk_io_udp_t*        handle,
+                                     size_t                 nread,
+                                     const csilk_io_buf_t*  buf,
+                                     const struct sockaddr* addr);
+
+/**
+ * @brief Adapter context for csilk_io_udp_recv_start under the libuv backend.
+ *
+ * libuv's `uv_udp_recv_start` allocates the receive buffer via a caller-provided
+ * `uv_alloc_cb` and invokes a `uv_udp_recv_cb` with a different signature than
+ * `csilk_io_udp_recv_cb`. This context carries the user callback; the internal
+ * bridge function (`_csilk_udp_recv_bridge`) forwards to `ctx->user_cb` with a
+ * properly constructed `csilk_io_buf_t`.
+ *
+ * The caller MUST keep the context alive for the lifetime of the UDP recv
+ * subscription, and must NULL out `user_cb` before the handle closes.
+ */
+struct csilk_io_udp_recv_ctx_s {
+    csilk_io_udp_recv_cb user_cb; /**< User callback to invoke on datagram arrival. */
+};
+typedef struct csilk_io_udp_recv_ctx_s csilk_io_udp_recv_ctx_t;
+
+/** @brief libuv UDP alloc callback that backs csilk_io_udp_recv_start. */
+static inline void
+_csilk_udp_alloc_bridge(uv_handle_t* handle, size_t suggested, uv_buf_t* buf)
+{
+    (void)handle;
+    (void)suggested;
+    /* Each UDP datagram is small; libuv's suggested size is bounded. */
+    buf->base = (char*)calloc(1, suggested + 1);
+    buf->len = suggested ? suggested : 65536;
+}
+
+/** @brief libuv UDP recv bridge that adapts `uv_udp_recv_cb` → `csilk_io_udp_recv_cb`. */
+static void _csilk_udp_recv_bridge(uv_udp_t*              handle,
+                                   ssize_t                nread,
+                                   const uv_buf_t*        buf,
+                                   const struct sockaddr* addr,
+                                   unsigned int           flags);
+
+/** @brief Initialize a UDP handle on the libuv loop. */
+static inline int
+_csilk_udp_init(csilk_io_loop_t* loop, csilk_io_udp_t* handle)
+{
+    return uv_udp_init(loop, handle);
+}
+/** @brief Open an existing UDP socket onto a libuv handle. */
+static inline int
+_csilk_udp_open(csilk_io_udp_t* handle, uv_os_sock_t sock)
+{
+    return uv_udp_open(handle, sock);
+}
+/** @brief Bind a libuv UDP handle to an address. */
+static inline int
+_csilk_udp_bind(csilk_io_udp_t* handle, const struct sockaddr* addr)
+{
+    return uv_udp_bind(handle, addr, 0);
+}
+/**
+ * @brief Begin datagram polling on a libuv UDP handle.
+ * @param[in,out] handle UDP handle (must have been opened or bound).
+ * @param[in] ctx User-allocated adapter context; `ctx->user_cb` is invoked on each datagram.
+ * @return 0 on success, or a libuv error code.
+ */
+static inline int
+_csilk_udp_recv_start(csilk_io_udp_t* handle, csilk_io_udp_recv_ctx_t* ctx)
+{
+    if (!handle || !ctx || !ctx->user_cb) {
+        return -1;
+    }
+    handle->data = ctx;
+    return uv_udp_recv_start(handle, _csilk_udp_alloc_bridge, _csilk_udp_recv_bridge);
+}
+/** @brief Stop datagram polling on a libuv UDP handle. */
+static inline int
+_csilk_udp_recv_stop(csilk_io_udp_t* handle)
+{
+    return uv_udp_recv_stop(handle);
+}
+/** @brief Send a datagram on a libuv UDP handle. */
+static inline int
+_csilk_udp_send(csilk_io_udp_t*        handle,
+                csilk_io_udp_send_t*   req,
+                const csilk_io_buf_t   bufs[],
+                unsigned int           nbufs,
+                const struct sockaddr* addr)
+{
+    return uv_udp_send(req, handle, bufs, nbufs, addr, NULL);
+}
+/** @brief Close a libuv UDP handle. */
+static inline void
+_csilk_udp_close(csilk_io_udp_t* handle, uv_close_cb cb)
+{
+    uv_close((uv_handle_t*)handle, cb);
+}
+
+/** @brief libuv UDP recv bridge (definition). */
+static void
+_csilk_udp_recv_bridge(uv_udp_t*              handle,
+                       ssize_t                nread,
+                       const uv_buf_t*        buf,
+                       const struct sockaddr* addr,
+                       unsigned int           flags)
+{
+    csilk_io_udp_recv_ctx_t* ctx = (csilk_io_udp_recv_ctx_t*)(handle->data);
+    if (!ctx || !ctx->user_cb) {
+        return;
+    }
+    if (nread < 0) {
+        csilk_io_buf_t empty = {buf->base, 0};
+        ctx->user_cb((csilk_io_udp_t*)handle, 0, &empty, NULL);
+        return;
+    }
+    csilk_io_buf_t csbuf;
+    csbuf.base = buf->base;
+    csbuf.len = (size_t)nread;
+    ctx->user_cb((csilk_io_udp_t*)handle, (size_t)nread, &csbuf, addr);
+    (void)flags;
+}
 /** @brief Filesystem-event callback type (libuv fs-event callback). */
 typedef uv_fs_event_cb csilk_io_fs_event_cb;
 

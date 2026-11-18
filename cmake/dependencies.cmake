@@ -87,13 +87,13 @@ if(CSILK_ENABLE_HTTP3)
     FetchContent_Declare(
       ngtcp2
       GIT_REPOSITORY https://github.com/ngtcp2/ngtcp2.git
-      GIT_TAG        v1.9.0
+      GIT_TAG        v1.25.0
       GIT_SHALLOW    TRUE
     )
     FetchContent_Declare(
       nghttp3
       GIT_REPOSITORY https://github.com/ngtcp2/nghttp3.git
-      GIT_TAG        v1.9.0
+      GIT_TAG        v1.18.0
       GIT_SHALLOW    TRUE
     )
     # ngtcp2 requires nghttp3 headers
