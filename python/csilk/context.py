@@ -164,6 +164,35 @@ class CaseInsensitiveDict(dict):
 
 _dispatcher_map = {}
 
+# Holds ctypes CsilkAsyncToken objects for the lifetime of their dispatched
+# response callback. The token is created on the asyncio thread but consumed by
+# the C worker thread inside the dispatch callback; without a strong reference
+# the token could be garbage-collected on the asyncio thread before the worker
+# runs csilk_ctx_release_async(token_ptr), leaving a dangling ctypes pointer
+# (the root cause of the flaky macOS Python SIGABRT). Entries are removed in
+# the release callback's finally block once the worker has consumed the token.
+_async_tokens = []
+
+def _release_token(token_ptr, token):
+    """Release a C async lease and drop the strong reference to the token.
+
+    Runs on the C worker thread (inside the dispatch callback). The token
+    object was created on the asyncio thread; once the worker has consumed it
+    via csilk_ctx_release_async it is safe to drop the strong reference so
+    the ctypes object can be reclaimed. Removal is idempotent and safe if the
+    entry is absent (e.g. a double-release or a cancelled coroutine that never
+    dispatched its callback).
+    """
+    lib = get_bindings()
+    try:
+        lib.csilk_ctx_release_async(token_ptr)
+    except Exception:
+        pass
+    try:
+        _async_tokens.remove(token)
+    except ValueError:
+        pass
+
 @ctypes.CFUNCTYPE(None, ctypes.c_void_p)
 def _python_dispatcher(arg):
     func_id = arg
@@ -505,6 +534,11 @@ class Context:
         # the dispatch callback has run (see _send / _send_error).
         _token = self._lib.csilk_ctx_acquire_async(self._ctx)
         _token_ptr = ctypes.pointer(_token)
+        # Keep a strong reference so the token outlives the asyncio coroutine
+        # frame: the C worker may call release_async(token_ptr) later, after
+        # the coroutine has completed and its closure (holding _token) could
+        # otherwise be reclaimed. Removed in the release callback's finally.
+        _async_tokens.append(_token)
 
         async def _runner():
             try:
@@ -522,7 +556,7 @@ class Context:
                             self.response_write(str(response_data))
                         self.response_end()
                     finally:
-                        self._lib.csilk_ctx_release_async(_token_ptr)
+                        _release_token(_token_ptr, _token)
 
                 self.dispatch(_send)
             except Exception as e:
@@ -537,7 +571,7 @@ class Context:
                         self.response_write(f"Internal Server Error: {error_msg}")
                         self.response_end()
                     finally:
-                        self._lib.csilk_ctx_release_async(_token_ptr)
+                        _release_token(_token_ptr, _token)
 
                 self.dispatch(_send_error)
 
