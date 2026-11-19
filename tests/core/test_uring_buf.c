@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,17 +51,17 @@ test_uring_buf_ring_registration()
     assert(!csilk_uring_buf_ring_is_registered(ring));
 
     /* NULL checks */
-    assert(csilk_uring_buf_ring_register(NULL, (void*)0x1) == -22); /* -EINVAL */
-    assert(csilk_uring_buf_ring_register(ring, NULL) == -22);
-    assert(csilk_uring_buf_ring_unregister(NULL, (void*)0x1) == -22);
-    assert(csilk_uring_buf_ring_unregister(ring, NULL) == -22);
+    assert(csilk_uring_buf_ring_register(NULL, (void*)0x1) == -EINVAL);
+    assert(csilk_uring_buf_ring_register(ring, NULL) == -EINVAL);
+    assert(csilk_uring_buf_ring_unregister(NULL, (void*)0x1) == -EINVAL);
+    assert(csilk_uring_buf_ring_unregister(ring, NULL) == -EINVAL);
 
     /* When not registered, unregister returns 0 (noop) */
     assert(csilk_uring_buf_ring_unregister(ring, (void*)0x1) == 0);
 
 #ifndef CSILK_USE_URING
     /* Under non-uring builds, registration returns -ENOSYS */
-    assert(csilk_uring_buf_ring_register(ring, (void*)0x1) == -38); /* -ENOSYS */
+    assert(csilk_uring_buf_ring_register(ring, (void*)0x1) == -ENOSYS);
 #endif
 
     csilk_uring_buf_ring_free(ring);
@@ -115,10 +116,10 @@ test_uring_direct_files()
     assert(csilk_uring_direct_files_free_slot(df, 100, NULL) == -1);
 
     /* NULL / bounds checks for registration */
-    assert(csilk_uring_direct_files_register(NULL, (void*)0x1) == -22);
-    assert(csilk_uring_direct_files_register(df, NULL) == -22);
-    assert(csilk_uring_direct_files_unregister(NULL, (void*)0x1) == -22);
-    assert(csilk_uring_direct_files_unregister(df, NULL) == -22);
+    assert(csilk_uring_direct_files_register(NULL, (void*)0x1) == -EINVAL);
+    assert(csilk_uring_direct_files_register(df, NULL) == -EINVAL);
+    assert(csilk_uring_direct_files_unregister(NULL, (void*)0x1) == -EINVAL);
+    assert(csilk_uring_direct_files_unregister(df, NULL) == -EINVAL);
 
     csilk_uring_direct_files_free(df);
     printf("test_uring_direct_files: PASS\n");
