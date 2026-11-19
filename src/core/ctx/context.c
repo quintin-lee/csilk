@@ -478,12 +478,12 @@ csilk_ctx_cleanup(csilk_ctx_t* c)
         if (!b) {
             continue;
         }
-        size_t sz = c->read_buf_sizes[i];
-        if (sz > 0 && c->server && c->server->worker_pools) {
+        size_t          sz = c->read_buf_sizes[i];
+        csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+        if (sz > 0 && c->server && c->server->worker_pools && client && client->owner_pool) {
             /* Pool-backed buffer — return to worker-local pool instead of free(). */
-            extern void    pool_put_read_buf(worker_pool_t * wp, char* base, size_t size);
-            worker_pool_t* wp = ((csilk_client_t*)c->_internal_client)->owner_pool;
-            pool_put_read_buf(wp, b, sz);
+            extern void pool_put_read_buf(worker_pool_t * wp, char* base, size_t size);
+            pool_put_read_buf(client->owner_pool, b, sz);
         } else {
             free(b);
         }
