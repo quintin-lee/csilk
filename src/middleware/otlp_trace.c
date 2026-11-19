@@ -34,9 +34,9 @@ static csilk_otlp_buffer_t g_otlp_buffer = {
     .head = 0,
     .count = 0,
 };
-static int      g_otlp_init = 0;
-static int      g_otlp_sample_rate = OTLP_SAMPLE_RATE_DEFAULT;
-static uint64_t g_otlp_total_spans = 0; /* total spans received (for sampling decision) */
+static int         g_otlp_init = 0;
+static _Atomic int g_otlp_sample_rate = OTLP_SAMPLE_RATE_DEFAULT;
+static uint64_t    g_otlp_total_spans = 0; /* total spans received (for sampling decision) */
 
 typedef struct {
     char trace_id[33];
