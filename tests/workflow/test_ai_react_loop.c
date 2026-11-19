@@ -185,14 +185,14 @@ test_react_loop_flow(void)
 
     char* final_text = NULL;
     int   rc = csilk_ai_react_execute_loop(ai,
-                                           "mock-model",
-                                           "You are a helpful assistant.",
-                                           "What is the temp in Berlin?",
-                                           reg,
-                                           5,
-                                           NULL,
-                                           NULL,
-                                           &final_text);
+                                         "mock-model",
+                                         "You are a helpful assistant.",
+                                         "What is the temp in Berlin?",
+                                         reg,
+                                         5,
+                                         NULL,
+                                         NULL,
+                                         &final_text);
 
     assert(rc == 0);
     assert(final_text != NULL);
