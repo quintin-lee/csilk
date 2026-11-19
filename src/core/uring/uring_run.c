@@ -390,8 +390,22 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                                 io_uring_sqe_set_data64(sqe, next_data);
                                 io_uring_submit(ring);
                             } else {
+                                /* Re-arm failed (SQE pool full / submit error):
+                                 * the repeating timer will not fire again. Log
+                                 * so the silent stall is diagnosable, then free
+                                 * the op context so it is not leaked. */
+                                CSILK_LOG_W("uring: failed to re-arm repeating timer %p; timer "
+                                            "will stop firing",
+                                            (void*)tmr);
                                 uring_op_free(loop, (uring_op_context_t*)(uintptr_t)next_data);
                             }
+                        } else {
+                            /* uring_encode_timer_data returned 0 (op pool
+                             * exhausted): the repeating timer cannot be
+                             * re-armed and will stop firing. */
+                            CSILK_LOG_W(
+                                "uring: op pool exhausted; repeating timer %p will stop firing",
+                                (void*)tmr);
                         }
                     } else {
                         /* One-shot timer: deactivate and drop active count. */
@@ -426,6 +440,14 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
         }
 
     } while (!loop->stop_flag && loop->active_handles > 0);
+
+    /* Drain any after-work callbacks left on this worker's TLS deferred
+     * queue. The run loop normally consumes these each iteration (see above),
+     * but a NOWAIT/ONCE or stop_flag exit may leave a few pending; csilk_io
+     * consumers that stop() the loop without going through csilk_io_loop_close
+     * would otherwise leak them (their client refs / gzip state). */
+    while (_uring_deferred_drain_all() > 0) {
+    }
 
     loop->running = 0;
     return total > 0 ? 0 : -1;
