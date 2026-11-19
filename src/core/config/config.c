@@ -157,15 +157,29 @@ parse_yaml_config_stream(yaml_parser_t* parser, csilk_config_t* config)
                             config->server.request_timeout_ms = 30000; /* default */
                         }
                     } else if (strcmp(current_key, "max_body_size") == 0) {
-                        config->server.max_body_size = (size_t)atoll(val);
+                        long long v = strtoll(val, NULL, 10);
+                        config->server.max_body_size = (v < 0) ? 0
+                                                       : (v > 1024 * 1024 * 1024LL)
+                                                           ? 1024 * 1024 * 1024ULL
+                                                           : (size_t)v;
                     } else if (strcmp(current_key, "max_header_size") == 0) {
-                        config->server.max_header_size = (size_t)atoll(val);
+                        long long v = strtoll(val, NULL, 10);
+                        config->server.max_header_size = (v < 0)         ? 0
+                                                         : (v > 65536LL) ? 65536ULL
+                                                                         : (size_t)v;
                     } else if (strcmp(current_key, "max_url_size") == 0) {
-                        config->server.max_url_size = (size_t)atoll(val);
+                        long long v = strtoll(val, NULL, 10);
+                        config->server.max_url_size = (v < 0)               ? 0
+                                                      : (v > 1024 * 1024LL) ? 1024 * 1024ULL
+                                                                            : (size_t)v;
                     } else if (strcmp(current_key, "max_headers_count") == 0) {
-                        config->server.max_headers_count = (size_t)atoll(val);
+                        long long v = strtoll(val, NULL, 10);
+                        config->server.max_headers_count = (v < 0)        ? 0
+                                                           : (v > 1024LL) ? 1024
+                                                                          : (size_t)v;
                     } else if (strcmp(current_key, "max_connections") == 0) {
-                        config->server.max_connections = atoi(val);
+                        int v = atoi(val);
+                        config->server.max_connections = (v < 0) ? 0 : v;
                     } else if (strcmp(current_key, "listen_backlog") == 0) {
                         config->server.listen_backlog = atoi(val);
                     } else if (strcmp(current_key, "tcp_nodelay") == 0) {
@@ -173,7 +187,8 @@ parse_yaml_config_stream(yaml_parser_t* parser, csilk_config_t* config)
                     } else if (strcmp(current_key, "tcp_keepalive") == 0) {
                         config->server.tcp_keepalive = atoi(val);
                     } else if (strcmp(current_key, "worker_threads") == 0) {
-                        config->server.worker_threads = atoi(val);
+                        int v = atoi(val);
+                        config->server.worker_threads = (v < 1) ? 1 : v;
                     } else if (strcmp(current_key, "enable_tls") == 0) {
                         config->server.enable_tls = atoi(val);
                     } else if (strcmp(current_key, "tls_cert_file") == 0) {
