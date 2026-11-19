@@ -6,18 +6,35 @@
 #include "csilk/core/uring/uring_buf.h"
 #include "csilk/csilk.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/uio.h>
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__unix__)
 #include <unistd.h>
 #endif
 
+#ifdef CSILK_USE_URING
+#include <liburing.h>
+#endif
+
 struct csilk_uring_buf_ring_s {
-    size_t num_bufs;
-    size_t buf_size;
-    void** buffers;
+    size_t        num_bufs;
+    size_t        buf_size;
+    void**        buffers;
+    struct iovec* iovecs;
+    bool          is_registered;
+    void*         registered_ring;
+};
+
+struct csilk_uring_direct_files_s {
+    size_t capacity;
+    size_t count;
+    int*   fds;
+    bool   is_registered;
+    void*  registered_ring;
 };
 
 /**
@@ -42,8 +59,16 @@ csilk_uring_buf_ring_create(size_t num_bufs, size_t buf_size)
 
     ring->num_bufs = num_bufs;
     ring->buf_size = buf_size;
+    ring->is_registered = false;
+    ring->registered_ring = NULL;
     ring->buffers = calloc(num_bufs, sizeof(void*));
     if (!ring->buffers) {
+        free(ring);
+        return NULL;
+    }
+    ring->iovecs = calloc(num_bufs, sizeof(struct iovec));
+    if (!ring->iovecs) {
+        free(ring->buffers);
         free(ring);
         return NULL;
     }
@@ -67,12 +92,15 @@ csilk_uring_buf_ring_create(size_t num_bufs, size_t buf_size)
             for (size_t j = 0; j < i; j++) {
                 free(ring->buffers[j]);
             }
+            free(ring->iovecs);
             free(ring->buffers);
             free(ring);
             return NULL;
         }
         memset(ptr, 0, aligned_size);
         ring->buffers[i] = ptr;
+        ring->iovecs[i].iov_base = ptr;
+        ring->iovecs[i].iov_len = aligned_size;
     }
 
     return ring;
@@ -126,6 +154,9 @@ csilk_uring_buf_ring_free(csilk_uring_buf_ring_t* ring)
     if (!ring) {
         return;
     }
+    if (ring->is_registered && ring->registered_ring) {
+        csilk_uring_buf_ring_unregister(ring, ring->registered_ring);
+    }
     if (ring->buffers) {
         for (size_t i = 0; i < ring->num_bufs; i++) {
             if (ring->buffers[i]) {
@@ -134,5 +165,273 @@ csilk_uring_buf_ring_free(csilk_uring_buf_ring_t* ring)
         }
         free(ring->buffers);
     }
+    if (ring->iovecs) {
+        free(ring->iovecs);
+    }
     free(ring);
+}
+
+/**
+ * @brief Check if the buffer ring is currently registered with a kernel io_uring.
+ */
+bool
+csilk_uring_buf_ring_is_registered(const csilk_uring_buf_ring_t* ring)
+{
+    return ring ? ring->is_registered : false;
+}
+
+/**
+ * @brief Register buffer ring with an io_uring instance using io_uring_register_buffers.
+ */
+int
+csilk_uring_buf_ring_register(csilk_uring_buf_ring_t* ring, void* io_uring_ptr)
+{
+    if (!ring || !io_uring_ptr) {
+        return -EINVAL;
+    }
+    if (ring->is_registered) {
+        return 0;
+    }
+#if defined(CSILK_USE_URING)
+    struct io_uring* u_ring = (struct io_uring*)io_uring_ptr;
+    int ret = io_uring_register_buffers(u_ring, ring->iovecs, (unsigned)ring->num_bufs);
+    if (ret < 0) {
+        return ret;
+    }
+    ring->is_registered = true;
+    ring->registered_ring = io_uring_ptr;
+    return 0;
+#else
+    (void)ring;
+    (void)io_uring_ptr;
+    return -ENOSYS;
+#endif
+}
+
+/**
+ * @brief Unregister a previously registered buffer ring from an io_uring instance.
+ */
+int
+csilk_uring_buf_ring_unregister(csilk_uring_buf_ring_t* ring, void* io_uring_ptr)
+{
+    if (!ring || !io_uring_ptr) {
+        return -EINVAL;
+    }
+    if (!ring->is_registered) {
+        return 0;
+    }
+#if defined(CSILK_USE_URING)
+    struct io_uring* u_ring = (struct io_uring*)io_uring_ptr;
+    int              ret = io_uring_unregister_buffers(u_ring);
+    if (ret < 0) {
+        return ret;
+    }
+    ring->is_registered = false;
+    ring->registered_ring = NULL;
+    return 0;
+#else
+    (void)ring;
+    (void)io_uring_ptr;
+    return -ENOSYS;
+#endif
+}
+
+/**
+ * @brief Create a direct FD table for io_uring fixed file descriptor registration.
+ */
+csilk_uring_direct_files_t*
+csilk_uring_direct_files_create(size_t max_files)
+{
+    if (max_files == 0) {
+        return NULL;
+    }
+    csilk_uring_direct_files_t* df = malloc(sizeof(csilk_uring_direct_files_t));
+    if (!df) {
+        return NULL;
+    }
+    df->capacity = max_files;
+    df->count = 0;
+    df->is_registered = false;
+    df->registered_ring = NULL;
+    df->fds = malloc(sizeof(int) * max_files);
+    if (!df->fds) {
+        free(df);
+        return NULL;
+    }
+    for (size_t i = 0; i < max_files; i++) {
+        df->fds[i] = -1;
+    }
+    return df;
+}
+
+/**
+ * @brief Get total slot capacity of the direct files table.
+ */
+size_t
+csilk_uring_direct_files_get_capacity(const csilk_uring_direct_files_t* df)
+{
+    return df ? df->capacity : 0;
+}
+
+/**
+ * @brief Get count of actively allocated slots in the direct files table.
+ */
+size_t
+csilk_uring_direct_files_get_count(const csilk_uring_direct_files_t* df)
+{
+    return df ? df->count : 0;
+}
+
+/**
+ * @brief Check if the direct files table is registered with a kernel io_uring.
+ */
+bool
+csilk_uring_direct_files_is_registered(const csilk_uring_direct_files_t* df)
+{
+    return df ? df->is_registered : false;
+}
+
+/**
+ * @brief Register the file table with an io_uring instance using io_uring_register_files.
+ */
+int
+csilk_uring_direct_files_register(csilk_uring_direct_files_t* df, void* io_uring_ptr)
+{
+    if (!df || !io_uring_ptr) {
+        return -EINVAL;
+    }
+    if (df->is_registered) {
+        return 0;
+    }
+#if defined(CSILK_USE_URING)
+    struct io_uring* u_ring = (struct io_uring*)io_uring_ptr;
+    int              ret = io_uring_register_files(u_ring, df->fds, (unsigned)df->capacity);
+    if (ret < 0) {
+        return ret;
+    }
+    df->is_registered = true;
+    df->registered_ring = io_uring_ptr;
+    return 0;
+#else
+    (void)df;
+    (void)io_uring_ptr;
+    return -ENOSYS;
+#endif
+}
+
+/**
+ * @brief Unregister the file table from an io_uring instance.
+ */
+int
+csilk_uring_direct_files_unregister(csilk_uring_direct_files_t* df, void* io_uring_ptr)
+{
+    if (!df || !io_uring_ptr) {
+        return -EINVAL;
+    }
+    if (!df->is_registered) {
+        return 0;
+    }
+#if defined(CSILK_USE_URING)
+    struct io_uring* u_ring = (struct io_uring*)io_uring_ptr;
+    int              ret = io_uring_unregister_files(u_ring);
+    if (ret < 0) {
+        return ret;
+    }
+    df->is_registered = false;
+    df->registered_ring = NULL;
+    return 0;
+#else
+    (void)df;
+    (void)io_uring_ptr;
+    return -ENOSYS;
+#endif
+}
+
+/**
+ * @brief Allocate a direct FD slot and assign a physical OS file descriptor.
+ */
+int
+csilk_uring_direct_files_alloc_slot(csilk_uring_direct_files_t* df, int os_fd, void* io_uring_ptr)
+{
+    if (!df || os_fd < 0) {
+        return -1;
+    }
+    for (size_t i = 0; i < df->capacity; i++) {
+        if (df->fds[i] < 0) {
+            df->fds[i] = os_fd;
+            df->count++;
+#if defined(CSILK_USE_URING)
+            if (df->is_registered && io_uring_ptr) {
+                struct io_uring* u_ring = (struct io_uring*)io_uring_ptr;
+                int              update_fd = os_fd;
+                int ret = io_uring_register_files_update(u_ring, (unsigned)i, &update_fd, 1);
+                if (ret < 0) {
+                    df->fds[i] = -1;
+                    df->count--;
+                    return -1;
+                }
+            }
+#else
+            (void)io_uring_ptr;
+#endif
+            return (int)i;
+        }
+    }
+    return -1; /* Table full */
+}
+
+/**
+ * @brief Release a direct FD slot.
+ */
+int
+csilk_uring_direct_files_free_slot(csilk_uring_direct_files_t* df, int slot_idx, void* io_uring_ptr)
+{
+    if (!df || slot_idx < 0 || (size_t)slot_idx >= df->capacity) {
+        return -1;
+    }
+    if (df->fds[slot_idx] < 0) {
+        return 0; /* Already empty */
+    }
+    df->fds[slot_idx] = -1;
+    if (df->count > 0) {
+        df->count--;
+    }
+#if defined(CSILK_USE_URING)
+    if (df->is_registered && io_uring_ptr) {
+        struct io_uring* u_ring = (struct io_uring*)io_uring_ptr;
+        int              empty_fd = -1;
+        (void)io_uring_register_files_update(u_ring, (unsigned)slot_idx, &empty_fd, 1);
+    }
+#else
+    (void)io_uring_ptr;
+#endif
+    return 0;
+}
+
+/**
+ * @brief Get the physical OS file descriptor assigned to a slot.
+ */
+int
+csilk_uring_direct_files_get_fd(const csilk_uring_direct_files_t* df, int slot_idx)
+{
+    if (!df || slot_idx < 0 || (size_t)slot_idx >= df->capacity) {
+        return -1;
+    }
+    return df->fds[slot_idx];
+}
+
+/**
+ * @brief Free resources associated with a direct files table.
+ */
+void
+csilk_uring_direct_files_free(csilk_uring_direct_files_t* df)
+{
+    if (!df) {
+        return;
+    }
+    if (df->is_registered && df->registered_ring) {
+        csilk_uring_direct_files_unregister(df, df->registered_ring);
+    }
+    free(df->fds);
+    free(df);
 }

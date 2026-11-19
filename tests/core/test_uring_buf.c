@@ -40,10 +40,96 @@ test_uring_buf_ring_basic()
     printf("test_uring_buf_ring_basic: PASS\n");
 }
 
+static void
+test_uring_buf_ring_registration()
+{
+    printf("Testing io_uring Registered Buffer Ring registration API...\n");
+
+    csilk_uring_buf_ring_t* ring = csilk_uring_buf_ring_create(4, 4096);
+    assert(ring != NULL);
+    assert(!csilk_uring_buf_ring_is_registered(ring));
+
+    /* NULL checks */
+    assert(csilk_uring_buf_ring_register(NULL, (void*)0x1) == -22); /* -EINVAL */
+    assert(csilk_uring_buf_ring_register(ring, NULL) == -22);
+    assert(csilk_uring_buf_ring_unregister(NULL, (void*)0x1) == -22);
+    assert(csilk_uring_buf_ring_unregister(ring, NULL) == -22);
+
+    /* When not registered, unregister returns 0 (noop) */
+    assert(csilk_uring_buf_ring_unregister(ring, (void*)0x1) == 0);
+
+#ifndef CSILK_USE_URING
+    /* Under non-uring builds, registration returns -ENOSYS */
+    assert(csilk_uring_buf_ring_register(ring, (void*)0x1) == -38); /* -ENOSYS */
+#endif
+
+    csilk_uring_buf_ring_free(ring);
+    printf("test_uring_buf_ring_registration: PASS\n");
+}
+
+static void
+test_uring_direct_files()
+{
+    printf("Testing io_uring Direct Files (Registered FDs) table...\n");
+
+    /* Invalid creation */
+    assert(csilk_uring_direct_files_create(0) == NULL);
+
+    csilk_uring_direct_files_t* df = csilk_uring_direct_files_create(8);
+    assert(df != NULL);
+    assert(csilk_uring_direct_files_get_capacity(df) == 8);
+    assert(csilk_uring_direct_files_get_count(df) == 0);
+    assert(!csilk_uring_direct_files_is_registered(df));
+
+    /* Slot allocation */
+    int slot0 = csilk_uring_direct_files_alloc_slot(df, 100, NULL);
+    int slot1 = csilk_uring_direct_files_alloc_slot(df, 101, NULL);
+    int slot2 = csilk_uring_direct_files_alloc_slot(df, 102, NULL);
+
+    assert(slot0 == 0);
+    assert(slot1 == 1);
+    assert(slot2 == 2);
+    assert(csilk_uring_direct_files_get_count(df) == 3);
+
+    assert(csilk_uring_direct_files_get_fd(df, 0) == 100);
+    assert(csilk_uring_direct_files_get_fd(df, 1) == 101);
+    assert(csilk_uring_direct_files_get_fd(df, 2) == 102);
+    assert(csilk_uring_direct_files_get_fd(df, 3) == -1);
+    assert(csilk_uring_direct_files_get_fd(df, 99) == -1);
+
+    /* Free slot 1 and verify slot reuse */
+    assert(csilk_uring_direct_files_free_slot(df, 1, NULL) == 0);
+    assert(csilk_uring_direct_files_get_count(df) == 2);
+    assert(csilk_uring_direct_files_get_fd(df, 1) == -1);
+
+    int reused = csilk_uring_direct_files_alloc_slot(df, 200, NULL);
+    assert(reused == 1);
+    assert(csilk_uring_direct_files_get_fd(df, 1) == 200);
+    assert(csilk_uring_direct_files_get_count(df) == 3);
+
+    /* Error handling */
+    assert(csilk_uring_direct_files_alloc_slot(NULL, 10, NULL) == -1);
+    assert(csilk_uring_direct_files_alloc_slot(df, -1, NULL) == -1);
+    assert(csilk_uring_direct_files_free_slot(NULL, 0, NULL) == -1);
+    assert(csilk_uring_direct_files_free_slot(df, -1, NULL) == -1);
+    assert(csilk_uring_direct_files_free_slot(df, 100, NULL) == -1);
+
+    /* NULL / bounds checks for registration */
+    assert(csilk_uring_direct_files_register(NULL, (void*)0x1) == -22);
+    assert(csilk_uring_direct_files_register(df, NULL) == -22);
+    assert(csilk_uring_direct_files_unregister(NULL, (void*)0x1) == -22);
+    assert(csilk_uring_direct_files_unregister(df, NULL) == -22);
+
+    csilk_uring_direct_files_free(df);
+    printf("test_uring_direct_files: PASS\n");
+}
+
 int
 main()
 {
     test_uring_buf_ring_basic();
-    printf("All io_uring Registered Buffer tests passed successfully!\n");
+    test_uring_buf_ring_registration();
+    test_uring_direct_files();
+    printf("All io_uring Registered Buffer & Direct Files tests passed successfully!\n");
     return 0;
 }
