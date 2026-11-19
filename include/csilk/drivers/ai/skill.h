@@ -254,11 +254,25 @@ int csilk_ai_skill_invoke_remote(csilk_ai_skill_t* sk,
  * job.  What this config guarantees is: relative-path containment, bounded
  * resources, and no env leakage.
  */
+/**
+ * @brief Sandboxing flags for local L3 execution.
+ */
+typedef enum {
+    CSILK_SKILL_SANDBOX_NONE = 0, /**< No sandboxing (default/legacy). */
+    CSILK_SKILL_SANDBOX_SECCOMP =
+        1 << 0, /**< Enable seccomp syscall filtering (blocks networking & privilege escalation). */
+    CSILK_SKILL_SANDBOX_NET =
+        1 << 1, /**< Unshare network namespace (isolated loopback, no external access). */
+    CSILK_SKILL_SANDBOX_PID = 1 << 2, /**< Unshare PID namespace (isolated process tree). */
+    CSILK_SKILL_SANDBOX_FULL = 0x7,   /**< Full micro-sandbox: seccomp + net + pid isolation. */
+} csilk_skill_sandbox_flags_t;
+
 typedef struct {
     char* root;             /**< Working-directory root; @p path must stay inside it. */
     int   timeout_ms;       /**< Bounded wait for the child (<= 0 → default). */
     int   max_output_bytes; /**< stdout capture cap (0 → framework default). */
     char* env;              /**< Optional space-separated KEY=VALUE env for the child. */
+    int   sandbox_flags;    /**< Sandbox isolation flags (see csilk_skill_sandbox_flags_t). */
 } csilk_skill_exec_cfg_t;
 
 /**

@@ -613,6 +613,98 @@ test_exec_cfg_lifecycle(void)
     csilk_ai_skill_free(sk);
 }
 
+static void
+test_skill_sandbox(void)
+{
+    /* 1. Safe command execution with CSILK_SKILL_SANDBOX_FULL */
+    csilk_skill_meta_t m = {.name = "sandbox-skill", .description = "Test sandbox execution."};
+    csilk_ai_skill_t*  sk = csilk_ai_skill_new(&m, CSILK_SKILL_LOCAL, NULL, NULL);
+    assert(sk != NULL);
+
+    csilk_skill_exec_cfg_t cfg = {
+        .root = "/",
+        .timeout_ms = 5000,
+        .max_output_bytes = 1024,
+        .env = NULL,
+        .sandbox_flags = CSILK_SKILL_SANDBOX_FULL,
+    };
+    assert(csilk_ai_skill_set_exec_cfg(sk, &cfg) == 0);
+
+    char* out = NULL;
+    int   rc = csilk_skill_exec_local(sk, "bin/echo", "sandbox execution ok", 0, &out);
+    assert(rc == 0);
+    assert(out && strstr(out, "\"exit_code\":0"));
+    assert(strstr(out, "sandbox execution ok"));
+    free(out);
+
+#if defined(__linux__) && defined(CSILK_HAS_SECCOMP_SANDBOX)
+    /* 2. Network / socket syscall denial under sandbox:
+     *    Compile a tiny C helper binary under a temp exec root that attempts socket(AF_INET, SOCK_STREAM, 0).
+     *    Under the sandbox, seccomp filters the socket syscall and returns -1 with errno == EPERM.
+     *    The helper exits with code 42 on EPERM, or code 0 if socket succeeded. */
+    const char* root_dir = "/tmp/skill_sandbox_root";
+    mkdir(root_dir, 0777);
+    mkdir("/tmp/skill_sandbox_root/bin", 0777);
+
+    const char* helper_src = "/tmp/skill_sandbox_root/try_socket.c";
+    const char* helper_bin = "/tmp/skill_sandbox_root/bin/try_socket";
+    FILE*       hf = fopen(helper_src, "w");
+    assert(hf);
+    const char* c_code = "#include <sys/socket.h>\n"
+                         "#include <errno.h>\n"
+                         "int main(void) {\n"
+                         "    int s = socket(AF_INET, SOCK_STREAM, 0);\n"
+                         "    if (s < 0 && errno == EPERM) return 42;\n"
+                         "    return 0;\n"
+                         "}\n";
+    assert(fwrite(c_code, 1, strlen(c_code), hf) == strlen(c_code));
+    fclose(hf);
+
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "gcc %s -o %s", helper_src, helper_bin);
+    assert(system(cmd) == 0);
+
+    /* 2a. With CSILK_SKILL_SANDBOX_FULL: socket() is intercepted by seccomp -> returns EPERM -> exit 42 */
+    csilk_skill_exec_cfg_t sb_cfg = {
+        .root = (char*)root_dir,
+        .timeout_ms = 5000,
+        .max_output_bytes = 1024,
+        .env = NULL,
+        .sandbox_flags = CSILK_SKILL_SANDBOX_FULL,
+    };
+    assert(csilk_ai_skill_set_exec_cfg(sk, &sb_cfg) == 0);
+
+    out = NULL;
+    rc = csilk_skill_exec_local(sk, "bin/try_socket", NULL, 0, &out);
+    assert(rc == 0);
+    assert(out && strstr(out, "\"exit_code\":42"));
+    free(out);
+
+    /* 2b. Without sandbox (flags = 0): socket() is not blocked by seccomp -> exit 0 */
+    csilk_skill_exec_cfg_t nosb_cfg = {
+        .root = (char*)root_dir,
+        .timeout_ms = 5000,
+        .max_output_bytes = 1024,
+        .env = NULL,
+        .sandbox_flags = CSILK_SKILL_SANDBOX_NONE,
+    };
+    assert(csilk_ai_skill_set_exec_cfg(sk, &nosb_cfg) == 0);
+
+    out = NULL;
+    rc = csilk_skill_exec_local(sk, "bin/try_socket", NULL, 0, &out);
+    assert(rc == 0);
+    assert(out && strstr(out, "\"exit_code\":0"));
+    free(out);
+
+    unlink(helper_bin);
+    unlink(helper_src);
+    rmdir("/tmp/skill_sandbox_root/bin");
+    rmdir(root_dir);
+#endif
+
+    csilk_ai_skill_free(sk);
+}
+
 int
 main(void)
 {
@@ -624,6 +716,7 @@ main(void)
     test_remote_dispatch();
     test_local_exec();
     test_exec_cfg_lifecycle();
+    test_skill_sandbox();
     test_meta_to_string_and_worker_registry();
     printf("test_ai_skill: ALL PASSED\n");
     return 0;

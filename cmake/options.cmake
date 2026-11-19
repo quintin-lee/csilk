@@ -61,6 +61,12 @@ endif()
 # HTTP/3 (QUIC) groundwork — ngtcp2/nghttp3 FetchContent
 option(CSILK_ENABLE_HTTP3 "Enable ngtcp2/nghttp3 FetchContent for HTTP/3 QUIC groundwork (v1.1 architectural only)" OFF)
 
+# Linux seccomp/namespaces micro-sandbox for Agent Skills (v1.2)
+option(CSILK_ENABLE_SECCOMP_SANDBOX "Enable Linux seccomp/namespaces isolation for Agent Skills" ON)
+if(CSILK_ENABLE_SECCOMP_SANDBOX)
+    add_compile_definitions(CSILK_HAS_SECCOMP_SANDBOX=1)
+endif()
+
 # ── Configurable compile-time constants ────────────────────────────────────
 set(CSILK_HEADER_BUCKETS 16  CACHE STRING "Header hash-table bucket count")
 set(CSILK_MAX_PARAMS      20  CACHE STRING "Max URL path parameters per request")

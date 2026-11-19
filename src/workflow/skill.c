@@ -25,6 +25,21 @@
 #include <time.h>
 #include <unistd.h>
 
+#if defined(__linux__)
+#include <sched.h>
+#include <stddef.h>
+#include <sys/prctl.h>
+#include <sys/syscall.h>
+#if defined(__has_include)
+#if __has_include(<linux/seccomp.h>) && __has_include(<linux/filter.h>) && __has_include(<linux/audit.h>)
+#define CSILK_HAVE_LINUX_SECCOMP_HEADERS 1
+#include <linux/audit.h>
+#include <linux/filter.h>
+#include <linux/seccomp.h>
+#endif
+#endif
+#endif
+
 #define SKILL_NAME_MAX 64
 #define SKILL_DESC_MAX 1024
 #define SKILL_LICENSE_MAX 64
@@ -1014,6 +1029,7 @@ csilk_ai_skill_set_exec_cfg(csilk_ai_skill_t* sk, const csilk_skill_exec_cfg_t* 
     sk->exec_cfg.env = cfg->env ? strdup(cfg->env) : NULL;
     sk->exec_cfg.timeout_ms = cfg->timeout_ms;
     sk->exec_cfg.max_output_bytes = cfg->max_output_bytes;
+    sk->exec_cfg.sandbox_flags = cfg->sandbox_flags;
     if (cfg->root && !sk->exec_cfg.root) {
         return -1;
     }
@@ -1054,6 +1070,149 @@ path_within_root(const char* root, const char* path)
     }
     return 0;
 }
+
+#if defined(__linux__) && defined(CSILK_HAS_SECCOMP_SANDBOX) &&                                    \
+    defined(CSILK_HAVE_LINUX_SECCOMP_HEADERS)
+static int
+_csilk_skill_apply_sandbox(int flags)
+{
+    if (!flags) {
+        return 0;
+    }
+
+    /* 1. Linux namespaces isolation (if requested).
+     * In containerized or unprivileged environments, unshare may return ENOSYS or EPERM.
+     * We attempt it gracefully with and without CLONE_NEWUSER. */
+    if (flags & (CSILK_SKILL_SANDBOX_NET | CSILK_SKILL_SANDBOX_PID)) {
+        int unshare_flags = 0;
+        if (flags & CSILK_SKILL_SANDBOX_NET) {
+            unshare_flags |= CLONE_NEWNET;
+        }
+        if (flags & CSILK_SKILL_SANDBOX_PID) {
+            unshare_flags |= CLONE_NEWPID;
+        }
+        if (unshare(unshare_flags) != 0) {
+#ifdef CLONE_NEWUSER
+            (void)unshare(unshare_flags | CLONE_NEWUSER);
+#endif
+        }
+    }
+
+    /* 2. Disallow acquiring new privileges via setuid/setgid binaries.
+     * This is required by the Linux kernel to install unprivileged seccomp filters. */
+    if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
+        return -1;
+    }
+
+    /* 3. Seccomp BPF filter to restrict network and dangerous system calls */
+    if (flags & (CSILK_SKILL_SANDBOX_SECCOMP | CSILK_SKILL_SANDBOX_NET)) {
+        struct sock_filter filter[] = {
+            /* 3.1 Validate architecture */
+            BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, arch))),
+#if defined(__x86_64__)
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_X86_64, 1, 0),
+#elif defined(__aarch64__)
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_AARCH64, 1, 0),
+#else
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, 0, 1, 0),
+#endif
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS),
+
+            /* 3.2 Load syscall number */
+            BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, nr))),
+
+        /* 3.3 Deny network syscalls (EPERM) */
+#ifdef __NR_socket
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_socket, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_connect
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_connect, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_bind
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_bind, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_listen
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_listen, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_accept
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_accept, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_accept4
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_accept4, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_sendto
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_sendto, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_sendmsg
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_sendmsg, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+
+        /* 3.4 Deny dangerous privileges and system alteration */
+#ifdef __NR_ptrace
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_ptrace, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_bpf
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_bpf, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_reboot
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_reboot, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_mount
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_mount, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_umount2
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_umount2, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_chroot
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_chroot, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_setuid
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_setuid, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+#ifdef __NR_setgid
+            BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_setgid, 0, 1),
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (EPERM & SECCOMP_RET_DATA)),
+#endif
+
+            /* 3.5 Allow normal syscalls */
+            BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+        };
+
+        struct sock_fprog prog = {
+            .len = (unsigned short)(sizeof(filter) / sizeof(filter[0])),
+            .filter = filter,
+        };
+
+        if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog) != 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+#else
+static inline int
+_csilk_skill_apply_sandbox(int flags)
+{
+    (void)flags;
+    return 0;
+}
+#endif
 
 int
 csilk_skill_exec_local(
@@ -1153,6 +1312,9 @@ csilk_skill_exec_local(
         close(pipefd[1]);
         if (chdir(sk->exec_cfg.root) != 0) {
             _exit(126);
+        }
+        if (_csilk_skill_apply_sandbox(sk->exec_cfg.sandbox_flags) != 0) {
+            _exit(125);
         }
         /* execve (not execvpe) is POSIX on glibc, macOS, and BSD: it takes
          * an explicit envp array so we never need to touch `environ`/`clearenv`
