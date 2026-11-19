@@ -73,10 +73,11 @@ struct csilk_h3_conn_s {
     uint8_t dcid_data[NGTCP2_MAX_CIDLEN];
     size_t  dcid_len;
 #endif
-    struct csilk_h3_stream_s streams[CSILK_H3_MAX_STREAMS];
-    int                      stream_count;
-    void*                    client; /* csilk_client_t* (owner worker) */
-    int                      is_server;
+    struct csilk_h3_stream_s     streams[CSILK_H3_MAX_STREAMS];
+    int                          stream_count;
+    void*                        client;    /* csilk_client_t* (owner worker) */
+    struct csilk_h3_transport_s* transport; /* Owning transport */
+    int                          is_server;
     /* Remote address for UDP reply. */
     struct sockaddr_storage remote;
     socklen_t               remote_len;
@@ -102,7 +103,13 @@ struct csilk_h3_transport_s {
 #endif
     struct csilk_h3_conn_s* conns[CSILK_H3_MAX_CONNS];
     int                     conn_count;
+    void*                   server; /* csilk_server_t* (owning server if any) */
 };
+
+CSILK_INTERNAL int _h3_send_quic_packets(csilk_h3_transport_t* t, struct csilk_h3_conn_s* conn);
+#ifdef CSILK_HAS_NGTCP2
+CSILK_INTERNAL int _h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn);
+#endif
 
 #ifdef __cplusplus
 }

@@ -7,6 +7,36 @@
 #include "csilk/csilk.h"
 #include "csilk/protocols/h3.h"
 #include "csilk/test/test.h"
+#include "core/internal/srv_internal.h"
+
+#ifdef CSILK_HAS_NGTCP2
+#include <openssl/ssl.h>
+#endif
+
+static int  g_h3_handler_invoked = 0;
+static char g_h3_received_body[128] = {0};
+static char g_h3_received_auth[128] = {0};
+
+static void
+_test_h3_order_handler(csilk_ctx_t* c)
+{
+    g_h3_handler_invoked = 1;
+    const char* auth = csilk_get_header(c, "Authorization");
+    if (auth) {
+        snprintf(g_h3_received_auth, sizeof(g_h3_received_auth), "%s", auth);
+    }
+    if (c->request.body && c->request.body_len > 0) {
+        snprintf(g_h3_received_body,
+                 sizeof(g_h3_received_body),
+                 "%.*s",
+                 (int)(c->request.body_len < sizeof(g_h3_received_body) - 1
+                           ? c->request.body_len
+                           : sizeof(g_h3_received_body) - 1),
+                 (const char*)c->request.body);
+    }
+    csilk_set_header(c, "Content-Type", "application/json");
+    csilk_string(c, 201, "{\"status\":\"order_created\"}");
+}
 
 static void
 test_h3_varint()
@@ -299,8 +329,79 @@ test_h3_dispatch_guard()
     printf("test_h3_dispatch_guard: PASS\n");
 }
 
+static void
+test_h3_router_dispatch(void)
+{
+    printf("Testing HTTP/3 unified router dispatch & response lifecycle...\n");
+
+    g_h3_handler_invoked = 0;
+    g_h3_received_body[0] = '\0';
+    g_h3_received_auth[0] = '\0';
+
+    csilk_router_t* router = csilk_router_new();
+    csilk_handler_t handlers[] = {_test_h3_order_handler};
+    csilk_router_add(router, "POST", "/api/v1/h3_order", handlers, 1);
+
+    csilk_server_t* server = csilk_server_new(router);
+    assert(server != NULL);
+
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+    client.server = server;
+    client.protocol = CSILK_PROTO_HTTP3;
+    client.ctx._internal_client = &client;
+    client.ctx.server = server;
+    client.ctx.arena = csilk_arena_new(4096);
+    client.ctx.file_fd = -1;
+    client.ctx.handler_index = -1;
+    client.ctx.request_seq = 1;
+    client.ctx.write_high_water_mark = CSILK_WRITE_HWM_DEFAULT;
+    client.ctx.write_low_water_mark = CSILK_WRITE_LWM_DEFAULT;
+    client.ctx.max_write_buffer_size = CSILK_WRITE_MAX_BUFFER_DEFAULT;
+
+    csilk_h3_stream_data_t* sd = csilk_h3_stream_data_new(10);
+    assert(sd != NULL);
+    snprintf(sd->method, sizeof(sd->method), "POST");
+    snprintf(sd->path, sizeof(sd->path), "/api/v1/h3_order");
+
+    sd->num_headers = 2;
+    sd->header_names = calloc(64, sizeof(char*));
+    sd->header_values = calloc(64, sizeof(char*));
+    sd->header_names[0] = malloc(16);
+    strcpy(sd->header_names[0], "Content-Type");
+    sd->header_values[0] = malloc(20);
+    strcpy(sd->header_values[0], "application/json");
+    sd->header_names[1] = malloc(16);
+    strcpy(sd->header_names[1], "Authorization");
+    sd->header_values[1] = malloc(32);
+    strcpy(sd->header_values[1], "Bearer quic_token_xyz");
+
+    const char* req_body = "{\"item\":\"item_42\",\"qty\":3}";
+    sd->body_buf = malloc(strlen(req_body) + 1);
+    strcpy(sd->body_buf, req_body);
+    sd->body_len = (uint32_t)strlen(req_body);
+    sd->headers_complete = 1;
+
+    int rc = csilk_h3_dispatch_stream(&client, sd);
+    assert(rc == 0);
+    assert(g_h3_handler_invoked == 1);
+    assert(strcmp(g_h3_received_body, req_body) == 0);
+    assert(strcmp(g_h3_received_auth, "Bearer quic_token_xyz") == 0);
+    assert(client.ctx.response.status == 201);
+    assert(client.ctx.response.body != NULL);
+    assert(strstr(client.ctx.response.body, "order_created") != NULL);
+
+    csilk_h3_stream_data_free(sd);
+    csilk_ctx_cleanup(&client.ctx);
+    if (client.ctx.arena) {
+        csilk_arena_free(client.ctx.arena);
+    }
+    csilk_server_free(server);
+
+    printf("test_h3_router_dispatch: PASS\n");
+}
+
 #ifdef CSILK_HAS_NGTCP2
-#include <openssl/ssl.h>
 
 /* Phase 1.3: TLS 1.3 + QUIC integration */
 static void
@@ -316,9 +417,6 @@ test_h3_quic_tls()
     SSL* ssl = csilk_h3_quic_tls_new(ctx);
     assert(ssl);
 
-    /* Verify TLS 1.3 is enforced */
-    /* (ngtcp2_crypto_ossl adapter will use this SSL for QUIC handshake) */
-
     SSL_free(ssl);
     SSL_CTX_free(ctx);
 
@@ -326,6 +424,100 @@ test_h3_quic_tls()
     assert(csilk_h3_quic_tls_new(NULL) == NULL);
 
     printf("test_h3_quic_tls: PASS\n");
+}
+
+static void
+test_h3_session_send_response_and_body(void)
+{
+    printf("Testing HTTP/3 session response and body streaming...\n");
+
+    /* 1. Create server session */
+    csilk_h3_session_t* s = csilk_h3_session_new(0, NULL);
+    assert(s != NULL);
+
+    /* 2. Create client session to feed a valid request on stream 0 */
+    nghttp3_conn*     cl = NULL;
+    nghttp3_callbacks cl_cb = {0};
+    nghttp3_settings  cl_st;
+    nghttp3_settings_default(&cl_st);
+    int rc = nghttp3_conn_client_new(&cl, &cl_cb, &cl_st, NULL, NULL);
+    assert(rc == 0);
+    assert(cl != NULL);
+
+    nghttp3_conn_bind_control_stream(cl, 2);
+    nghttp3_conn_bind_qpack_streams(cl, 6, 10);
+
+    nghttp3_nv req_nv[] = {
+        {(uint8_t*)":method",    (uint8_t*)"GET",       7,  3, NGHTTP3_NV_FLAG_NONE},
+        {(uint8_t*)":scheme",    (uint8_t*)"https",     7,  5, NGHTTP3_NV_FLAG_NONE},
+        {(uint8_t*)":authority", (uint8_t*)"localhost", 10, 9, NGHTTP3_NV_FLAG_NONE},
+        {(uint8_t*)":path",      (uint8_t*)"/",         5,  1, NGHTTP3_NV_FLAG_NONE},
+    };
+    rc = nghttp3_conn_submit_request(cl, 0, req_nv, 4, NULL, NULL);
+    assert(rc == 0);
+
+    /* Pump generated client frames to server session */
+    int64_t     stream_id = -1;
+    int         fin = 0;
+    nghttp3_vec vec[16];
+    while (1) {
+        nghttp3_ssize nvec = nghttp3_conn_writev_stream(cl, &stream_id, &fin, vec, 16);
+        if (nvec <= 0) {
+            break;
+        }
+        size_t total_written = 0;
+        for (nghttp3_ssize i = 0; i < nvec; i++) {
+            nghttp3_conn_read_stream(s, stream_id, vec[i].base, vec[i].len, fin);
+            total_written += vec[i].len;
+        }
+        nghttp3_conn_add_write_offset(cl, stream_id, total_written);
+    }
+
+    /* 3. Server responds on stream 0 */
+    nghttp3_nv hdr;
+    hdr.name = (const uint8_t*)"content-type";
+    hdr.namelen = 12;
+    hdr.value = (const uint8_t*)"text/plain";
+    hdr.valuelen = 10;
+    hdr.flags = NGHTTP3_NV_FLAG_NONE;
+
+    rc = csilk_h3_session_send_response(s, 0, 200, &hdr, 1, (const uint8_t*)"Hello H3", 8);
+    assert(rc == 0);
+
+    rc = csilk_h3_session_send_body(s, 0, (const uint8_t*)" additional chunk", 17);
+    assert(rc == 0);
+
+    /* Null guards */
+    assert(csilk_h3_session_send_response(NULL, 0, 200, NULL, 0, NULL, 0) == -1);
+    assert(csilk_h3_session_send_body(NULL, 0, (const uint8_t*)"x", 1) == -1);
+    assert(csilk_h3_session_send_body(s, 0, NULL, 0) == -1);
+
+    nghttp3_conn_del(cl);
+    csilk_h3_session_destroy(s);
+    csilk_h3_session_destroy(NULL); /* null-safe */
+
+    printf("test_h3_session_send_response_and_body: PASS\n");
+}
+
+static void
+test_h3_0rtt_early_data(void)
+{
+    printf("Testing HTTP/3 0-RTT early data configuration...\n");
+
+    SSL_CTX* ctx = SSL_CTX_new(TLS_method());
+    assert(ctx != NULL);
+    SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER);
+    SSL_CTX_set_max_early_data(ctx, 0xffffffff);
+    assert(SSL_CTX_get_max_early_data(ctx) == 0xffffffff);
+
+    SSL* ssl = csilk_h3_quic_tls_new(ctx);
+    assert(ssl != NULL);
+    assert(SSL_get_max_early_data(ssl) == 0xffffffff);
+
+    SSL_free(ssl);
+    SSL_CTX_free(ctx);
+
+    printf("test_h3_0rtt_early_data: PASS\n");
 }
 #endif /* CSILK_HAS_NGTCP2 */
 
@@ -343,8 +535,11 @@ main()
     test_h3_session_data();
     test_h3_set_enabled();
     test_h3_dispatch_guard();
+    test_h3_router_dispatch();
 #ifdef CSILK_HAS_NGTCP2
     test_h3_quic_tls();
+    test_h3_session_send_response_and_body();
+    test_h3_0rtt_early_data();
 #endif
     printf("All HTTP/3 protocol tests passed successfully!\n");
     return 0;

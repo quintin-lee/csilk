@@ -217,15 +217,19 @@ int csilk_h3_set_enabled(void* server, int port);
 
 /** @brief Per-stream user data for HTTP/3 callbacks. */
 typedef struct csilk_h3_stream_data_s {
-    uint64_t stream_id;
-    char     method[16];
-    char     path[512];
-    uint32_t num_headers;
-    char**   header_names;
-    char**   header_values;
-    char*    body_buf;
-    uint32_t body_len;
-    int      headers_complete;
+    uint64_t       stream_id;
+    char           method[16];
+    char           path[512];
+    uint32_t       num_headers;
+    char**         header_names;
+    char**         header_values;
+    char*          body_buf;
+    uint32_t       body_len;
+    int            headers_complete;
+    int            dispatched;
+    const uint8_t* resp_body;
+    size_t         resp_body_len;
+    size_t         resp_body_offset;
 } csilk_h3_stream_data_t;
 
 /* --- HTTP/3 Session (nghttp3) — v1.2+ --- */
@@ -333,6 +337,16 @@ void csilk_h3_stream_data_free(csilk_h3_stream_data_t* sd);
  * @return 0 on success, -1 if stream data is incomplete or client is NULL.
  */
 int csilk_h3_dispatch_stream(csilk_client_t* client, csilk_h3_stream_data_t* sd);
+
+/**
+ * @brief Submit an HTTP/3 response for a completed request context.
+ *
+ * Encodes status and response headers via QPACK, writes body chunks into nghttp3,
+ * and flushes resulting QUIC packets via UDP socket.
+ *
+ * @param ctx The request context.
+ */
+void csilk_h3_send_response_for_ctx(csilk_ctx_t* ctx);
 
 #ifdef __cplusplus
 } /* extern "C" */

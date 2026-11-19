@@ -18,6 +18,7 @@
 #include "csilk/csilk.h"
 #include "http3_internal.h"
 #include "core/internal/srv_internal.h"
+#include "core/primitives/header_map.h"
 
 #include <errno.h>
 #include <stdio.h>
@@ -42,7 +43,11 @@ _h3_stream_close_cb(nghttp3_conn* conn,
     (void)stream_id;
     (void)app_error_code;
     (void)conn_user_data;
-    (void)stream_user_data;
+    csilk_h3_stream_data_t* sd = (csilk_h3_stream_data_t*)stream_user_data;
+    if (sd) {
+        csilk_h3_stream_data_free(sd);
+        nghttp3_conn_set_stream_user_data(conn, stream_id, NULL);
+    }
     return 0;
 }
 
@@ -57,16 +62,20 @@ _h3_recv_data_cb(nghttp3_conn*  conn,
     (void)conn;
     (void)stream_id;
     (void)conn_user_data;
-    (void)stream_user_data;
 
-    /* Accumulate body data. In a full implementation, this would feed
-     * the data into csilk_ctx_t's body buffer via the arena. */
     if (data && datalen > 0) {
         csilk_h3_stream_data_t* sd = (csilk_h3_stream_data_t*)stream_user_data;
         if (sd) {
-            /* Simple: just track the last chunk for now.
-             * Full implementation would allocate from arena. */
-            sd->body_len = (uint32_t)datalen;
+            /* Bound memory usage per stream to max 10MB */
+            if (sd->body_len + datalen <= 10 * 1024 * 1024) {
+                char* new_buf = realloc(sd->body_buf, sd->body_len + datalen + 1);
+                if (new_buf) {
+                    sd->body_buf = new_buf;
+                    memcpy(sd->body_buf + sd->body_len, data, datalen);
+                    sd->body_len += (uint32_t)datalen;
+                    sd->body_buf[sd->body_len] = '\0';
+                }
+            }
         }
     }
     return 0;
@@ -78,14 +87,18 @@ _h3_begin_headers_cb(nghttp3_conn* conn,
                      void*         conn_user_data,
                      void*         stream_user_data)
 {
-    (void)conn;
     (void)conn_user_data;
-    (void)stream_user_data;
-
     csilk_h3_stream_data_t* sd = (csilk_h3_stream_data_t*)stream_user_data;
-    if (sd) {
+    if (!sd) {
+        sd = csilk_h3_stream_data_new((uint64_t)stream_id);
+        if (!sd) {
+            return NGHTTP3_ERR_CALLBACK_FAILURE;
+        }
+        nghttp3_conn_set_stream_user_data(conn, stream_id, sd);
+    } else {
         sd->num_headers = 0;
         sd->headers_complete = 0;
+        sd->dispatched = 0;
     }
     return 0;
 }
@@ -160,19 +173,18 @@ _h3_end_headers_cb(
 {
     (void)conn;
     (void)stream_id;
-    (void)fin;
 
     csilk_h3_stream_data_t* sd = (csilk_h3_stream_data_t*)stream_user_data;
     if (sd) {
         sd->headers_complete = 1;
     }
 
-    /* Phase 1.4: bridge into the shared router/middleware pipeline.
-     * conn_user_data carries a csilk_h3_conn_state_t with the client pointer. */
-    if (conn_user_data && sd && sd->headers_complete) {
-        /* The dispatch is deferred to the caller via the public bridge: */
-        /*   csilk_h3_dispatch_stream(client, sd)                        */
-        /* This keeps the nghttp3 callback thin and testable.          */
+    if (fin && conn_user_data && sd && !sd->dispatched) {
+        struct csilk_h3_conn_s* c = (struct csilk_h3_conn_s*)conn_user_data;
+        if (c->client) {
+            sd->dispatched = 1;
+            csilk_h3_dispatch_stream((csilk_client_t*)c->client, sd);
+        }
     }
     return 0;
 }
@@ -185,8 +197,15 @@ _h3_end_stream_cb(nghttp3_conn* conn,
 {
     (void)conn;
     (void)stream_id;
-    (void)conn_user_data;
-    (void)stream_user_data;
+
+    csilk_h3_stream_data_t* sd = (csilk_h3_stream_data_t*)stream_user_data;
+    if (conn_user_data && sd && sd->headers_complete && !sd->dispatched) {
+        struct csilk_h3_conn_s* c = (struct csilk_h3_conn_s*)conn_user_data;
+        if (c->client) {
+            sd->dispatched = 1;
+            csilk_h3_dispatch_stream((csilk_client_t*)c->client, sd);
+        }
+    }
     return 0;
 }
 
@@ -243,11 +262,41 @@ _h3_deferred_consume_cb(nghttp3_conn* conn,
                         void*         stream_user_data)
 {
     (void)conn;
-    (void)stream_id;
-    (void)consumed;
-    (void)conn_user_data;
     (void)stream_user_data;
+    struct csilk_h3_conn_s* c = (struct csilk_h3_conn_s*)conn_user_data;
+    if (c && c->ngtcp2_conn && consumed > 0) {
+        ngtcp2_conn_extend_max_stream_offset(c->ngtcp2_conn, stream_id, (uint64_t)consumed);
+        ngtcp2_conn_extend_max_offset(c->ngtcp2_conn, (uint64_t)consumed);
+    }
     return 0;
+}
+
+static nghttp3_ssize
+_h3_read_data_cb(nghttp3_conn* conn,
+                 int64_t       stream_id,
+                 nghttp3_vec*  vec,
+                 size_t        veccnt,
+                 uint32_t*     pflags,
+                 void*         conn_user_data,
+                 void*         stream_user_data)
+{
+    (void)conn;
+    (void)stream_id;
+    (void)conn_user_data;
+    csilk_h3_stream_data_t* sd = (csilk_h3_stream_data_t*)stream_user_data;
+    if (!sd || !sd->resp_body || sd->resp_body_offset >= sd->resp_body_len) {
+        *pflags |= NGHTTP3_DATA_FLAG_EOF;
+        return 0;
+    }
+    if (veccnt == 0) {
+        return 0;
+    }
+    size_t rem = sd->resp_body_len - sd->resp_body_offset;
+    vec[0].base = (uint8_t*)(sd->resp_body + sd->resp_body_offset);
+    vec[0].len = rem;
+    sd->resp_body_offset += rem;
+    *pflags |= NGHTTP3_DATA_FLAG_EOF;
+    return 1;
 }
 
 #endif /* CSILK_HAS_NGTCP2 */
@@ -293,12 +342,12 @@ csilk_h3_session_new(int64_t stream_id, void* user_data)
 
     nghttp3_conn* ng3 = NULL;
     int           rc = nghttp3_conn_server_new_versioned(&ng3,
-                                               NGHTTP3_CALLBACKS_VERSION,
-                                               &callbacks,
-                                               NGHTTP3_SETTINGS_VERSION,
-                                               &settings,
-                                               NULL, /* mem */
-                                               user_data);
+                                                         NGHTTP3_CALLBACKS_VERSION,
+                                                         &callbacks,
+                                                         NGHTTP3_SETTINGS_VERSION,
+                                                         &settings,
+                                                         NULL, /* mem */
+                                                         user_data);
     if (rc != 0) {
         CSILK_LOG_E("H3: nghttp3_conn_server_new_versioned failed: %s", nghttp3_strerror(rc));
         return NULL;
@@ -306,7 +355,21 @@ csilk_h3_session_new(int64_t stream_id, void* user_data)
 
     /* The nghttp3 user_data is retrieved via nghttp3_conn_get_stream_user_data
      * (per-stream). The connection-level user_data is set at session creation
-     * and accessible via the nghttp3_conn internals. No validation needed here. */
+     * and accessible via the nghttp3_conn internals. */
+
+    int64_t ctrl_stream_id = 3;
+    int64_t qpack_enc_stream_id = 7;
+    int64_t qpack_dec_stream_id = 11;
+
+    struct csilk_h3_conn_s* c = (struct csilk_h3_conn_s*)user_data;
+    if (c && c->ngtcp2_conn) {
+        ngtcp2_conn_open_uni_stream(c->ngtcp2_conn, &ctrl_stream_id, NULL);
+        ngtcp2_conn_open_uni_stream(c->ngtcp2_conn, &qpack_enc_stream_id, NULL);
+        ngtcp2_conn_open_uni_stream(c->ngtcp2_conn, &qpack_dec_stream_id, NULL);
+    }
+
+    nghttp3_conn_bind_control_stream(ng3, ctrl_stream_id);
+    nghttp3_conn_bind_qpack_streams(ng3, qpack_enc_stream_id, qpack_dec_stream_id);
 
     return ng3;
 }
@@ -377,29 +440,28 @@ csilk_h3_session_send_response(nghttp3_conn*     session,
         }
     }
 
-    nghttp3_data_reader reader = {0};
-    int rc = nghttp3_conn_submit_response(session, stream_id, resp_nv, (size_t)resp_nvlen, &reader);
+    csilk_h3_stream_data_t* sd =
+        (csilk_h3_stream_data_t*)nghttp3_conn_get_stream_user_data(session, stream_id);
+    if (!sd) {
+        sd = csilk_h3_stream_data_new((uint64_t)stream_id);
+        if (sd) {
+            nghttp3_conn_set_stream_user_data(session, stream_id, sd);
+        }
+    }
+    if (sd) {
+        sd->resp_body = body;
+        sd->resp_body_len = body_len;
+        sd->resp_body_offset = 0;
+    }
+
+    nghttp3_data_reader dr = {.read_data = _h3_read_data_cb};
+    int                 rc = nghttp3_conn_submit_response(
+        session, stream_id, resp_nv, (size_t)resp_nvlen, (body && body_len > 0) ? &dr : NULL);
     if (rc != 0) {
         CSILK_LOG_E("H3: nghttp3_conn_submit_response failed: %s", nghttp3_strerror(rc));
         return -1;
     }
 
-    /* Push the response body (if any) via nghttp3_conn_writev_stream. */
-    if (body && body_len > 0) {
-        nghttp3_vec iov;
-        iov.base = (uint8_t*)body;
-        iov.len = body_len;
-
-        int64_t       out_stream_id = 0;
-        int           out_fin = 0;
-        nghttp3_ssize written =
-            nghttp3_conn_writev_stream(session, &out_stream_id, &out_fin, &iov, 1);
-        if (written < 0) {
-            CSILK_LOG_E("H3: nghttp3_conn_writev_stream failed: %s",
-                        nghttp3_strerror((int)written));
-            return -1;
-        }
-    }
     return 0;
 }
 
@@ -426,16 +488,19 @@ csilk_h3_session_send_body(nghttp3_conn*  session,
         return -1;
     }
 
-    nghttp3_vec iov;
-    iov.base = (uint8_t*)body;
-    iov.len = body_len;
+    csilk_h3_stream_data_t* sd =
+        (csilk_h3_stream_data_t*)nghttp3_conn_get_stream_user_data(session, stream_id);
+    if (!sd) {
+        return -1;
+    }
 
-    int64_t       out_stream_id = stream_id;
-    int           out_fin = 0;
-    nghttp3_ssize written = nghttp3_conn_writev_stream(session, &out_stream_id, &out_fin, &iov, 1);
-    if (written < 0) {
-        CSILK_LOG_E("H3: nghttp3_conn_writev_stream (body) failed: %s",
-                    nghttp3_strerror((int)written));
+    sd->resp_body = body;
+    sd->resp_body_len = body_len;
+    sd->resp_body_offset = 0;
+
+    int rc = nghttp3_conn_resume_stream(session, stream_id);
+    if (rc != 0) {
+        CSILK_LOG_E("H3: nghttp3_conn_resume_stream failed: %s", nghttp3_strerror(rc));
         return -1;
     }
     return 0;
@@ -465,6 +530,11 @@ csilk_h3_dispatch_stream(csilk_client_t* client, csilk_h3_stream_data_t* sd)
 
     csilk_ctx_t* ctx = &client->ctx;
 
+    client->protocol = CSILK_PROTO_HTTP3;
+    ctx->stream_id = (int32_t)sd->stream_id;
+    ctx->handler_index = -1;
+    ctx->request_seq++;
+
     /* Method */
     ctx->request.method = csilk_arena_strdup(ctx->arena, sd->method[0] ? sd->method : "GET");
     if (!ctx->request.method) {
@@ -475,6 +545,13 @@ csilk_h3_dispatch_stream(csilk_client_t* client, csilk_h3_stream_data_t* sd)
     ctx->request.path = csilk_arena_strdup(ctx->arena, sd->path[0] ? sd->path : "/");
     if (!ctx->request.path) {
         ctx->request.path = csilk_arena_strdup(ctx->arena, "/");
+    }
+
+    /* Request headers */
+    for (uint32_t i = 0; i < sd->num_headers; i++) {
+        if (sd->header_names[i] && sd->header_values[i]) {
+            map_set(ctx, &ctx->request.headers, sd->header_names[i], sd->header_values[i]);
+        }
     }
 
     /* Body */
@@ -492,6 +569,83 @@ csilk_h3_dispatch_stream(csilk_client_t* client, csilk_h3_stream_data_t* sd)
     _csilk_dispatch_request(ctx);
 
     return 0;
+}
+
+/**
+ * @brief Submit an HTTP/3 response for a completed request context.
+ *
+ * @param c The request context.
+ */
+void
+csilk_h3_send_response_for_ctx(csilk_ctx_t* c)
+{
+    if (!c) {
+        return;
+    }
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (!client) {
+        return;
+    }
+
+#ifdef CSILK_HAS_NGTCP2
+    struct csilk_h3_conn_s* h3c = (struct csilk_h3_conn_s*)client->h3_conn;
+    if (!h3c || !h3c->nghttp3_conn) {
+        return;
+    }
+
+    int status = c->response.status ? c->response.status : 200;
+
+    int header_count = 0;
+    for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {
+        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+            header_count++;
+        }
+    }
+
+    nghttp3_nv  stack_nva[64];
+    nghttp3_nv* nva = stack_nva;
+    if (header_count > 64) {
+        nva = malloc(sizeof(nghttp3_nv) * (size_t)header_count);
+        if (!nva) {
+            return;
+        }
+    }
+
+    int idx = 0;
+    for (int i = 0; i < CSILK_HEADER_BUCKETS && idx < header_count; i++) {
+        for (csilk_header_t* h = c->response.headers.buckets[i]; h; h = h->next) {
+            nva[idx].name = (const uint8_t*)h->key;
+            nva[idx].namelen = h->key_len;
+            nva[idx].value = (const uint8_t*)h->value;
+            nva[idx].valuelen = h->value_len;
+            nva[idx].flags = NGHTTP3_NV_FLAG_NONE;
+            idx++;
+        }
+    }
+
+    int rc = csilk_h3_session_send_response(h3c->nghttp3_conn,
+                                            c->stream_id,
+                                            status,
+                                            nva,
+                                            idx,
+                                            (const uint8_t*)c->response.body,
+                                            c->response.body_len);
+
+    if (nva != stack_nva) {
+        free(nva);
+    }
+
+    if (rc == 0 && h3c->transport) {
+        _h3_flush_http3_to_quic(h3c);
+        _h3_send_quic_packets(h3c->transport, h3c);
+    }
+
+    if (client->server) {
+        _csilk_trigger_hooks(client->server, c, CSILK_HOOK_REQUEST_END);
+    }
+#else
+    (void)c;
+#endif
 }
 
 /* --- HTTP/3 Stream data (always available) --- */
