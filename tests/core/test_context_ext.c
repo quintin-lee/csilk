@@ -6,6 +6,7 @@
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 #include "core/ctx/ctx_internal.h"
+#include "core/internal/srv_internal.h"
 
 static void
 test_csilk_next_aborted()
@@ -839,6 +840,32 @@ test_csilk_read_buffer_dynamic_expansion()
 }
 
 static void
+test_csilk_ctx_cleanup_null_internal_client()
+{
+    printf("Testing csilk_ctx_cleanup with null _internal_client...\n");
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+
+    /* Set up server with worker_pools non-null, but _internal_client is null */
+    csilk_server_t fake_server = {0};
+    worker_pool_t  fake_wp = {0};
+    fake_server.worker_pools = &fake_wp;
+    ctx->server = &fake_server;
+    ctx->_internal_client = nullptr;
+
+    char* buf = (char*)malloc(1024);
+    assert(buf != nullptr);
+    int r = _csilk_ctx_register_pooled_read_buffer(ctx, buf, 1024);
+    assert(r == 0);
+
+    /* Must not crash; should safely fall back to free(buf) */
+    csilk_ctx_cleanup(ctx);
+    ctx->server = nullptr;
+
+    csilk_test_ctx_free(ctx);
+    printf("csilk_ctx_cleanup_null_internal_client passed!\n");
+}
+
+static void
 test_csilk_view_accessors()
 {
     printf("Testing context zero-copy view accessors...\n");
@@ -1081,6 +1108,7 @@ main()
     test_csilk_parse_form_urlencoded_null();
     test_csilk_get_form_field_null();
     test_csilk_read_buffer_dynamic_expansion();
+    test_csilk_ctx_cleanup_null_internal_client();
     test_csilk_view_accessors();
     test_csilk_set_ex_destructor();
     test_csilk_streaming_backpressure();
