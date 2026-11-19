@@ -46,11 +46,11 @@ _udp_recv_timer_cb(csilk_io_timer_t* timer)
     struct sockaddr_in from;
     socklen_t          fromlen = sizeof(from);
     ssize_t            n = recvfrom(handle->fd,
-                         handle->recv_buf,
-                         sizeof(handle->recv_buf),
-                         0,
-                         (struct sockaddr*)&from,
-                         &fromlen);
+                                    handle->recv_buf,
+                                    sizeof(handle->recv_buf),
+                                    0,
+                                    (struct sockaddr*)&from,
+                                    &fromlen);
     if (n < 0) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             /* No datagram ready — keep the timer armed for the next tick. */
