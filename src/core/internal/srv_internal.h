@@ -77,7 +77,12 @@ typedef struct csilk_hook_array_s {
 } csilk_hook_array_t;
 
 /** @brief Protocol type for a client connection. */
-typedef enum { CSILK_PROTO_UNKNOWN, CSILK_PROTO_HTTP1, CSILK_PROTO_HTTP2 } csilk_protocol_t;
+typedef enum {
+    CSILK_PROTO_UNKNOWN,
+    CSILK_PROTO_HTTP1,
+    CSILK_PROTO_HTTP2,
+    CSILK_PROTO_HTTP3
+} csilk_protocol_t;
 
 /** @brief Connection lifecycle states. */
 typedef enum {
@@ -253,6 +258,7 @@ struct csilk_server_s {
     csilk_mutex_t                hook_mutex;   /**< Protects hook registration/removal CoW. */
     csilk_mutex_t                config_mutex; /**< Protects runtime config updates. */
     void* quic_transport;                      /**< Optional QUIC transport callbacks for HTTP/3. */
+    void* h3_transport; /**< Active csilk_h3_transport_t instance (if HTTP/3 enabled). */
 };
 
 #define CSILK_H2_INLINE_BUCKETS 16
@@ -307,6 +313,7 @@ struct csilk_client_s {
 
     nghttp2_session*      h2_session;    /**< HTTP/2 session state (if HTTP/2). */
     csilk_h2_stream_map_t h2_stream_map; /**< Adaptive hash table for active HTTP/2 streams. */
+    void*                 h3_conn;       /**< HTTP/3 QUIC connection state (if HTTP/3). */
 
     llhttp_t parser;                     /**< HTTP request parser (if HTTP/1.1). */
 

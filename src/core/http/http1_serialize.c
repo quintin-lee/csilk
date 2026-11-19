@@ -236,6 +236,12 @@ _csilk_send_response(csilk_ctx_t* c)
         return;
     }
 
+    if (client->protocol == CSILK_PROTO_HTTP3) {
+        extern void csilk_h3_send_response_for_ctx(csilk_ctx_t * c);
+        csilk_h3_send_response_for_ctx(c);
+        return;
+    }
+
     csilk_io_timer_stop(&client->request_timer);
 
     int         status = client->ctx.response.status ? client->ctx.response.status : 200;

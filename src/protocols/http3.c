@@ -21,6 +21,7 @@
 #include "csilk/protocols/h3.h"
 #include "csilk/csilk.h"
 #include "http3_internal.h"
+#include "core/internal/srv_internal.h"
 
 #include <errno.h>
 #include <netinet/in.h>
@@ -163,6 +164,16 @@ _h3_rand(uint8_t* dest, size_t destlen, const ngtcp2_rand_ctx* rand_ctx)
     RAND_bytes(dest, (int)destlen);
 }
 
+/* QUIC tls_early_data_rejected callback: 0-RTT early data was rejected by peer. */
+static int
+_h3_tls_early_data_rejected(ngtcp2_conn* conn, void* user_data)
+{
+    (void)conn;
+    (void)user_data;
+    CSILK_LOG_W("H3: 0-RTT early data rejected by TLS peer");
+    return 0;
+}
+
 /* QUIC recv_stream_data callback: forward data to nghttp3. */
 static int
 _h3_recv_stream_data(ngtcp2_conn*   conn,
@@ -174,28 +185,32 @@ _h3_recv_stream_data(ngtcp2_conn*   conn,
                      void*          user_data,
                      void*          stream_user_data)
 {
-    (void)conn;
-    (void)flags;
+    (void)offset;
     (void)stream_user_data;
     struct csilk_h3_conn_s* c = (struct csilk_h3_conn_s*)user_data;
     if (!c || !c->nghttp3_conn) {
         return 0;
     }
 
+    int fin = (flags & NGTCP2_STREAM_DATA_FLAG_FIN) ? 1 : 0;
+
     /* Feed the raw HTTP/3 stream payload into nghttp3. */
-    nghttp3_ssize consumed = nghttp3_conn_read_stream(c->nghttp3_conn,
-                                                      stream_id,
-                                                      data,
-                                                      datalen,
-                                                      /*fin=*/offset == 0 ? 0 : 0);
+    nghttp3_ssize consumed =
+        nghttp3_conn_read_stream(c->nghttp3_conn, stream_id, data, datalen, fin);
     if (consumed < 0) {
         CSILK_LOG_W("H3: nghttp3 read_stream error on stream %" PRId64 ": %s",
                     stream_id,
                     nghttp3_strerror((int)consumed));
         return NGTCP2_ERR_CALLBACK_FAILURE;
     }
-    /* Inform nghttp3 of the write offset we consumed. */
-    nghttp3_conn_add_write_offset(c->nghttp3_conn, stream_id, (uint64_t)consumed);
+    if (consumed > 0) {
+        /* Inform nghttp3 of the write offset we consumed. */
+        nghttp3_conn_add_write_offset(c->nghttp3_conn, stream_id, (size_t)consumed);
+
+        /* Update QUIC flow control windows */
+        ngtcp2_conn_extend_max_stream_offset(conn, stream_id, (uint64_t)consumed);
+        ngtcp2_conn_extend_max_offset(conn, (uint64_t)consumed);
+    }
     return 0;
 }
 
@@ -242,6 +257,7 @@ _h3_callbacks(void)
     cbs.encrypt = ngtcp2_crypto_encrypt_cb;
     cbs.decrypt = ngtcp2_crypto_decrypt_cb;
     cbs.hp_mask = ngtcp2_crypto_hp_mask_cb;
+    cbs.tls_early_data_rejected = _h3_tls_early_data_rejected;
     /* version_negotiation is required by NGTCP2_CALLBACKS_V3+; the
      * generic wrapper installs Initial keys for the negotiated version. */
     cbs.version_negotiation = ngtcp2_crypto_version_negotiation_cb;
@@ -302,7 +318,23 @@ _h3_new_conn(csilk_h3_transport_t*  t,
     c->is_server = 1;
     c->state = 0; /* new */
     c->stream_count = 0;
-    c->client = NULL;
+    c->transport = t;
+    c->client = calloc(1, sizeof(csilk_client_t));
+    if (c->client) {
+        csilk_client_t* cl = (csilk_client_t*)c->client;
+        cl->protocol = CSILK_PROTO_HTTP3;
+        cl->h3_conn = c;
+        cl->server = (csilk_server_t*)t->server;
+        cl->ctx._internal_client = cl;
+        cl->ctx.server = cl->server;
+        cl->ctx.arena = csilk_arena_new(4096);
+        cl->ctx.file_fd = -1;
+        cl->ctx.handler_index = -1;
+        cl->ctx.request_seq = 1;
+        cl->ctx.write_high_water_mark = CSILK_WRITE_HWM_DEFAULT;
+        cl->ctx.write_low_water_mark = CSILK_WRITE_LWM_DEFAULT;
+        cl->ctx.max_write_buffer_size = CSILK_WRITE_MAX_BUFFER_DEFAULT;
+    }
     c->dcid_len = dcid->datalen;
     if (dcid->datalen > 0) {
         memcpy(c->dcid_data,
@@ -318,7 +350,7 @@ _h3_new_conn(csilk_h3_transport_t*  t,
 }
 
 /* Forward. */
-static int _h3_send_quic_packets(csilk_h3_transport_t* t, struct csilk_h3_conn_s* conn);
+CSILK_INTERNAL int _h3_send_quic_packets(csilk_h3_transport_t* t, struct csilk_h3_conn_s* conn);
 
 /**
  * @brief Unregister and free a QUIC connection.
@@ -346,6 +378,17 @@ _h3_del_conn(csilk_h3_transport_t* t, struct csilk_h3_conn_s* c)
         SSL_set_app_data(c->ssl, NULL);
         SSL_free(c->ssl);
         c->ssl = NULL;
+    }
+
+    if (c->client) {
+        csilk_client_t* cl = (csilk_client_t*)c->client;
+        if (cl->ctx.arena) {
+            csilk_arena_free(cl->ctx.arena);
+            cl->ctx.arena = NULL;
+        }
+        csilk_ctx_cleanup(&cl->ctx);
+        free(cl);
+        c->client = NULL;
     }
 
     /* Remove from transport's connection table. */
@@ -394,7 +437,7 @@ _h3_make_path(const struct sockaddr_storage* remote,
  * @param conn  The QUIC connection.
  * @return 0 on success, -1 on error.
  */
-static int
+CSILK_INTERNAL int
 _h3_send_quic_packets(csilk_h3_transport_t* t, struct csilk_h3_conn_s* conn)
 {
     uint8_t pktbuf[NGTCP2_MAX_UDP_PAYLOAD_SIZE + 64];
@@ -430,6 +473,80 @@ _h3_send_quic_packets(csilk_h3_transport_t* t, struct csilk_h3_conn_s* conn)
             CSILK_LOG_W("H3: sendto failed: %s", strerror(errno));
             return -1;
         }
+    }
+    return 0;
+}
+
+/**
+ * @brief Flush outbound HTTP/3 data (control frames, QPACK, responses) into QUIC streams.
+ *
+ * @param conn  HTTP/3 connection.
+ * @return 0 on success, -1 on error.
+ */
+CSILK_INTERNAL int
+_h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn)
+{
+    if (!conn || !conn->nghttp3_conn || !conn->ngtcp2_conn) {
+        return 0;
+    }
+
+    while (1) {
+        int64_t       stream_id = -1;
+        int           fin = 0;
+        nghttp3_vec   vec[16];
+        nghttp3_ssize nvec =
+            nghttp3_conn_writev_stream(conn->nghttp3_conn, &stream_id, &fin, vec, 16);
+        if (nvec < 0) {
+            CSILK_LOG_E("H3: nghttp3_conn_writev_stream error: %s", nghttp3_strerror((int)nvec));
+            return -1;
+        }
+        if (nvec == 0) {
+            if (fin && stream_id >= 0) {
+                uint8_t      pktbuf[NGTCP2_MAX_UDP_PAYLOAD_SIZE + 64];
+                ngtcp2_ssize written = ngtcp2_conn_writev_stream(conn->ngtcp2_conn,
+                                                                 NULL,
+                                                                 NULL,
+                                                                 pktbuf,
+                                                                 sizeof(pktbuf),
+                                                                 NULL,
+                                                                 NGTCP2_WRITE_STREAM_FLAG_FIN,
+                                                                 stream_id,
+                                                                 NULL,
+                                                                 0,
+                                                                 csilk_io_hrtime());
+                (void)written;
+                nghttp3_conn_add_write_offset(conn->nghttp3_conn, stream_id, 0);
+            }
+            break;
+        }
+
+        ngtcp2_vec qvec[16];
+        for (int i = 0; i < nvec; i++) {
+            qvec[i].base = vec[i].base;
+            qvec[i].len = vec[i].len;
+        }
+
+        uint8_t      pktbuf[NGTCP2_MAX_UDP_PAYLOAD_SIZE + 64];
+        ngtcp2_ssize written = ngtcp2_conn_writev_stream(conn->ngtcp2_conn,
+                                                         NULL,
+                                                         NULL,
+                                                         pktbuf,
+                                                         sizeof(pktbuf),
+                                                         NULL,
+                                                         fin ? NGTCP2_WRITE_STREAM_FLAG_FIN : 0,
+                                                         stream_id,
+                                                         qvec,
+                                                         (size_t)nvec,
+                                                         csilk_io_hrtime());
+        if (written < 0) {
+            if (written == NGTCP2_ERR_STREAM_NOT_FOUND) {
+                nghttp3_conn_close_stream(
+                    conn->nghttp3_conn, stream_id, NGHTTP3_H3_STREAM_CREATION_ERROR);
+            }
+            break;
+        }
+
+        nghttp3_conn_add_write_offset(conn->nghttp3_conn, stream_id, (size_t)written);
     }
     return 0;
 }
@@ -504,19 +621,31 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
                                                (const struct sockaddr*)&local_addr,
                                                local_len);
 
+        /* Generate a server connection ID. */
+        ngtcp2_cid scid;
+        scid.datalen = 8;
+        RAND_bytes(scid.data, scid.datalen);
+
         ngtcp2_settings settings;
         ngtcp2_settings_default(&settings);
         settings.initial_rtt = NGTCP2_DEFAULT_INITIAL_RTT;
 
         ngtcp2_transport_params tp;
         ngtcp2_transport_params_default(&tp);
+        tp.initial_max_streams_bidi = 128;
+        tp.initial_max_streams_uni = 128;
+        tp.initial_max_stream_data_bidi_local = 256 * 1024;
+        tp.initial_max_stream_data_bidi_remote = 256 * 1024;
+        tp.initial_max_stream_data_uni = 256 * 1024;
+        tp.initial_max_data = 1024 * 1024;
+        tp.max_idle_timeout = 30 * NGTCP2_SECONDS;
+        tp.original_dcid = hd.dcid;
+        tp.original_dcid_present = 1;
+        tp.initial_scid = scid;
+        tp.initial_scid_present = 1;
+        tp.active_connection_id_limit = 4;
 
         ngtcp2_callbacks cbs = _h3_callbacks();
-
-        /* Generate a server connection ID. */
-        ngtcp2_cid scid;
-        scid.datalen = 8;
-        RAND_bytes(scid.data, scid.datalen);
 
         rc = ngtcp2_conn_server_new_versioned(&conn->ngtcp2_conn,
                                               &hd.dcid,
@@ -559,6 +688,8 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
         }
 
         conn->state = 1; /* handshake */
+
+        _h3_flush_http3_to_quic(conn);
 
         CSILK_LOG_I("H3: new QUIC conn (DCID=%02x%02x%02x%02x)",
                     hd.dcid.data[0],
@@ -954,6 +1085,8 @@ _h3_init_ssl_ctx(csilk_h3_transport_t* t, const char* cert_pem, const char* key_
         return -1;
     }
     SSL_CTX_set_min_proto_version(t->ssl_ctx, TLS1_3_VERSION);
+    SSL_CTX_set_session_cache_mode(t->ssl_ctx, SSL_SESS_CACHE_SERVER);
+    SSL_CTX_set_max_early_data(t->ssl_ctx, 0xffffffff);
 
     BIO*      cert_bio = BIO_new_mem_buf(cert_pem, (int)strlen(cert_pem));
     BIO*      key_bio = BIO_new_mem_buf(key_pem, (int)strlen(key_pem));
@@ -1011,6 +1144,7 @@ csilk_h3_quic_tls_new(SSL_CTX* ssl_ctx)
     /* Enforce TLS 1.3 only for QUIC (RFC 9001 mandates TLS 1.3). */
     SSL_set_min_proto_version(ssl, TLS1_3_VERSION);
     SSL_set_max_proto_version(ssl, TLS1_3_VERSION);
+    SSL_set_max_early_data(ssl, 0xffffffff);
 
     return ssl;
 }
@@ -1023,31 +1157,52 @@ csilk_h3_quic_tls_new(SSL_CTX* ssl_ctx)
 static int
 _h3_on_stream_recv(csilk_server_t* server, int64_t stream_id, const uint8_t* data, size_t len)
 {
-    (void)server;
+    if (!server || !server->h3_transport) {
+        return 0;
+    }
+#ifdef CSILK_HAS_NGTCP2
+    csilk_h3_transport_t* t = (csilk_h3_transport_t*)server->h3_transport;
+    for (int i = 0; i < t->conn_count; i++) {
+        struct csilk_h3_conn_s* c = t->conns[i];
+        if (c && c->nghttp3_conn) {
+            nghttp3_ssize consumed =
+                nghttp3_conn_read_stream(c->nghttp3_conn, stream_id, data, len, 0);
+            if (consumed > 0) {
+                nghttp3_conn_add_write_offset(c->nghttp3_conn, stream_id, (size_t)consumed);
+                return 0;
+            }
+        }
+    }
+#else
     (void)stream_id;
     (void)data;
     (void)len;
-    /* Phase 1.4 integration path:
-     * 1. Feed (data, len) into nghttp3_conn_read_stream (h3_session.c).
-     * 2. nghttp3 invokes _h3_recv_header_cb / _h3_end_headers_cb.
-     * 3. When headers_complete == 1, caller invokes:
-     *    csilk_h3_dispatch_stream(client, sd)
-     * 4. csilk_h3_dispatch_stream populates client->ctx and calls
-     *    _csilk_dispatch_request(ctx) — same as HTTP/1.1 and HTTP/2.
-     * This stub is the vtable entry point; the real pipeline runs
-     * through the nghttp3 session layer. */
+#endif
     return 0;
 }
 
 static int
 _h3_on_stream_send(csilk_server_t* server, int64_t stream_id, const uint8_t* data, size_t len)
 {
-    (void)server;
+    if (!server || !server->h3_transport) {
+        return 0;
+    }
+#ifdef CSILK_HAS_NGTCP2
+    csilk_h3_transport_t* t = (csilk_h3_transport_t*)server->h3_transport;
+    for (int i = 0; i < t->conn_count; i++) {
+        struct csilk_h3_conn_s* c = t->conns[i];
+        if (c && c->nghttp3_conn) {
+            csilk_h3_session_send_body(c->nghttp3_conn, stream_id, data, len);
+            _h3_flush_http3_to_quic(c);
+            _h3_send_quic_packets(t, c);
+            return 0;
+        }
+    }
+#else
     (void)stream_id;
     (void)data;
     (void)len;
-    /* In a full implementation, this would encode via nghttp3 and
-     * flush QUIC packets via ngtcp2. */
+#endif
     return 0;
 }
 
@@ -1071,6 +1226,11 @@ csilk_h3_set_enabled(void* server, int port)
         .on_stream_send = _h3_on_stream_send,
     };
     csilk_server_set_quic_transport(srv, &h3_vtable);
+    csilk_h3_transport_t* t = csilk_h3_transport_new(port, NULL, NULL);
+    if (t) {
+        t->server = srv;
+        srv->h3_transport = t;
+    }
     CSILK_LOG_I("HTTP/3: enabled on server, UDP port %d", port);
     return 0;
 }
