@@ -31,11 +31,15 @@
 #include <sys/prctl.h>
 #include <sys/syscall.h>
 #if defined(__has_include)
-#if __has_include(<linux/seccomp.h>) && __has_include(<linux/filter.h>) && __has_include(<linux/audit.h>)
+#if __has_include(<linux/seccomp.h>)
+#if __has_include(<linux/filter.h>)
+#if __has_include(<linux/audit.h>)
 #define CSILK_HAVE_LINUX_SECCOMP_HEADERS 1
 #include <linux/audit.h>
 #include <linux/filter.h>
 #include <linux/seccomp.h>
+#endif
+#endif
 #endif
 #endif
 #endif
