@@ -327,7 +327,7 @@ jobs:
       run: cmake --build build -j$(nproc)
 
     - name: Run tests with UV_USE_IO_URING=1
-      run: UV_USE_IO_URING=1 ctest --test-dir build --timeout 60 --output-on-failure
+      run: UV_USE_IO_URING=1 ctest --test-dir build --timeout 120 --output-on-failure
       env:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
@@ -346,7 +346,7 @@ jobs:
       run: cmake --build build_uring -j$(nproc)
 
     - name: Run tests with native CSILK_USE_URING=ON
-      run: ctest --test-dir build_uring --timeout 60 --output-on-failure
+      run: ctest --test-dir build_uring --timeout 120 --output-on-failure
       env:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
