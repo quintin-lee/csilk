@@ -59,15 +59,19 @@ typedef struct {
 } fg_stack_entry_t;
 
 typedef struct {
-    atomic_int        running;        /**< Non-zero while sampler is active. */
-    atomic_int        sample_count;   /**< Total samples captured. */
-    fg_stack_entry_t* entries;        /**< Aggregated stack entries. */
-    int*              hash_table;     /**< Hash bucket heads (-1 = empty). */
-    int               entry_count;    /**< Number of entries used. */
-    csilk_thread_t    sampler_thread; /**< Background profiler thread. */
-    csilk_mutex_t     mutex;          /**< Guards entries and hash_table. */
-    useconds_t        interval_us;    /**< Sampling interval. */
-    csilk_ctx_t*      notify_ctx;     /**< Admin context for completion notification. */
+    atomic_int               running;        /**< Non-zero while sampler is active. */
+    atomic_int               sample_count;   /**< Total samples captured. */
+    fg_stack_entry_t*        entries;        /**< Aggregated stack entries. */
+    int*                     hash_table;     /**< Hash bucket heads (-1 = empty). */
+    int                      entry_count;    /**< Number of entries used. */
+    csilk_thread_t           sampler_thread; /**< Background profiler thread. */
+    csilk_mutex_t            mutex;          /**< Guards entries and hash_table. */
+    useconds_t               interval_us;    /**< Sampling interval. */
+    uint64_t                 duration_ms;    /**< Auto-stop duration (0 = manual stop only). */
+    csilk_flamegraph_done_cb done_cb;        /**< Completion callback (NULL = none). */
+    void*                    user_data;      /**< Opaque pointer passed to done_cb. */
+    int                      auto_stop;  /**< 1 if sampler should auto-stop after duration_ms. */
+    csilk_ctx_t*             notify_ctx; /**< Admin context for completion notification. */
 } fg_profiler_t;
 
 static fg_profiler_t* g_profiler = NULL;
@@ -122,6 +126,9 @@ fg_entry_insert(fg_profiler_t* p, const char* collapsed, int depth)
     return idx;
 }
 
+/* Forward declaration: defined later in this file */
+static void fg_generate_svg(fg_profiler_t* p, char** out_svg, size_t* out_len);
+
 /** @brief Background sampler thread entry point.
  *
  * Loops at the configured interval while @c running is set.  On each
@@ -137,6 +144,14 @@ fg_sampler_thread(void* arg)
     fg_profiler_t* p = (fg_profiler_t*)arg;
     char           collapsed[FG_MAX_DEPTH * FG_MAX_NAME];
     void*          buffer[FG_MAX_DEPTH];
+    uint64_t       start_ms = 0;
+    uint64_t       elapsed_ms = 0;
+
+    if (p->auto_stop && p->duration_ms > 0) {
+        struct timespec ts;
+        clock_gettime(CLOCK_MONOTONIC, &ts);
+        start_ms = (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000;
+    }
 
     while (atomic_load(&p->running)) {
 #if defined(HAS_EXECINFO)
@@ -177,6 +192,45 @@ fg_sampler_thread(void* arg)
         (void)collapsed;
 #endif
         usleep(p->interval_us);
+
+        /* Auto-stop check: exit loop after duration_ms elapses */
+        if (p->auto_stop && p->duration_ms > 0) {
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            elapsed_ms = (uint64_t)ts.tv_sec * 1000 + (uint64_t)ts.tv_nsec / 1000000 - start_ms;
+            if (elapsed_ms >= p->duration_ms) {
+                atomic_store(&p->running, 0);
+                break;
+            }
+        }
+    }
+
+    /* Auto-stop path: stop + generate SVG + invoke callback, then clean up.
+     * The sampler thread owns the cleanup since it is the last thread that
+     * references the profiler instance. */
+    if (p->auto_stop) {
+        char*  svg = NULL;
+        size_t svg_len = 0;
+
+        if (p->done_cb) {
+            fg_generate_svg(p, &svg, &svg_len);
+        }
+
+        /* Clear global pointer before callback so is_running() returns 0
+           and concurrent start attempts can proceed. */
+        g_profiler = NULL;
+
+        if (p->done_cb) {
+            p->done_cb(svg, svg_len, p->user_data);
+        }
+        if (svg) {
+            free(svg);
+        }
+
+        csilk_mutex_destroy(&p->mutex);
+        free(p->entries);
+        free(p->hash_table);
+        free(p);
     }
 }
 
@@ -355,10 +409,29 @@ csilk_flamegraph_start(unsigned int interval_us)
 int
 csilk_flamegraph_stop(char** out_svg, size_t* out_len)
 {
-    if (!g_profiler) {
+    fg_profiler_t* p = g_profiler;
+    if (!p) {
         return -1;
     }
-    fg_profiler_t* p = g_profiler;
+
+    /* Auto-stop sessions are managed by the sampler thread: it sets
+     * running=0, generates SVG, frees resources, and clears g_profiler
+     * itself.  If we reach here while auto_stop is active the session has
+     * already completed (g_profiler would be NULL) or the sampler is still
+     * in its cleanup window — just signal stop and join; do NOT double-free. */
+    if (p->auto_stop) {
+        atomic_store(&p->running, 0);
+        csilk_thread_join(&p->sampler_thread);
+        g_profiler = NULL;
+        if (out_svg) {
+            *out_svg = NULL;
+        }
+        if (out_len) {
+            *out_len = 0;
+        }
+        return -1;
+    }
+
     atomic_store(&p->running, 0);
     csilk_thread_join(&p->sampler_thread);
     g_profiler = NULL;
@@ -381,4 +454,64 @@ int
 csilk_flamegraph_is_running(void)
 {
     return g_profiler && atomic_load(&g_profiler->running);
+}
+
+/** @brief Start sampling with auto-stop and completion callback.
+ *
+ * The sampler thread runs for @p duration_ms then automatically stops,
+ * generates the SVG (if @p cb is non-NULL), and invokes @p cb on the
+ * sampler thread.  Profiler resources are freed internally.
+ *
+ * @param interval_us  Sampling interval in microseconds (e.g. 10000 = 100 Hz).
+ * @param duration_ms  Auto-stop duration in milliseconds.
+ * @param cb           Completion callback (may be NULL for fire-and-forget).
+ * @param user_data    Opaque pointer passed to @p cb.
+ * @return 0 on success, -1 if already running or allocation failure. */
+int
+csilk_flamegraph_start_async(useconds_t               interval_us,
+                             uint64_t                 duration_ms,
+                             csilk_flamegraph_done_cb cb,
+                             void*                    user_data)
+{
+    if (g_profiler) {
+        return -1;
+    }
+
+    fg_profiler_t* p = calloc(1, sizeof(fg_profiler_t));
+    if (!p) {
+        return -1;
+    }
+
+    p->entries = calloc(FG_MAX_STACKS, sizeof(fg_stack_entry_t));
+    p->hash_table = malloc(FG_MAX_STACKS * sizeof(int));
+    if (!p->entries || !p->hash_table) {
+        free(p->entries);
+        free(p->hash_table);
+        free(p);
+        return -1;
+    }
+    for (int i = 0; i < FG_MAX_STACKS; i++) {
+        p->hash_table[i] = -1;
+    }
+
+    p->interval_us = interval_us;
+    p->duration_ms = duration_ms;
+    p->auto_stop = 1;
+    p->done_cb = cb;
+    p->user_data = user_data;
+
+    csilk_mutex_init(&p->mutex);
+    atomic_store(&p->running, 1);
+    atomic_store(&p->sample_count, 0);
+
+    if (csilk_thread_create(&p->sampler_thread, fg_sampler_thread, p) != 0) {
+        csilk_mutex_destroy(&p->mutex);
+        free(p->entries);
+        free(p->hash_table);
+        free(p);
+        return -1;
+    }
+
+    g_profiler = p;
+    return 0;
 }

@@ -11,13 +11,15 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <unistd.h>
 
 #include "csilk/core/json/json.h"
 #include "csilk/core/internal.h"
 #include "csilk/drivers/db.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/util/flamegraph.h"
+
+/* Internal dispatch with return value (from srv_impl.h via internal.h chain) */
+extern int _csilk_dispatch_try(csilk_ctx_t* c, void (*cb)(void* arg), void* arg);
 
 /* Weak fallbacks for optional sub-modules (AI, DB) */
 #if defined(__GNUC__) || defined(__clang__)
@@ -46,6 +48,61 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
     }
 }
 #endif
+
+/* --- Async flame-graph completion (dispatched from sampler thread) --- */
+
+typedef struct {
+    csilk_ctx_t* ctx;
+    char*        svg;
+    size_t       svg_len;
+} admin_fg_result_t;
+
+static void
+admin_fg_complete_dispatch_cb(void* arg)
+{
+    admin_fg_result_t* r = (admin_fg_result_t*)arg;
+    if (!r || !r->ctx) {
+        free(r);
+        return;
+    }
+
+    if (r->svg) {
+        csilk_set_header(r->ctx, "Content-Type", "image/svg+xml");
+        csilk_set_header(r->ctx, "Cache-Control", "no-cache");
+        csilk_status(r->ctx, 200);
+        csilk_set_response_body(r->ctx, r->svg, r->svg_len, 0);
+    } else {
+        csilk_json_error(r->ctx, 500, "No samples collected");
+    }
+    free(r->svg);
+    free(r);
+}
+
+/** @brief Flame-graph done callback (runs on sampler thread).
+ *  Marshals the SVG result back to the worker via csilk_dispatch. */
+static void
+admin_fg_done_cb(char* svg, size_t svg_len, void* user_data)
+{
+    csilk_ctx_t* c = (csilk_ctx_t*)user_data;
+    if (!c) {
+        free(svg);
+        return;
+    }
+
+    admin_fg_result_t* r = (admin_fg_result_t*)malloc(sizeof(admin_fg_result_t));
+    if (!r) {
+        free(svg);
+        return;
+    }
+    r->ctx = c;
+    r->svg = svg;
+    r->svg_len = svg_len;
+
+    if (_csilk_dispatch_try(c, admin_fg_complete_dispatch_cb, r) < 0) {
+        free(svg);
+        free(r);
+    }
+}
 
 /* Externs from metrics.c */
 extern uint64_t atomic_load_http_requests(void);
@@ -208,9 +265,10 @@ admin_topology_handler(csilk_ctx_t* c)
 
 /** @brief Start flame graph profiling and return the SVG result.
  *
- * Begins stack sampling for 5 seconds (100Hz), then stops and returns
- * the generated SVG flame graph directly as an image/svg+xml response.
- * Only one profiler session runs at a time. */
+ * Begins non-blocking stack sampling for 5 seconds (100 Hz).  The handler
+ * returns immediately; the sampler thread auto-stops after the duration
+ * and dispatches the SVG response back to the owning worker via
+ * csilk_dispatch.  Only one profiler session runs at a time. */
 static void
 admin_flamegraph_handler(csilk_ctx_t* c)
 {
@@ -219,23 +277,13 @@ admin_flamegraph_handler(csilk_ctx_t* c)
         return;
     }
 
-    if (csilk_flamegraph_start(10000) != 0) {
+    if (csilk_flamegraph_start_async(10000, 5000, admin_fg_done_cb, c) != 0) {
         csilk_json_error(c, 500, "Failed to start profiler");
         return;
     }
 
-    usleep(5000000);
-
-    char*  svg = NULL;
-    size_t svg_len = 0;
-    if (csilk_flamegraph_stop(&svg, &svg_len) == 0 && svg) {
-        csilk_set_header(c, "Content-Type", "image/svg+xml");
-        csilk_set_header(c, "Cache-Control", "no-cache");
-        csilk_status(c, 200);
-        csilk_set_response_body(c, svg, svg_len, 1);
-    } else {
-        csilk_json_error(c, 500, "No samples collected");
-    }
+    /* Handler returns without sending a response; the dispatched callback
+     * will write the SVG when sampling completes. */
 }
 
 /** @brief Quick CPU profile — always available, non-blocking.
@@ -275,13 +323,11 @@ admin_profile_quick_handler(csilk_ctx_t* c)
         return;
     }
 
-    if (csilk_flamegraph_start(5000) != 0) {
+    /* Non-blocking: sampler auto-stops after 100 ms and dispatches result */
+    if (csilk_flamegraph_start_async(5000, 100, admin_fg_done_cb, c) != 0) {
         csilk_json_error(c, 500, "Failed to start profiler");
         return;
     }
-    usleep(100000);
-    csilk_flamegraph_stop(NULL, NULL);
-    csilk_json_error(c, 200, "Quick profile complete");
 }
 
 typedef struct {
