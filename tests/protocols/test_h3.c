@@ -397,6 +397,7 @@ test_h3_router_dispatch(void)
         csilk_arena_free(client.ctx.arena);
     }
     csilk_server_free(server);
+    csilk_router_free(router);
 
     printf("test_h3_router_dispatch: PASS\n");
 }
