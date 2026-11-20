@@ -25,9 +25,11 @@
 struct csilk_db_pool_s {
     csilk_db_driver_t* driver;
     void*              connections[CSILK_DB_POOL_MAX_CONNS]; /**< Connection array (csilk#6). */
-    int                max_conns;  /**< Number of connections in this pool. */
-    void*              connection; /**< = connections[0], backward compat. */
+    int                max_conns;    /**< Number of connections in this pool. */
+    void*              connection;   /**< = connections[0], backward compat. */
     csilk_mutex_t      mutex;
+    csilk_cond_t       pool_cond;    /**< Signalled when a connection slot is released. */
+    int                pool_closing; /**< Set by csilk_db_pool_free to wake all waiters. */
     /*
      * Per-connection holder tracking (csilk#6).
      * conn_holder[i] / conn_holder_set[i] track which thread owns connections[i].
