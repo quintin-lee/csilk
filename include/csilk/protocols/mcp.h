@@ -119,6 +119,15 @@ int csilk_mcp_server_start_stdio(csilk_mcp_server_t* server);
 int
 csilk_mcp_server_bind_app(csilk_mcp_server_t* server, csilk_app_t* app, const char* route_prefix);
 
+/**
+ * @brief Binds the MCP Server to a csilk web application using WebSocket transport.
+ * @param server The server instance.
+ * @param app The csilk application instance.
+ * @param ws_path Route path for WebSocket endpoint (e.g. "/mcp/ws", or NULL for default "<route_prefix>/ws").
+ * @return 0 on success, non-zero on failure.
+ */
+int csilk_mcp_server_bind_ws(csilk_mcp_server_t* server, csilk_app_t* app, const char* ws_path);
+
 /* --- MCP Client API --- */
 
 /**
@@ -135,6 +144,13 @@ csilk_mcp_client_t* csilk_mcp_client_connect_stdio(const char* command, char* co
  * @return Pointer to connected MCP client, or NULL on failure.
  */
 csilk_mcp_client_t* csilk_mcp_client_connect_sse(const char* sse_url);
+
+/**
+ * @brief Connects to an external MCP Server via WebSocket endpoint.
+ * @param ws_url WebSocket endpoint URL.
+ * @return Pointer to connected MCP client, or NULL on failure.
+ */
+csilk_mcp_client_t* csilk_mcp_client_connect_ws(const char* ws_url);
 
 /**
  * @brief Frees an MCP Client instance and closes its connection.
@@ -178,6 +194,15 @@ char* csilk_mcp_client_call_tool(csilk_mcp_client_t* client,
  * @return Number of tools successfully registered (>= 0), or -1 on error.
  */
 int csilk_mcp_client_import_to_registry(csilk_mcp_client_t* client, csilk_ai_tool_registry_t* reg);
+
+/**
+ * @brief Fetch prompts and resources from remote MCP server and inject them as system messages
+ *        into an AI conversation context for distributed agent execution.
+ * @param client Connected MCP client.
+ * @param ctx AI context to inject into.
+ * @return Number of context items injected (>= 0), or negative on failure.
+ */
+int csilk_mcp_client_inject_context(csilk_mcp_client_t* client, csilk_ai_context_t* ctx);
 
 /* --- MCP Stdio Client Pool API --- */
 

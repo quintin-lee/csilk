@@ -19,6 +19,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "csilk/drivers/ai.h"
 #include "csilk/drivers/ai/tool_registry.h"
 #include "csilk/protocols/mcp.h"
 #include "mcp_internal.h"
@@ -259,6 +260,54 @@ mcp_http_roundtrip(csilk_mcp_client_t* client, const char* req_json, char** out_
     return 0;
 }
 
+static int
+mcp_ws_roundtrip(csilk_mcp_client_t* client, const char* req_json, char** out_body)
+{
+    const char* url = client->ws_url[0] ? client->ws_url : client->sse_url;
+    if (!url || !url[0] || !req_json || !out_body) {
+        return -1;
+    }
+
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        return -1;
+    }
+
+    char target_url[320];
+    if (strncmp(url, "ws://", 5) == 0) {
+        snprintf(target_url, sizeof(target_url), "http://%s", url + 5);
+    } else if (strncmp(url, "wss://", 6) == 0) {
+        snprintf(target_url, sizeof(target_url), "https://%s", url + 6);
+    } else {
+        snprintf(target_url, sizeof(target_url), "%s", url);
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, target_url);
+    curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 2L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 3000L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 5000L);
+
+    CURLcode res = curl_easy_perform(curl);
+    if (res == CURLE_OK) {
+        size_t sent = 0;
+        if (curl_ws_send(curl, req_json, strlen(req_json), &sent, 0, CURLWS_TEXT) == CURLE_OK) {
+            char                        buf[4096];
+            size_t                      nread = 0;
+            const struct curl_ws_frame* meta = NULL;
+            if (curl_ws_recv(curl, buf, sizeof(buf) - 1, &nread, &meta) == CURLE_OK && nread > 0) {
+                buf[nread] = '\0';
+                *out_body = strdup(buf);
+                curl_easy_cleanup(curl);
+                return 0;
+            }
+        }
+    }
+    curl_easy_cleanup(curl);
+
+    /* If direct WebSocket frame transfer is unsupported or fails, fall back to HTTP */
+    return mcp_http_roundtrip(client, req_json, out_body);
+}
+
 static csilk_mcp_msg_t*
 mcp_client_rpc(csilk_mcp_client_t* client, const char* method, csilk_json_t* params_owned)
 {
@@ -291,7 +340,8 @@ mcp_client_rpc(csilk_mcp_client_t* client, const char* method, csilk_json_t* par
 
     char* resp_str = NULL;
     int   rc = client->is_stdio ? mcp_stdio_roundtrip(client, req_str, &resp_str)
-                                : mcp_http_roundtrip(client, req_str, &resp_str);
+                                : (client->is_ws ? mcp_ws_roundtrip(client, req_str, &resp_str)
+                                                 : mcp_http_roundtrip(client, req_str, &resp_str));
     free(req_str);
     if (rc != 0 || !resp_str) {
         free(resp_str);
@@ -387,6 +437,32 @@ csilk_mcp_client_connect_sse(const char* sse_url)
 
     snprintf(client->sse_url, sizeof(client->sse_url), "%s", sse_url);
     client->is_stdio = 0;
+    client->pipe_fd[0] = -1;
+    client->pipe_fd[1] = -1;
+    csilk_mutex_init(&client->mutex);
+
+    return client;
+}
+
+/**
+ * @brief Connect to a remote MCP server over a WebSocket endpoint.
+ */
+csilk_mcp_client_t*
+csilk_mcp_client_connect_ws(const char* ws_url)
+{
+    if (!ws_url) {
+        return NULL;
+    }
+
+    csilk_mcp_client_t* client = (csilk_mcp_client_t*)calloc(1, sizeof(csilk_mcp_client_t));
+    if (!client) {
+        return NULL;
+    }
+
+    snprintf(client->ws_url, sizeof(client->ws_url), "%s", ws_url);
+    snprintf(client->sse_url, sizeof(client->sse_url), "%s", ws_url);
+    client->is_stdio = 0;
+    client->is_ws = 1;
     client->pipe_fd[0] = -1;
     client->pipe_fd[1] = -1;
     csilk_mutex_init(&client->mutex);
@@ -690,4 +766,73 @@ csilk_mcp_client_import_tools(csilk_mcp_client_t* client, csilk_wf_t* wf)
 
     mcp_msg_free(resp);
     return imported;
+}
+
+int
+csilk_mcp_client_inject_context(csilk_mcp_client_t* client, csilk_ai_context_t* ctx)
+{
+    if (!client || !ctx) {
+        return -1;
+    }
+    if (mcp_client_ensure_initialized(client) != 0) {
+        return -1;
+    }
+
+    int injected_count = 0;
+
+    /* 1. Fetch prompts */
+    csilk_json_t*    prompt_params = csilk_json_object();
+    csilk_mcp_msg_t* p_resp = mcp_client_rpc(client, "prompts/list", prompt_params);
+    if (p_resp && p_resp->result) {
+        csilk_json_t* prompts = csilk_json_get_array(p_resp->result, "prompts");
+        if (prompts) {
+            size_t count = csilk_json_array_size(prompts);
+            for (size_t i = 0; i < count; i++) {
+                csilk_json_t* p = csilk_json_array_get(prompts, i);
+                if (!p) {
+                    continue;
+                }
+                const char* pname = csilk_json_get_string(p, "name");
+                const char* pdesc = csilk_json_get_string(p, "description");
+                if (pname) {
+                    char buf[512];
+                    snprintf(buf, sizeof(buf), "[MCP PROMPT: %s]\n%s", pname, pdesc ? pdesc : "");
+                    csilk_ai_context_add(ctx, "system", buf);
+                    injected_count++;
+                }
+            }
+        }
+    }
+    if (p_resp) {
+        mcp_msg_free(p_resp);
+    }
+
+    /* 2. Fetch resources */
+    csilk_json_t*    res_params = csilk_json_object();
+    csilk_mcp_msg_t* r_resp = mcp_client_rpc(client, "resources/list", res_params);
+    if (r_resp && r_resp->result) {
+        csilk_json_t* resources = csilk_json_get_array(r_resp->result, "resources");
+        if (resources) {
+            size_t count = csilk_json_array_size(resources);
+            for (size_t i = 0; i < count; i++) {
+                csilk_json_t* r = csilk_json_array_get(resources, i);
+                if (!r) {
+                    continue;
+                }
+                const char* uri = csilk_json_get_string(r, "uri");
+                const char* rname = csilk_json_get_string(r, "name");
+                if (uri) {
+                    char buf[512];
+                    snprintf(buf, sizeof(buf), "[MCP RESOURCE: %s (%s)]", rname ? rname : uri, uri);
+                    csilk_ai_context_add(ctx, "system", buf);
+                    injected_count++;
+                }
+            }
+        }
+    }
+    if (r_resp) {
+        mcp_msg_free(r_resp);
+    }
+
+    return injected_count;
 }

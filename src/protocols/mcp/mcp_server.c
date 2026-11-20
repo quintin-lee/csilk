@@ -16,6 +16,7 @@
 #include <unistd.h>
 
 #include "csilk/protocols/mcp.h"
+#include "csilk/protocols/websocket.h"
 #include "mcp_internal.h"
 #include "workflow/workflow_internal.h"
 
@@ -639,13 +640,92 @@ mcp_sse_get_handler(csilk_ctx_t* c)
     csilk_set_response_body(c, endpoint_ev, strlen(endpoint_ev), 0);
 }
 
+static void
+mcp_ws_on_message(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
+{
+    (void)opcode;
+    if (!c || !payload || len == 0) {
+        return;
+    }
+    csilk_mcp_server_t* server = (csilk_mcp_server_t*)csilk_get_param(c, "_mcp_server");
+    if (!server) {
+        server = (csilk_mcp_server_t*)csilk_get(c, "_mcp_server");
+    }
+    if (!server) {
+        const char* err =
+            "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32603,\"message\":\"Invalid server\"}}";
+        csilk_ws_send(c, (const uint8_t*)err, strlen(err), 0x1);
+        return;
+    }
+
+    csilk_mcp_msg_t* req = csilk_mcp_msg_parse((const char*)payload, len, NULL);
+    if (!req) {
+        const char* err =
+            "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32700,\"message\":\"Parse error\"}}";
+        csilk_ws_send(c, (const uint8_t*)err, strlen(err), 0x1);
+        return;
+    }
+
+    csilk_mcp_msg_t* resp = handle_mcp_request(server, req);
+    char*            out = resp ? csilk_mcp_msg_serialize(resp, NULL) : strdup("{}");
+    const char*      out_payload = out ? out : "{}";
+
+    csilk_ws_send(c, (const uint8_t*)out_payload, strlen(out_payload), 0x1);
+
+    if (out) {
+        free(out);
+    }
+    if (resp) {
+        if (resp->id) {
+            csilk_json_free(resp->id);
+        }
+        if (resp->result) {
+            csilk_json_free(resp->result);
+        }
+        if (resp->error) {
+            csilk_json_free(resp->error);
+        }
+        free(resp);
+    }
+    if (req->id) {
+        csilk_json_free(req->id);
+    }
+    if (req->params) {
+        csilk_json_free(req->params);
+    }
+    if (req->method) {
+        free(req->method);
+    }
+    free(req);
+}
+
+static void
+mcp_ws_handler(csilk_ctx_t* c)
+{
+    csilk_ws_handshake(c);
+    if (csilk_is_websocket(c)) {
+        csilk_set_on_ws_message(c, mcp_ws_on_message);
+    }
+}
+
+int
+csilk_mcp_server_bind_ws(csilk_mcp_server_t* server, csilk_app_t* app, const char* ws_path)
+{
+    if (!server || !app) {
+        return -1;
+    }
+    const char* path = (ws_path && ws_path[0] != '\0') ? ws_path : "/mcp/ws";
+    csilk_app_add_route(app, "GET", path, mcp_ws_handler);
+    return 0;
+}
+
 /**
  * @brief Bind the MCP JSON-RPC endpoint as an HTTP POST route on an app.
  *
  * Registers a POST handler at "<route_prefix>/message" (default "/mcp") that
  * parses the request body as a JSON-RPC message and replies with the
  * dispatch result. Also registers a GET handler at "<route_prefix>/sse" that
- * emits the standard MCP endpoint event.
+ * emits the standard MCP endpoint event, and a WebSocket route at "<route_prefix>/ws".
  *
  * @param[in,out] server       The MCP server handling dispatched requests.
  * @param[in,out] app          The application to register the route on.
@@ -663,11 +743,14 @@ csilk_mcp_server_bind_app(csilk_mcp_server_t* server, csilk_app_t* app, const ch
     const char* pfx = route_prefix ? route_prefix : "/mcp";
     char        msg_path[256];
     char        sse_path[256];
+    char        ws_path[256];
     snprintf(msg_path, sizeof(msg_path), "%s/message", pfx);
     snprintf(sse_path, sizeof(sse_path), "%s/sse", pfx);
+    snprintf(ws_path, sizeof(ws_path), "%s/ws", pfx);
 
     csilk_app_add_route(app, "POST", msg_path, mcp_sse_post_handler);
     csilk_app_add_route(app, "GET", sse_path, mcp_sse_get_handler);
+    csilk_app_add_route(app, "GET", ws_path, mcp_ws_handler);
     return 0;
 }
 

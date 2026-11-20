@@ -74,11 +74,13 @@ struct csilk_mcp_client_s {
     char*         command;
     char**        argv;
     int           is_stdio;
+    int           is_ws;
     int           pipe_fd[2]; /* [0]: read (from child stdout), [1]: write (to child stdin) */
     int           child_pid;
     int           initialized;
     int64_t       next_id;
     char          sse_url[256];
+    char          ws_url[256];
     char**        imported_names;
     size_t        imported_count;
     csilk_mutex_t mutex;
