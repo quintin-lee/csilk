@@ -230,6 +230,146 @@ csilk_db_pool_acquire(csilk_db_pool_t* pool, void** conn)
     return 0;
 }
 
+/** @brief Acquire a pool connection with a bounded wait (csilk#10).
+ *
+ * Blocks up to @p timeout_ms waiting for a free slot.  Uses pool->pool_cond
+ * which is signalled by csilk_db_pool_put() and csilk_db_pool_free().
+ * On timeout returns -1 so the caller can fail-fast without stalling the
+ * worker event loop. */
+int
+csilk_db_pool_acquire_timeout(csilk_db_pool_t* pool, void** conn, uint64_t timeout_ms)
+{
+    if (!pool || !conn) {
+        CSILK_LOG_E("csilk_db_pool_acquire_timeout: invalid pool or conn out-param");
+        return -1;
+    }
+
+    csilk_mutex_lock(&pool->mutex);
+
+    /* Try to claim a slot immediately. */
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
+
+    if (n > 1) {
+        csilk_thread_t me = csilk_thread_self();
+        for (int i = 0; i < n; i++) {
+            if (!pool->connections[i]) {
+                continue;
+            }
+            if (pool->conn_holder_flags[i] && pool->conn_holders[i] == me) {
+                *conn = pool->connections[i];
+                csilk_mutex_unlock(&pool->mutex);
+                return 0;
+            }
+            if (!pool->conn_holder_flags[i]) {
+                pool->conn_holder_flags[i] = true;
+                pool->conn_holders[i] = me;
+                *conn = pool->connections[i];
+                csilk_mutex_unlock(&pool->mutex);
+                return 0;
+            }
+        }
+    } else {
+        if (!pool->connection) {
+            csilk_mutex_unlock(&pool->mutex);
+            CSILK_LOG_E("csilk_db_pool_acquire_timeout: pool '%s' has no open connection",
+                        pool->driver ? pool->driver->name : "(null)");
+            return -1;
+        }
+        if (pool->conn_holder_set) {
+            csilk_thread_t me = csilk_thread_self();
+            if (me != pool->conn_holder) {
+                /* Held by another thread — fall through to timed wait. */
+            } else {
+                *conn = pool->connection;
+                csilk_mutex_unlock(&pool->mutex);
+                return 0;
+            }
+        } else {
+            pool->conn_holder = csilk_thread_self();
+            pool->conn_holder_set = true;
+            *conn = pool->connection;
+            csilk_mutex_unlock(&pool->mutex);
+            return 0;
+        }
+    }
+
+    /* Pool exhausted — wait up to timeout_ms for a slot to free. */
+    if (timeout_ms == 0) {
+        CSILK_LOG_W("csilk_db_pool_acquire_timeout: pool '%s' exhausted (%d/%d in use)",
+                    pool->driver ? pool->driver->name : "(null)",
+                    n,
+                    n);
+        csilk_mutex_unlock(&pool->mutex);
+        return -1;
+    }
+
+    uint64_t deadline_ns = csilk_io_hrtime() + timeout_ms * 1000000ULL;
+    while (1) {
+        /* Compute remaining time. */
+        uint64_t now_ns = csilk_io_hrtime();
+        if (now_ns >= deadline_ns) {
+            CSILK_LOG_W("csilk_db_pool_acquire_timeout: pool '%s' exhausted after %llu ms wait",
+                        pool->driver ? pool->driver->name : "(null)",
+                        (unsigned long long)timeout_ms);
+            csilk_mutex_unlock(&pool->mutex);
+            return -1;
+        }
+        uint64_t remaining_ns = deadline_ns - now_ns;
+        int      rc = csilk_cond_timedwait(&pool->pool_cond, &pool->mutex, remaining_ns);
+        if (rc != 0) {
+            /* Timeout (or spurious wake with no time left). */
+            csilk_mutex_unlock(&pool->mutex);
+            return -1;
+        }
+
+        if (pool->pool_closing) {
+            csilk_mutex_unlock(&pool->mutex);
+            return -1;
+        }
+
+        /* Re-check slot availability. */
+        csilk_thread_t me = csilk_thread_self();
+        if (n > 1) {
+            for (int i = 0; i < n; i++) {
+                if (!pool->connections[i]) {
+                    continue;
+                }
+                if (pool->conn_holder_flags[i] && pool->conn_holders[i] == me) {
+                    *conn = pool->connections[i];
+                    csilk_mutex_unlock(&pool->mutex);
+                    return 0;
+                }
+                if (!pool->conn_holder_flags[i]) {
+                    pool->conn_holder_flags[i] = true;
+                    pool->conn_holders[i] = me;
+                    *conn = pool->connections[i];
+                    csilk_mutex_unlock(&pool->mutex);
+                    return 0;
+                }
+            }
+        } else {
+            if (!pool->connection) {
+                continue; /* no connection at all — keep waiting */
+            }
+            if (pool->conn_holder_set) {
+                if (me == pool->conn_holder) {
+                    *conn = pool->connection;
+                    csilk_mutex_unlock(&pool->mutex);
+                    return 0;
+                }
+                /* Held by another thread — keep waiting. */
+            } else {
+                pool->conn_holder = me;
+                pool->conn_holder_set = true;
+                *conn = pool->connection;
+                csilk_mutex_unlock(&pool->mutex);
+                return 0;
+            }
+        }
+        /* Slot still not available — loop back to timedwait. */
+    }
+}
+
 /** @brief Release a previously-acquired connection back to the pool.
  *
  * Performs a holder check under pool->mutex: only the thread that called
@@ -274,6 +414,7 @@ csilk_db_pool_put(csilk_db_pool_t* pool, void* conn)
                     return -1;
                 }
                 pool->conn_holder_flags[i] = false;
+                csilk_cond_broadcast(&pool->pool_cond); /* wake any timed acquire waiters */
                 csilk_mutex_unlock(&pool->mutex);
                 return 0;
             }
@@ -308,6 +449,7 @@ csilk_db_pool_put(csilk_db_pool_t* pool, void* conn)
         }
     }
     pool->conn_holder_set = false;
+    csilk_cond_broadcast(&pool->pool_cond); /* wake any timed acquire waiters */
     csilk_mutex_unlock(&pool->mutex);
     return 0;
 }
@@ -371,6 +513,7 @@ csilk_db_with_conn(csilk_db_pool_t* pool, csilk_db_with_conn_fn fn, void* user_c
     int rc = fn(pool->connection, user_ctx);
 
     pool->conn_holder_set = false;
+    csilk_cond_broadcast(&pool->pool_cond); /* wake any timed acquire waiters */
     csilk_mutex_unlock(&pool->mutex);
     return rc;
 }
@@ -545,6 +688,8 @@ csilk_db_pool_new_ex(const char* driver_name, const char* dsn, int max_conns)
     }
 
     csilk_mutex_init(&pool->mutex);
+    csilk_cond_init(&pool->pool_cond);
+    pool->pool_closing = 0;
     pool->driver = driver;
     pool->max_conns = max_conns;
     pool->conn_holder_set = false;
@@ -624,7 +769,12 @@ csilk_db_pool_free(csilk_db_pool_t* pool)
             }
         }
     }
+    /* Wake any threads blocked in csilk_db_pool_acquire_timeout so they
+     * can observe pool_closing and return -1 promptly. */
+    pool->pool_closing = 1;
+    csilk_cond_broadcast(&pool->pool_cond);
     csilk_mutex_destroy(&pool->mutex);
+    csilk_cond_destroy(&pool->pool_cond);
     free(pool);
 }
 

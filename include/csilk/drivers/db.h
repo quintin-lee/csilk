@@ -165,6 +165,28 @@ void* csilk_db_pool_get_connection(csilk_db_pool_t* pool);
 int csilk_db_pool_acquire(csilk_db_pool_t* pool, void** conn);
 
 /**
+ * @brief Acquire a pool connection with a bounded wait (csilk#10).
+ *
+ * Like csilk_db_pool_acquire(), but blocks up to @p timeout_ms milliseconds
+ * waiting for a free connection slot when the pool is exhausted.  Uses a
+ * condition variable (pool->pool_cond) that is signalled by every
+ * csilk_db_pool_put() and csilk_db_pool_free() call, so the waiting thread
+ * is woken as soon as any slot becomes available.
+ *
+ * On timeout the caller receives -1 and can fail-fast without holding the
+ * pool mutex, preventing a slow query from stalling the entire worker
+ * event loop.
+ *
+ * @param pool        Connection pool.  Must not be NULL.
+ * @param conn        [out] Receives the raw driver-level connection pointer.
+ * @param timeout_ms  Maximum wait in milliseconds (0 = non-blocking, same
+ *                    as csilk_db_pool_acquire).
+ * @return 0 on success, -1 if the pool is exhausted after the timeout,
+ *         or on invalid arguments.
+ */
+int csilk_db_pool_acquire_timeout(csilk_db_pool_t* pool, void** conn, uint64_t timeout_ms);
+
+/**
  * @brief Release a previously-acquired connection back to the pool.
  *
  * Performs a holder check: only the thread that called csilk_db_pool_acquire()
