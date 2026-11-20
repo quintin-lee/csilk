@@ -222,6 +222,12 @@ on_mq_async(csilk_io_async_t* handle)
         mq->delivered_total++;
         csilk_mutex_unlock(&mq->queue_mutex);
 
+        /* Build the handler chain under the topics lock so the count, the
+         * allocation, and the copy form a single atomic unit.  A concurrent
+         * csilk_mq_use() on a worker thread cannot grow handler_count between
+         * the count and the memcpy (TOCTOU). */
+        csilk_mutex_lock(&mq->topics_mutex);
+
         size_t total_handlers = mq->global_mw_count;
         for (csilk_mq_topic_t* t = mq->topics; t; t = t->next) {
             if (fnmatch(t->name, msg->topic, 0) == 0) {
@@ -234,12 +240,6 @@ on_mq_async(csilk_io_async_t* handle)
             if (chain) {
                 size_t idx = 0;
 
-                /* Snapshot the handler chain under the topics lock so a
-                 * concurrent csilk_mq_use() cannot tear the array or topic
-                 * list mid-copy. csilk_mq_next runs user handlers that may
-                 * themselves register topics, so the lock is released before
-                 * invoking it. */
-                csilk_mutex_lock(&mq->topics_mutex);
                 if (mq->global_mw_count > 0) {
                     memcpy(chain,
                            mq->global_middlewares,
@@ -265,12 +265,14 @@ on_mq_async(csilk_io_async_t* handle)
                 csilk_mq_next(&ctx);
                 free(chain);
             } else {
+                csilk_mutex_unlock(&mq->topics_mutex);
                 CSILK_LOG_E("MQ: Failed to allocate memory for handler chain "
                             "(total_handlers: %zu) for topic '%s'",
                             total_handlers,
                             msg->topic);
             }
         } else {
+            csilk_mutex_unlock(&mq->topics_mutex);
             CSILK_LOG_D("MQ: No handlers registered for topic '%s'", msg->topic);
         }
 
