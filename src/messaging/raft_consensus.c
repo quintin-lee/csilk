@@ -259,40 +259,50 @@ _raft_flush_apply_callbacks(csilk_raft_node_t* node)
     }
 
     /* Deferred log-entry apply callback */
+    uint64_t              idx = 0;
+    uint64_t              term = 0;
+    uint8_t*              data = NULL;
+    size_t                len = 0;
+    csilk_raft_apply_cb_t apply_cb = NULL;
+    void*                 apply_user_data = NULL;
+
+    /* Deferred snapshot apply callback */
+    uint64_t                       snap_idx = 0;
+    uint64_t                       snap_term = 0;
+    uint8_t*                       snap_data = NULL;
+    size_t                         snap_len = 0;
+    csilk_raft_snapshot_apply_cb_t snap_cb = NULL;
+
+    csilk_mutex_lock(&node->mutex);
     if (node->apply_cb_pending) {
-        csilk_mutex_lock(&node->mutex);
-        uint64_t                      idx = node->last_applied;
-        uint64_t                      term = 0;
-        uint8_t*                      data = NULL;
-        size_t                        len = 0;
+        idx = node->last_applied;
         const csilk_raft_log_entry_t* ent = _raft_log_get_locked(node, idx);
         if (ent) {
             term = ent->term;
             data = (uint8_t*)ent->data;
             len = ent->len;
         }
+        apply_cb = node->apply_cb;
+        apply_user_data = node->apply_user_data;
         node->apply_cb_pending = 0;
-        csilk_mutex_unlock(&node->mutex);
-
-        if (data && node->apply_cb) {
-            node->apply_cb(idx, term, data, len, node->apply_user_data);
-        }
     }
 
-    /* Deferred snapshot apply callback */
     if (node->snapshot_apply_cb_pending) {
-        csilk_mutex_lock(&node->mutex);
-        uint64_t snap_idx = node->snapshot_last_index;
-        uint64_t snap_term = node->snapshot_last_term;
-        uint8_t* snap_data = (uint8_t*)node->snapshot_data;
-        size_t   snap_len = node->snapshot_len;
+        snap_idx = node->snapshot_last_index;
+        snap_term = node->snapshot_last_term;
+        snap_data = (uint8_t*)node->snapshot_data;
+        snap_len = node->snapshot_len;
+        snap_cb = node->snapshot_apply_cb;
+        apply_user_data = node->apply_user_data;
         node->snapshot_apply_cb_pending = 0;
-        csilk_mutex_unlock(&node->mutex);
+    }
+    csilk_mutex_unlock(&node->mutex);
 
-        if (snap_data && node->snapshot_apply_cb) {
-            node->snapshot_apply_cb(
-                snap_idx, snap_term, snap_data, snap_len, node->apply_user_data);
-        }
+    if (data && apply_cb) {
+        apply_cb(idx, term, data, len, apply_user_data);
+    }
+    if (snap_data && snap_cb) {
+        snap_cb(snap_idx, snap_term, snap_data, snap_len, apply_user_data);
     }
 }
 
@@ -432,7 +442,7 @@ _raft_broadcast_append_entries_locked(csilk_raft_node_t* node)
         ae.entry_count = (uint32_t)count;
 
         const csilk_raft_log_entry_t* slice = (count > 0) ? &node->entries[start_pos] : NULL;
-        int                           plen = _raft_rpc_encode_ae_req(&ae,
+        int plen = _raft_rpc_encode_ae_req(&ae,
                                            slice,
                                            count,
                                            tx_buf + sizeof(csilk_raft_hdr_t),
@@ -1027,11 +1037,11 @@ raft_transport_loop(void* arg)
                     struct sockaddr_in src_addr = {0};
                     socklen_t          slen = sizeof(src_addr);
                     ssize_t            n = recvfrom(fd,
-                                         rx_buf,
-                                         CSILK_RAFT_RPC_MAX_PACKET,
-                                         0,
-                                         (struct sockaddr*)&src_addr,
-                                         &slen);
+                                                    rx_buf,
+                                                    CSILK_RAFT_RPC_MAX_PACKET,
+                                                    0,
+                                                    (struct sockaddr*)&src_addr,
+                                                    &slen);
                     if (n < 0) {
                         if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
                             break;

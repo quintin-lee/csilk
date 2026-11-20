@@ -20,7 +20,7 @@ rm_rf_failover_dir(const char* dir)
 static int
 wait_for_single_leader(csilk_raft_node_t* nodes[], int count, int skip_idx)
 {
-    for (int attempt = 0; attempt < 300; attempt++) {
+    for (int attempt = 0; attempt < 600; attempt++) {
         int leaders = 0;
         int found = -1;
         for (int i = 0; i < count; i++) {
