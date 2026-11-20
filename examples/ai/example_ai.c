@@ -63,7 +63,7 @@ main()
 
     /* Prepare a chat request */
     csilk_ai_message_t messages[] = {
-        {"system", "You are a helpful assistant."               },
+        {"system", "You are a helpful assistant."                                   },
         {"user",   "介绍一下自己，并用一句话总结 C 语言的优势。"}
     };
 
