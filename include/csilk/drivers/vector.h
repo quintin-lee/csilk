@@ -88,6 +88,26 @@ int csilk_simd_has_avx2(void);
  *  @return Handle or NULL. */
 csilk_vector_db_t* csilk_vector_db_new_embedded(size_t dim, int metric);
 
+/**
+ * @brief Open an existing embedded HNSW vector database snapshot using zero-copy mmap.
+ *
+ * Maps the vector index file directly into the process address space without
+ * loading vectors into the heap, providing sub-millisecond cold start times.
+ *
+ * @param filepath Path to the HNSW snapshot file.
+ * @return Handle to vector DB instance, or NULL on failure.
+ */
+csilk_vector_db_t* csilk_vector_db_new_embedded_mmap(const char* filepath);
+
+/**
+ * @brief Persist an embedded HNSW vector database to an mmap-compatible snapshot file.
+ *
+ * @param db       Vector DB handle (must be embedded HNSW driver).
+ * @param filepath Destination path for the snapshot file.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_vector_db_save_embedded(csilk_vector_db_t* db, const char* filepath);
+
 /** @brief Create a new Vector DB instance.
  * @param driver_name "qdrant", "milvus", "embedded", etc.
  * @param endpoint    API endpoint.

@@ -18,6 +18,7 @@ int csilk_hnsw_search(csilk_hnsw_index_t* index,
                       size_t*             out_count);
 int csilk_hnsw_save(const csilk_hnsw_index_t* index, const char* filepath);
 csilk_hnsw_index_t* csilk_hnsw_load(const char* filepath);
+csilk_hnsw_index_t* csilk_hnsw_mmap_open(const char* filepath);
 
 static void
 test_hnsw_index_insertion_and_search(void)
@@ -299,6 +300,96 @@ test_hnsw_1000dim_recall_95pct(void)
     printf("test_hnsw_1000dim_recall_95pct passed\n");
 }
 
+static void
+test_hnsw_mmap_cold_start_and_db_api(void)
+{
+    printf("Testing HNSW zero-copy mmap cold start & vector db persistence API...\n");
+    size_t              dim = 32;
+    csilk_hnsw_index_t* idx = csilk_hnsw_index_new(dim, 0);
+    assert(idx != nullptr);
+
+    float* vectors = calloc(50 * dim, sizeof(float));
+    for (int i = 0; i < 50; i++) {
+        char doc[32];
+        snprintf(doc, sizeof(doc), "doc_mmap_%d", i);
+        for (size_t d = 0; d < dim; d++) {
+            vectors[i * dim + d] = (float)((i + 1) * 3 + d);
+        }
+        assert(csilk_hnsw_insert(idx, doc, &vectors[i * dim]) == 0);
+    }
+
+    char** orig_ids = nullptr;
+    float* orig_scores = nullptr;
+    size_t orig_count = 0;
+    assert(csilk_hnsw_search(idx, &vectors[0], 5, &orig_ids, &orig_scores, &orig_count) == 0);
+    assert(orig_count == 5);
+
+    const char* snap_path = "/tmp/test_hnsw_mmap_snapshot.bin";
+    remove(snap_path);
+    assert(csilk_hnsw_save(idx, snap_path) == 0);
+    csilk_hnsw_index_free(idx);
+
+    /* 1. Test csilk_hnsw_mmap_open zero-copy load */
+    csilk_hnsw_index_t* mmapped = csilk_hnsw_mmap_open(snap_path);
+    assert(mmapped != nullptr);
+
+    /* Mmapped index is read-only: insert must be rejected */
+    float dummy_vec[32] = {0};
+    assert(csilk_hnsw_insert(mmapped, "illegal_insert", dummy_vec) == -1);
+
+    char** mmap_ids = nullptr;
+    float* mmap_scores = nullptr;
+    size_t mmap_count = 0;
+    assert(csilk_hnsw_search(mmapped, &vectors[0], 5, &mmap_ids, &mmap_scores, &mmap_count) == 0);
+    assert(mmap_count == orig_count);
+
+    for (size_t i = 0; i < mmap_count; i++) {
+        assert(strcmp(mmap_ids[i], orig_ids[i]) == 0);
+        assert(fabsf(mmap_scores[i] - orig_scores[i]) < 1e-5f);
+        free(orig_ids[i]);
+        free(mmap_ids[i]);
+    }
+    free(orig_ids);
+    free(orig_scores);
+    free(mmap_ids);
+    free(mmap_scores);
+
+    csilk_hnsw_index_free(mmapped);
+
+    /* 2. Test high-level csilk_vector_db_new_embedded_mmap and csilk_vector_db_save_embedded */
+    csilk_vector_db_t* vdb = csilk_vector_db_new_embedded_mmap(snap_path);
+    assert(vdb != nullptr);
+
+    csilk_vector_search_response_t res = {0};
+    assert(csilk_vector_db_search(vdb, "default", &vectors[0], dim, 3, &res) == 0);
+    assert(res.count == 3);
+    assert(res.results != nullptr);
+    assert(strcmp(res.results[0].id, "doc_mmap_0") == 0);
+    csilk_vector_search_response_free(&res);
+
+    /* Test saving existing db through high-level API */
+    const char* snap_path2 = "/tmp/test_hnsw_mmap_snapshot2.bin";
+    remove(snap_path2);
+    assert(csilk_vector_db_save_embedded(vdb, snap_path2) == 0);
+
+    csilk_vector_db_free(vdb);
+
+    /* Load second snapshot to verify re-saving works */
+    csilk_vector_db_t* vdb2 = csilk_vector_db_new_embedded_mmap(snap_path2);
+    assert(vdb2 != nullptr);
+    csilk_vector_search_response_t res2 = {0};
+    assert(csilk_vector_db_search(vdb2, "default", &vectors[0], dim, 3, &res2) == 0);
+    assert(res2.count == 3);
+    assert(strcmp(res2.results[0].id, "doc_mmap_0") == 0);
+    csilk_vector_search_response_free(&res2);
+    csilk_vector_db_free(vdb2);
+
+    free(vectors);
+    remove(snap_path);
+    remove(snap_path2);
+    printf("test_hnsw_mmap_cold_start_and_db_api passed\n");
+}
+
 int
 main(void)
 {
@@ -306,6 +397,7 @@ main(void)
     test_hnsw_multilayer_recall_and_l2();
     test_hnsw_save_load_persistence();
     test_hnsw_1000dim_recall_95pct();
+    test_hnsw_mmap_cold_start_and_db_api();
     printf("All test_vector_hnsw tests passed successfully!\n");
     return 0;
 }

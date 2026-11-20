@@ -179,3 +179,31 @@ class VectorDB:
             self._lib.csilk_vector_search_response_free(ctypes.byref(c_res))
 
         return results
+
+    @classmethod
+    def open_mmap(cls, filepath: str) -> "VectorDB":
+        """Open an embedded HNSW vector database snapshot using zero-copy mmap.
+
+        Args:
+            filepath: Path to snapshot file.
+        Returns:
+            VectorDB instance mapped to the file.
+        """
+        instance = cls.__new__(cls)
+        instance._lib = get_bindings()
+        instance._db = instance._lib.csilk_vector_db_new_embedded_mmap(filepath.encode("utf-8"))
+        if not instance._db:
+            raise RuntimeError(f"Failed to open vector DB mmap at '{filepath}'")
+        return instance
+
+    def save(self, filepath: str) -> None:
+        """Persist embedded vector database to an mmap-compatible snapshot file.
+
+        Args:
+            filepath: Destination file path.
+        """
+        if not hasattr(self, "_db") or not self._db:
+            raise RuntimeError("Vector DB handle is closed")
+        rc = self._lib.csilk_vector_db_save_embedded(self._db, filepath.encode("utf-8"))
+        if rc != 0:
+            raise RuntimeError(f"Failed to save vector DB snapshot to '{filepath}'")

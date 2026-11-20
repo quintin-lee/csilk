@@ -49,6 +49,9 @@ typedef struct {
     csilk_simd_dist_fn  dist_fn;
     uint64_t            rng_state;
     csilk_mutex_t       mutex;
+    void*               mmap_base;
+    size_t              mmap_size;
+    int                 is_mmap;
 } csilk_hnsw_index_t;
 
 /** @brief Create a new empty HNSW index. */
@@ -71,9 +74,14 @@ int csilk_hnsw_search(csilk_hnsw_index_t* index,
  * @return 0 on success, -1 on I/O or parameter error. */
 int csilk_hnsw_save(const csilk_hnsw_index_t* index, const char* filepath);
 
-/** @brief Load HNSW index from a binary snapshot file.
+/** @brief Load HNSW index from a binary snapshot file into mutable heap.
  * @param filepath Path to snapshot file.
  * @return Allocated index instance, or NULL on error. */
 csilk_hnsw_index_t* csilk_hnsw_load(const char* filepath);
+
+/** @brief Open an existing HNSW index file using zero-copy mmap.
+ * @param filepath Path to snapshot file.
+ * @return Mapped index instance, or NULL on error. */
+csilk_hnsw_index_t* csilk_hnsw_mmap_open(const char* filepath);
 
 #endif /* CSILK_VECTOR_INTERNAL_H */

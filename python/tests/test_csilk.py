@@ -756,6 +756,33 @@ class TestCsilkVector(unittest.TestCase):
 
         db.free()
 
+    def test_vector_db_mmap_save_load(self):
+        import tempfile
+        import os
+        db = VectorDB("embedded", "")
+        self.assertIsNotNone(db)
+
+        points = [
+            {"id": "doc_py_1", "vector": [0.1] * 1536, "payload": {"tag": "first"}},
+            {"id": "doc_py_2", "vector": [0.2] * 1536, "payload": {"tag": "second"}},
+        ]
+        db.upsert("default", points)
+
+        tmp_snap = tempfile.mktemp(suffix=".bin")
+        try:
+            db.save(tmp_snap)
+            db.free()
+
+            mmap_db = VectorDB.open_mmap(tmp_snap)
+            self.assertIsNotNone(mmap_db)
+            res = mmap_db.search("default", [0.1] * 1536, limit=2)
+            self.assertEqual(len(res), 2)
+            self.assertEqual(res[0]["id"], "doc_py_1")
+            mmap_db.free()
+        finally:
+            if os.path.exists(tmp_snap):
+                os.remove(tmp_snap)
+
 class TestCsilkGroups(unittest.TestCase):
     def test_route_groups_and_middleware(self):
         app = App()

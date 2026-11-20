@@ -69,6 +69,49 @@ csilk_vector_db_new_embedded(size_t dim, int metric)
 }
 
 /**
+ * @brief Open an existing embedded HNSW vector database snapshot using zero-copy mmap.
+ *
+ * @param filepath Path to snapshot file.
+ * @return Newly allocated DB handle, or NULL on error.
+ */
+csilk_vector_db_t*
+csilk_vector_db_new_embedded_mmap(const char* filepath)
+{
+    if (!filepath) {
+        return NULL;
+    }
+    csilk_hnsw_index_t* index = csilk_hnsw_mmap_open(filepath);
+    if (!index) {
+        return NULL;
+    }
+
+    csilk_vector_db_t* db = calloc(1, sizeof(csilk_vector_db_t));
+    if (!db) {
+        csilk_hnsw_index_free(index);
+        return NULL;
+    }
+
+    db->state = index;
+    return db;
+}
+
+/**
+ * @brief Persist an embedded HNSW vector database to an mmap-compatible snapshot file.
+ *
+ * @param db       Vector DB handle.
+ * @param filepath Destination path for the snapshot file.
+ * @return 0 on success, -1 on failure.
+ */
+int
+csilk_vector_db_save_embedded(csilk_vector_db_t* db, const char* filepath)
+{
+    if (!db || !filepath || !db->state || db->driver != NULL) {
+        return -1;
+    }
+    return csilk_hnsw_save((const csilk_hnsw_index_t*)db->state, filepath);
+}
+
+/**
  * @brief Create a vector DB, either embedded or via a named remote driver.
  *
  * For the literal driver name "embedded" this delegates to
