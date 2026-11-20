@@ -9,8 +9,15 @@
 # CI install list together when the whole tree is reformatted.
 set(CSILK_CLANG_FORMAT_VERSION 18)
 find_program(CLANG_FORMAT_EXECUTABLE
-             NAMES clang-format-${CSILK_CLANG_FORMAT_VERSION} clang-format
-                   clang-format-18.0 clang-format-18)
+             NAMES clang-format-${CSILK_CLANG_FORMAT_VERSION}
+                   clang-format-18.0 clang-format-18 clang-format
+             HINTS /usr/lib/llvm18/bin /usr/lib/llvm-18/bin
+             NO_DEFAULT_PATH)
+if(NOT CLANG_FORMAT_EXECUTABLE)
+    find_program(CLANG_FORMAT_EXECUTABLE
+                 NAMES clang-format-${CSILK_CLANG_FORMAT_VERSION}
+                       clang-format-18.0 clang-format-18 clang-format)
+endif()
 if(CLANG_FORMAT_EXECUTABLE)
     message(STATUS "Found clang-format: ${CLANG_FORMAT_EXECUTABLE}")
 

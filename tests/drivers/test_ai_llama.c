@@ -277,7 +277,7 @@ test_llama_react_agent_loop_integration(void)
            0);
 
     char* final_text = NULL;
-    int rc = csilk_ai_react_execute_loop(ai,
+    int   rc = csilk_ai_react_execute_loop(ai,
                                          "llama",
                                          "System: You are an autonomous agent with tools.",
                                          "Please execute tool get_weather for Tokyo and summarize.",
