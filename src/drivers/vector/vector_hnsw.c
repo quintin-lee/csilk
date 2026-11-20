@@ -10,11 +10,15 @@
  * @copyright MIT License
  */
 
+#include <fcntl.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "vector_internal.h"
 
@@ -532,10 +536,26 @@ csilk_hnsw_index_free(csilk_hnsw_index_t* index)
     }
 
     csilk_mutex_lock(&index->mutex);
-    for (size_t i = 0; i < index->node_count; i++) {
-        hnsw_free_node(index->nodes[i]);
+    if (index->is_mmap) {
+        for (size_t i = 0; i < index->node_count; i++) {
+            if (index->nodes[i]) {
+                free(index->nodes[i]->neighbor_count);
+                free(index->nodes[i]->neighbors);
+                free(index->nodes[i]);
+            }
+        }
+        free(index->nodes);
+        if (index->mmap_base && index->mmap_size > 0) {
+            munmap(index->mmap_base, index->mmap_size);
+            index->mmap_base = NULL;
+            index->mmap_size = 0;
+        }
+    } else {
+        for (size_t i = 0; i < index->node_count; i++) {
+            hnsw_free_node(index->nodes[i]);
+        }
+        free(index->nodes);
     }
-    free(index->nodes);
     csilk_mutex_unlock(&index->mutex);
     csilk_mutex_destroy(&index->mutex);
     free(index);
@@ -555,7 +575,7 @@ csilk_hnsw_index_free(csilk_hnsw_index_t* index)
 int
 csilk_hnsw_insert(csilk_hnsw_index_t* index, const char* doc_id, const float* vector)
 {
-    if (!index || !doc_id || !vector) {
+    if (!index || !doc_id || !vector || index->is_mmap) {
         return -1;
     }
 
@@ -767,7 +787,37 @@ csilk_hnsw_search(csilk_hnsw_index_t* index,
 }
 
 #define CSILK_HNSW_MAGIC 0x57534E48U /* "HNSW" */
-#define CSILK_HNSW_VERSION 1U
+#define CSILK_HNSW_VERSION_1 1U
+#define CSILK_HNSW_VERSION_2 2U
+
+typedef struct {
+    uint32_t magic;            /* CSILK_HNSW_MAGIC */
+    uint32_t version;          /* CSILK_HNSW_VERSION_2 (2) */
+    uint32_t dim;              /* vector dimensionality */
+    int32_t  metric;           /* distance metric: 0=cosine, 1=l2, 2=dot */
+    uint32_t M;                /* max outgoing connections per layer */
+    uint32_t ef_construction;  /* efConstruction */
+    uint32_t ef_search;        /* efSearch */
+    uint32_t enter_id;         /* entry point node ID */
+    int32_t  max_level;        /* maximum graph layer level */
+    uint32_t node_count;       /* total number of nodes */
+    uint32_t stride_bytes;     /* aligned byte stride per vector */
+    uint32_t flags;            /* feature flags: bit 0 = 1 (mmap ready) */
+    uint64_t node_meta_offset; /* file offset to node metadata table */
+    uint64_t vector_offset;    /* file offset to contiguous vector array (32/64-byte aligned) */
+    uint64_t string_offset;    /* file offset to string table (NUL-terminated doc_ids) */
+    uint64_t graph_offset;     /* file offset to graph neighbor lists */
+    uint64_t file_size;        /* expected total file size in bytes */
+    uint8_t  reserved[40];     /* pad header struct to 128 bytes */
+} csilk_hnsw_header_v2_t;
+
+typedef struct {
+    uint32_t id;
+    int32_t  level;
+    uint32_t doc_id_offset;   /* byte offset into string table */
+    uint32_t doc_id_len;      /* length of string without NUL terminator */
+    uint64_t neighbor_offset; /* byte offset relative to graph_offset */
+} csilk_hnsw_node_meta_v2_t;
 
 int
 csilk_hnsw_save(const csilk_hnsw_index_t* index, const char* filepath)
@@ -780,50 +830,164 @@ csilk_hnsw_save(const csilk_hnsw_index_t* index, const char* filepath)
         return -1;
     }
 
-    uint32_t magic = CSILK_HNSW_MAGIC;
-    uint32_t version = CSILK_HNSW_VERSION;
-    uint32_t dim = (uint32_t)index->dim;
-    int32_t  metric = (int32_t)index->metric;
-    uint32_t m = (uint32_t)index->M;
-    uint32_t ef_c = (uint32_t)index->ef_construction;
-    uint32_t ef_s = (uint32_t)index->ef_search;
-    uint32_t enter_id = index->enter_node_id;
-    int32_t  max_level = index->max_level;
     uint32_t node_count = (uint32_t)index->node_count;
+    uint32_t dim = (uint32_t)index->dim;
+    size_t   raw_vec_bytes = (size_t)dim * sizeof(float);
+    size_t   stride_bytes = ((raw_vec_bytes + 31) / 32) * 32;
 
-    if (fwrite(&magic, sizeof(magic), 1, fp) != 1 ||
-        fwrite(&version, sizeof(version), 1, fp) != 1 || fwrite(&dim, sizeof(dim), 1, fp) != 1 ||
-        fwrite(&metric, sizeof(metric), 1, fp) != 1 || fwrite(&m, sizeof(m), 1, fp) != 1 ||
-        fwrite(&ef_c, sizeof(ef_c), 1, fp) != 1 || fwrite(&ef_s, sizeof(ef_s), 1, fp) != 1 ||
-        fwrite(&enter_id, sizeof(enter_id), 1, fp) != 1 ||
-        fwrite(&max_level, sizeof(max_level), 1, fp) != 1 ||
-        fwrite(&node_count, sizeof(node_count), 1, fp) != 1) {
+    /* Build string table and compute offsets */
+    uint32_t* doc_offsets = NULL;
+    uint32_t* doc_lens = NULL;
+    size_t    total_string_bytes = 0;
+    if (node_count > 0) {
+        doc_offsets = calloc(node_count, sizeof(uint32_t));
+        doc_lens = calloc(node_count, sizeof(uint32_t));
+        if (!doc_offsets || !doc_lens) {
+            free(doc_offsets);
+            free(doc_lens);
+            fclose(fp);
+            return -1;
+        }
+        for (uint32_t i = 0; i < node_count; i++) {
+            const char* did = index->nodes[i]->doc_id;
+            size_t      slen = did ? strlen(did) : 0;
+            doc_offsets[i] = (uint32_t)total_string_bytes;
+            doc_lens[i] = (uint32_t)slen;
+            total_string_bytes += slen + 1; /* include NUL terminator */
+        }
+    }
+
+    /* Compute graph offsets */
+    uint64_t* neighbor_offsets = NULL;
+    size_t    total_graph_bytes = 0;
+    if (node_count > 0) {
+        neighbor_offsets = calloc(node_count, sizeof(uint64_t));
+        if (!neighbor_offsets) {
+            free(doc_offsets);
+            free(doc_lens);
+            fclose(fp);
+            return -1;
+        }
+        for (uint32_t i = 0; i < node_count; i++) {
+            neighbor_offsets[i] = total_graph_bytes;
+            const csilk_hnsw_node_t* node = index->nodes[i];
+            for (int l = 0; l <= node->level; l++) {
+                total_graph_bytes += sizeof(uint16_t);
+                total_graph_bytes += (size_t)node->neighbor_count[l] * sizeof(uint32_t);
+            }
+        }
+    }
+
+    uint64_t header_size = sizeof(csilk_hnsw_header_v2_t); /* 128 bytes */
+    uint64_t vector_offset = header_size;
+    uint64_t total_vec_bytes = (uint64_t)node_count * stride_bytes;
+    uint64_t node_meta_offset = vector_offset + total_vec_bytes;
+    uint64_t total_meta_bytes = (uint64_t)node_count * sizeof(csilk_hnsw_node_meta_v2_t);
+    uint64_t string_offset = node_meta_offset + total_meta_bytes;
+    uint64_t graph_offset = string_offset + total_string_bytes;
+    uint64_t file_size = graph_offset + total_graph_bytes;
+
+    csilk_hnsw_header_v2_t hdr = {
+        .magic = CSILK_HNSW_MAGIC,
+        .version = CSILK_HNSW_VERSION_2,
+        .dim = dim,
+        .metric = (int32_t)index->metric,
+        .M = (uint32_t)index->M,
+        .ef_construction = (uint32_t)index->ef_construction,
+        .ef_search = (uint32_t)index->ef_search,
+        .enter_id = index->enter_node_id,
+        .max_level = index->max_level,
+        .node_count = node_count,
+        .stride_bytes = (uint32_t)stride_bytes,
+        .flags = 1,
+        .node_meta_offset = node_meta_offset,
+        .vector_offset = vector_offset,
+        .string_offset = string_offset,
+        .graph_offset = graph_offset,
+        .file_size = file_size,
+    };
+
+    if (fwrite(&hdr, sizeof(hdr), 1, fp) != 1) {
+        free(doc_offsets);
+        free(doc_lens);
+        free(neighbor_offsets);
         fclose(fp);
         return -1;
     }
 
+    /* Write vectors (32-byte stride zero-padded) */
+    uint8_t zero_pad[64] = {0};
+    size_t  pad_len = stride_bytes - raw_vec_bytes;
     for (uint32_t i = 0; i < node_count; i++) {
-        const csilk_hnsw_node_t* node = index->nodes[i];
-        uint32_t                 id = node->id;
-        int32_t                  level = node->level;
-        uint32_t                 doc_len = (uint32_t)strlen(node->doc_id);
-
-        if (fwrite(&id, sizeof(id), 1, fp) != 1 || fwrite(&level, sizeof(level), 1, fp) != 1 ||
-            fwrite(&doc_len, sizeof(doc_len), 1, fp) != 1 ||
-            fwrite(node->doc_id, 1, doc_len, fp) != doc_len ||
-            fwrite(node->vector, sizeof(float), dim, fp) != dim) {
+        if (fwrite(index->nodes[i]->vector, sizeof(float), dim, fp) != dim) {
+            free(doc_offsets);
+            free(doc_lens);
+            free(neighbor_offsets);
             fclose(fp);
             return -1;
         }
+        if (pad_len > 0) {
+            if (fwrite(zero_pad, 1, pad_len, fp) != pad_len) {
+                free(doc_offsets);
+                free(doc_lens);
+                free(neighbor_offsets);
+                fclose(fp);
+                return -1;
+            }
+        }
+    }
 
-        for (int l = 0; l <= level; l++) {
+    /* Write node metadata table */
+    for (uint32_t i = 0; i < node_count; i++) {
+        csilk_hnsw_node_meta_v2_t meta = {
+            .id = index->nodes[i]->id,
+            .level = index->nodes[i]->level,
+            .doc_id_offset = doc_offsets[i],
+            .doc_id_len = doc_lens[i],
+            .neighbor_offset = neighbor_offsets[i],
+        };
+        if (fwrite(&meta, sizeof(meta), 1, fp) != 1) {
+            free(doc_offsets);
+            free(doc_lens);
+            free(neighbor_offsets);
+            fclose(fp);
+            return -1;
+        }
+    }
+
+    /* Write string table (NUL-terminated) */
+    for (uint32_t i = 0; i < node_count; i++) {
+        const char* did = index->nodes[i]->doc_id;
+        size_t      slen = doc_lens[i];
+        if (slen > 0) {
+            if (fwrite(did, 1, slen, fp) != slen) {
+                free(doc_offsets);
+                free(doc_lens);
+                free(neighbor_offsets);
+                fclose(fp);
+                return -1;
+            }
+        }
+        fputc('\0', fp);
+    }
+
+    /* Write graph neighbor lists */
+    for (uint32_t i = 0; i < node_count; i++) {
+        const csilk_hnsw_node_t* node = index->nodes[i];
+        for (int l = 0; l <= node->level; l++) {
             uint16_t deg = node->neighbor_count[l];
             if (fwrite(&deg, sizeof(deg), 1, fp) != 1) {
+                free(doc_offsets);
+                free(doc_lens);
+                free(neighbor_offsets);
                 fclose(fp);
                 return -1;
             }
             if (deg > 0) {
                 if (fwrite(node->neighbors[l], sizeof(uint32_t), deg, fp) != deg) {
+                    free(doc_offsets);
+                    free(doc_lens);
+                    free(neighbor_offsets);
                     fclose(fp);
                     return -1;
                 }
@@ -831,6 +995,9 @@ csilk_hnsw_save(const csilk_hnsw_index_t* index, const char* filepath)
         }
     }
 
+    free(doc_offsets);
+    free(doc_lens);
+    free(neighbor_offsets);
     fclose(fp);
     return 0;
 }
@@ -846,13 +1013,190 @@ csilk_hnsw_load(const char* filepath)
         return NULL;
     }
 
-    uint32_t magic = 0, version = 0, dim = 0, m = 0, ef_c = 0, ef_s = 0;
+    uint32_t magic = 0, version = 0;
+    if (fread(&magic, sizeof(magic), 1, fp) != 1 || magic != CSILK_HNSW_MAGIC ||
+        fread(&version, sizeof(version), 1, fp) != 1) {
+        fclose(fp);
+        return NULL;
+    }
+
+    /* Version 2: Load into mutable heap index */
+    if (version == CSILK_HNSW_VERSION_2) {
+        rewind(fp);
+        csilk_hnsw_header_v2_t hdr;
+        if (fread(&hdr, sizeof(hdr), 1, fp) != 1) {
+            fclose(fp);
+            return NULL;
+        }
+
+        uint32_t dim = hdr.dim;
+        uint32_t node_count = hdr.node_count;
+        uint32_t m = hdr.M;
+        int32_t  max_level = hdr.max_level;
+        uint32_t enter_id = hdr.enter_id;
+
+        if (dim == 0 || dim > HNSW_MAX_DIM || m == 0 || m > HNSW_MAX_M ||
+            node_count > HNSW_MAX_NODES || (uint32_t)max_level > HNSW_MAX_LEVEL ||
+            (node_count > 0 && enter_id >= node_count)) {
+            fclose(fp);
+            return NULL;
+        }
+
+        csilk_hnsw_index_t* index = csilk_hnsw_index_new((size_t)dim, (int)hdr.metric);
+        if (!index) {
+            fclose(fp);
+            return NULL;
+        }
+        index->M = m;
+        index->ef_construction = hdr.ef_construction;
+        index->ef_search = hdr.ef_search;
+        index->enter_node_id = enter_id;
+        index->max_level = max_level;
+
+        if (node_count == 0) {
+            fclose(fp);
+            return index;
+        }
+
+        csilk_hnsw_node_meta_v2_t* meta = calloc(node_count, sizeof(csilk_hnsw_node_meta_v2_t));
+        if (!meta) {
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+        if (fseek(fp, (long)hdr.node_meta_offset, SEEK_SET) != 0 ||
+            fread(meta, sizeof(csilk_hnsw_node_meta_v2_t), node_count, fp) != node_count) {
+            free(meta);
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+
+        if (node_count > index->node_capacity) {
+            size_t              new_cap = node_count + 64;
+            csilk_hnsw_node_t** new_nodes =
+                realloc(index->nodes, new_cap * sizeof(csilk_hnsw_node_t*));
+            if (!new_nodes) {
+                free(meta);
+                csilk_hnsw_index_free(index);
+                fclose(fp);
+                return NULL;
+            }
+            index->nodes = new_nodes;
+            index->node_capacity = new_cap;
+        }
+
+        size_t str_table_size = (size_t)(hdr.graph_offset - hdr.string_offset);
+        char*  str_table = malloc(str_table_size > 0 ? str_table_size : 1);
+        if (!str_table ||
+            (str_table_size > 0 && (fseek(fp, (long)hdr.string_offset, SEEK_SET) != 0 ||
+                                    fread(str_table, 1, str_table_size, fp) != str_table_size))) {
+            free(str_table);
+            free(meta);
+            csilk_hnsw_index_free(index);
+            fclose(fp);
+            return NULL;
+        }
+
+        for (uint32_t i = 0; i < node_count; i++) {
+            if (meta[i].level < 0 || (uint32_t)meta[i].level > HNSW_MAX_LEVEL ||
+                meta[i].doc_id_len > HNSW_MAX_DOC_LEN || meta[i].id != i) {
+                free(str_table);
+                free(meta);
+                csilk_hnsw_index_free(index);
+                fclose(fp);
+                return NULL;
+            }
+
+            csilk_hnsw_node_t* node = calloc(1, sizeof(csilk_hnsw_node_t));
+            if (!node) {
+                free(str_table);
+                free(meta);
+                csilk_hnsw_index_free(index);
+                fclose(fp);
+                return NULL;
+            }
+            node->id = meta[i].id;
+            node->level = meta[i].level;
+            node->doc_id = strdup(str_table + meta[i].doc_id_offset);
+            node->vector = (float*)csilk_aligned_alloc(32, (size_t)dim * sizeof(float));
+
+            long vec_pos = (long)(hdr.vector_offset + (uint64_t)i * hdr.stride_bytes);
+            if (!node->doc_id || !node->vector || fseek(fp, vec_pos, SEEK_SET) != 0 ||
+                fread(node->vector, sizeof(float), dim, fp) != dim) {
+                hnsw_free_node(node);
+                free(str_table);
+                free(meta);
+                csilk_hnsw_index_free(index);
+                fclose(fp);
+                return NULL;
+            }
+
+            int lvl = node->level;
+            node->neighbors = calloc((size_t)lvl + 1, sizeof(uint32_t*));
+            node->neighbor_count = calloc((size_t)lvl + 1, sizeof(uint16_t));
+            if (!node->neighbors || !node->neighbor_count) {
+                hnsw_free_node(node);
+                free(str_table);
+                free(meta);
+                csilk_hnsw_index_free(index);
+                fclose(fp);
+                return NULL;
+            }
+
+            long g_pos = (long)(hdr.graph_offset + meta[i].neighbor_offset);
+            if (fseek(fp, g_pos, SEEK_SET) != 0) {
+                hnsw_free_node(node);
+                free(str_table);
+                free(meta);
+                csilk_hnsw_index_free(index);
+                fclose(fp);
+                return NULL;
+            }
+
+            for (int l = 0; l <= lvl; l++) {
+                uint16_t deg = 0;
+                if (fread(&deg, sizeof(deg), 1, fp) != 1) {
+                    hnsw_free_node(node);
+                    free(str_table);
+                    free(meta);
+                    csilk_hnsw_index_free(index);
+                    fclose(fp);
+                    return NULL;
+                }
+                node->neighbor_count[l] = deg;
+                size_t cap = hnsw_layer_cap(index, l);
+                node->neighbors[l] = calloc(cap, sizeof(uint32_t));
+                if (!node->neighbors[l] ||
+                    (deg > 0 && fread(node->neighbors[l], sizeof(uint32_t), deg, fp) != deg)) {
+                    hnsw_free_node(node);
+                    free(str_table);
+                    free(meta);
+                    csilk_hnsw_index_free(index);
+                    fclose(fp);
+                    return NULL;
+                }
+            }
+            index->nodes[index->node_count++] = node;
+        }
+
+        free(str_table);
+        free(meta);
+        fclose(fp);
+        return index;
+    }
+
+    /* Version 1: Legacy loader */
+    if (version != CSILK_HNSW_VERSION_1) {
+        fclose(fp);
+        return NULL;
+    }
+
+    uint32_t dim = 0, m = 0, ef_c = 0, ef_s = 0;
     uint32_t enter_id = 0, node_count = 0;
     int32_t  metric = 0, max_level = 0;
 
-    if (fread(&magic, sizeof(magic), 1, fp) != 1 || magic != CSILK_HNSW_MAGIC ||
-        fread(&version, sizeof(version), 1, fp) != 1 || version != CSILK_HNSW_VERSION ||
-        fread(&dim, sizeof(dim), 1, fp) != 1 || fread(&metric, sizeof(metric), 1, fp) != 1 ||
+    if (fread(&dim, sizeof(dim), 1, fp) != 1 || fread(&metric, sizeof(metric), 1, fp) != 1 ||
         fread(&m, sizeof(m), 1, fp) != 1 || fread(&ef_c, sizeof(ef_c), 1, fp) != 1 ||
         fread(&ef_s, sizeof(ef_s), 1, fp) != 1 || fread(&enter_id, sizeof(enter_id), 1, fp) != 1 ||
         fread(&max_level, sizeof(max_level), 1, fp) != 1 ||
@@ -861,13 +1205,8 @@ csilk_hnsw_load(const char* filepath)
         return NULL;
     }
 
-    /* Taint bounds: the header fields are read straight from a file that may
-     * be attacker-controlled.  Reject out-of-range values before they drive
-     * any allocation (dim / node_count / m) or array index (level, doc_len).
-     * enter_node_id indexes nodes[enter_node_id] in search; it must be a valid
-     * slot within [0, node_count) or later traversal dereferences OOB. */
     if (dim == 0 || dim > HNSW_MAX_DIM || m == 0 || m > HNSW_MAX_M || node_count > HNSW_MAX_NODES ||
-        (uint32_t)max_level > HNSW_MAX_LEVEL || enter_id >= node_count) {
+        (uint32_t)max_level > HNSW_MAX_LEVEL || (node_count > 0 && enter_id >= node_count)) {
         fclose(fp);
         return NULL;
     }
@@ -886,17 +1225,12 @@ csilk_hnsw_load(const char* filepath)
 
     if (node_count > index->node_capacity) {
         size_t new_cap = node_count + 64;
-        /* Bound the realloc size so a (taint-checked) node_count cannot
-         * produce an integer overflow in new_cap * sizeof(...). */
         if (new_cap > HNSW_MAX_NODES + 64) {
             csilk_hnsw_index_free(index);
             fclose(fp);
             return NULL;
         }
-        csilk_hnsw_node_t** new_nodes =
-            realloc( // NOLINT(clang-analyzer-optin.taint.TaintedAlloc) /* new_cap bounded by HNSW_MAX_NODES + 64 */
-                index->nodes,
-                new_cap * sizeof(csilk_hnsw_node_t*));
+        csilk_hnsw_node_t** new_nodes = realloc(index->nodes, new_cap * sizeof(csilk_hnsw_node_t*));
         if (!new_nodes) {
             csilk_hnsw_index_free(index);
             fclose(fp);
@@ -916,11 +1250,6 @@ csilk_hnsw_load(const char* filepath)
             return NULL;
         }
 
-        /* Per-node taint bounds: level indexes node->neighbors[level]; a
-         * negative or oversized level would corrupt the neighbor array.  doc_len
-         * sizes the doc_id allocation; an unbounded value is a DoS vector.
-         * id must equal the array slot i: search traverses by node->id as an
-         * index into nodes[], so a mismatch corrupts graph navigation. */
         if (level < 0 || (uint32_t)level > HNSW_MAX_LEVEL || doc_len > HNSW_MAX_DOC_LEN ||
             id != i) {
             csilk_hnsw_index_free(index);
@@ -945,8 +1274,7 @@ csilk_hnsw_load(const char* filepath)
             fclose(fp);
             return NULL;
         }
-        node->doc_id // NOLINT(clang-analyzer-security.ArrayBound) /* doc_id allocated with doc_len+1, doc_len bounded by HNSW_MAX_DOC_LEN */
-            [doc_len] = '\0';
+        node->doc_id[doc_len] = '\0';
 
         node->vector = csilk_aligned_alloc(32, (size_t)dim * sizeof(float));
         if (!node->vector || fread(node->vector, sizeof(float), dim, fp) != dim) {
@@ -977,8 +1305,6 @@ csilk_hnsw_load(const char* filepath)
             }
             node->neighbor_count[l] = deg;
             size_t cap = hnsw_layer_cap(index, l);
-            /* Taint bound: deg is a file-controlled uint16; refuse to copy
-             * more neighbors than the per-layer capacity holds. */
             if (deg > cap) {
                 hnsw_free_node(node);
                 csilk_hnsw_index_free(index);
@@ -1006,5 +1332,138 @@ csilk_hnsw_load(const char* filepath)
     }
 
     fclose(fp);
+    return index;
+}
+
+csilk_hnsw_index_t*
+csilk_hnsw_mmap_open(const char* filepath)
+{
+    if (!filepath) {
+        return NULL;
+    }
+
+    int fd = open(filepath, O_RDONLY);
+    if (fd < 0) {
+        return NULL;
+    }
+
+    struct stat st;
+    if (fstat(fd, &st) != 0 || st.st_size < (off_t)sizeof(csilk_hnsw_header_v2_t)) {
+        close(fd);
+        return NULL;
+    }
+
+    void* base = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    close(fd);
+    if (base == MAP_FAILED) {
+        return NULL;
+    }
+
+    const csilk_hnsw_header_v2_t* hdr = (const csilk_hnsw_header_v2_t*)base;
+    if (hdr->magic != CSILK_HNSW_MAGIC || hdr->version != CSILK_HNSW_VERSION_2) {
+        munmap(base, (size_t)st.st_size);
+        return NULL;
+    }
+
+    uint32_t dim = hdr->dim;
+    uint32_t node_count = hdr->node_count;
+    uint32_t m = hdr->M;
+    int32_t  max_level = hdr->max_level;
+    uint32_t enter_id = hdr->enter_id;
+
+    if (dim == 0 || dim > HNSW_MAX_DIM || m == 0 || m > HNSW_MAX_M || node_count > HNSW_MAX_NODES ||
+        (uint32_t)max_level > HNSW_MAX_LEVEL || (node_count > 0 && enter_id >= node_count) ||
+        hdr->node_meta_offset >= (uint64_t)st.st_size ||
+        hdr->vector_offset >= (uint64_t)st.st_size || hdr->string_offset > (uint64_t)st.st_size ||
+        hdr->graph_offset > (uint64_t)st.st_size) {
+        munmap(base, (size_t)st.st_size);
+        return NULL;
+    }
+
+    csilk_hnsw_index_t* index = calloc(1, sizeof(csilk_hnsw_index_t));
+    if (!index) {
+        munmap(base, (size_t)st.st_size);
+        return NULL;
+    }
+
+    index->dim = dim;
+    index->metric = hdr->metric;
+    index->M = m;
+    index->ef_construction = hdr->ef_construction;
+    index->ef_search = hdr->ef_search;
+    index->enter_node_id = enter_id;
+    index->max_level = max_level;
+    index->node_count = node_count;
+    index->node_capacity = node_count;
+    index->mmap_base = base;
+    index->mmap_size = (size_t)st.st_size;
+    index->is_mmap = 1;
+
+    if (hdr->metric == 1) {
+        index->dist_fn = csilk_simd_l2_distance;
+    } else if (hdr->metric == 2) {
+        index->dist_fn = csilk_simd_dot_product;
+    } else {
+        index->dist_fn = csilk_simd_cosine_distance;
+    }
+    csilk_mutex_init(&index->mutex);
+
+    if (node_count == 0) {
+        return index;
+    }
+
+    index->nodes = calloc(node_count, sizeof(csilk_hnsw_node_t*));
+    if (!index->nodes) {
+        csilk_hnsw_index_free(index);
+        return NULL;
+    }
+
+    const uint8_t*                   bptr = (const uint8_t*)base;
+    const csilk_hnsw_node_meta_v2_t* meta =
+        (const csilk_hnsw_node_meta_v2_t*)(bptr + hdr->node_meta_offset);
+    uint32_t stride = hdr->stride_bytes;
+
+    for (uint32_t i = 0; i < node_count; i++) {
+        if (meta[i].level < 0 || (uint32_t)meta[i].level > HNSW_MAX_LEVEL ||
+            meta[i].doc_id_len > HNSW_MAX_DOC_LEN || meta[i].id != i) {
+            csilk_hnsw_index_free(index);
+            return NULL;
+        }
+
+        csilk_hnsw_node_t* node = calloc(1, sizeof(csilk_hnsw_node_t));
+        if (!node) {
+            csilk_hnsw_index_free(index);
+            return NULL;
+        }
+
+        node->id = meta[i].id;
+        node->level = meta[i].level;
+        /* Zero-copy pointers to mmapped memory */
+        node->doc_id = (char*)(bptr + hdr->string_offset + meta[i].doc_id_offset);
+        node->vector = (float*)(bptr + hdr->vector_offset + (uint64_t)i * stride);
+
+        int lvl = node->level;
+        node->neighbor_count = calloc((size_t)lvl + 1, sizeof(uint16_t));
+        node->neighbors = calloc((size_t)lvl + 1, sizeof(uint32_t*));
+        if (!node->neighbor_count || !node->neighbors) {
+            free(node->neighbor_count);
+            free(node->neighbors);
+            free(node);
+            csilk_hnsw_index_free(index);
+            return NULL;
+        }
+
+        const uint8_t* gptr = bptr + hdr->graph_offset + meta[i].neighbor_offset;
+        for (int l = 0; l <= lvl; l++) {
+            uint16_t deg = *(const uint16_t*)gptr;
+            gptr += sizeof(uint16_t);
+            node->neighbor_count[l] = deg;
+            node->neighbors[l] = (uint32_t*)gptr; /* Zero-copy pointer directly into mmap! */
+            gptr += (size_t)deg * sizeof(uint32_t);
+        }
+
+        index->nodes[i] = node;
+    }
+
     return index;
 }

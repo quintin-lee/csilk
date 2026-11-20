@@ -1115,6 +1115,12 @@ def get_bindings():
     lib.csilk_vector_db_free.restype = None
     lib.csilk_vector_db_free.argtypes = [ctypes.c_void_p]
 
+    lib.csilk_vector_db_new_embedded_mmap.restype = ctypes.c_void_p
+    lib.csilk_vector_db_new_embedded_mmap.argtypes = [ctypes.c_char_p]
+
+    lib.csilk_vector_db_save_embedded.restype = ctypes.c_int
+    lib.csilk_vector_db_save_embedded.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+
     lib.csilk_vector_search_response_free.restype = None
     lib.csilk_vector_search_response_free.argtypes = [ctypes.POINTER(CsilkVectorSearchResponse)]
 
