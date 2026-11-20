@@ -35,6 +35,10 @@
 
 /* --- Type Definitions --- */
 
+enum {
+    LLAMA_EMBED_DIM = 128,
+};
+
 typedef void* (*llama_backend_init_fn)(void);
 typedef void (*llama_backend_free_fn)(void);
 
@@ -368,8 +372,7 @@ llama_embeddings(void*                           state_ptr,
 
     csilk_mutex_lock(&state->mutex);
 
-    constexpr size_t DIM = 128;
-    float*           vals = calloc(count * DIM, sizeof(float));
+    float* vals = calloc(count * LLAMA_EMBED_DIM, sizeof(float));
     if (!vals) {
         csilk_mutex_unlock(&state->mutex);
         return -1;
@@ -384,21 +387,21 @@ llama_embeddings(void*                           state_ptr,
         }
 
         float norm_sq = 0.0f;
-        for (size_t d = 0; d < DIM; d++) {
+        for (size_t d = 0; d < LLAMA_EMBED_DIM; d++) {
             h = h * 1103515245u + 12345u;
             float val = ((float)(h % 2000) - 1000.0f) / 1000.0f;
-            vals[i * DIM + d] = val;
+            vals[i * LLAMA_EMBED_DIM + d] = val;
             norm_sq += val * val;
         }
 
         float inv_norm = 1.0f / sqrtf(norm_sq > 1e-6f ? norm_sq : 1.0f);
-        for (size_t d = 0; d < DIM; d++) {
-            vals[i * DIM + d] *= inv_norm;
+        for (size_t d = 0; d < LLAMA_EMBED_DIM; d++) {
+            vals[i * LLAMA_EMBED_DIM + d] *= inv_norm;
         }
     }
 
     res->values = vals;
-    res->dimension = DIM;
+    res->dimension = LLAMA_EMBED_DIM;
     res->count = count;
     res->prompt_tokens = (int)(count * 8);
     res->total_tokens = res->prompt_tokens;
