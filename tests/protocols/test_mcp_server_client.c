@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "csilk/drivers/ai.h"
 #include "csilk/protocols/mcp.h"
 
 static char*
@@ -136,6 +137,87 @@ test_mcp_client_boundary_guards(void)
     printf("test_mcp_client_boundary_guards passed\n");
 }
 
+static void
+test_mcp_ws_transport(void)
+{
+    /* Test server-side WebSocket binding */
+    csilk_mcp_server_t* srv = csilk_mcp_server_new("test-ws-server", "1.0.0");
+    assert(srv != nullptr);
+
+    csilk_app_t* app = csilk_app_new(NULL);
+    assert(app != nullptr);
+
+    assert(csilk_mcp_server_bind_ws(srv, app, "/mcp/ws") == 0);
+    assert(csilk_mcp_server_bind_ws(nullptr, app, "/mcp/ws") == -1);
+    assert(csilk_mcp_server_bind_ws(srv, nullptr, "/mcp/ws") == -1);
+
+    /* Test bind_app auto-binds /ws */
+    assert(csilk_mcp_server_bind_app(srv, app, "/mcp2") == 0);
+
+    /* Test client-side WebSocket handle creation */
+    assert(csilk_mcp_client_connect_ws(nullptr) == nullptr);
+    csilk_mcp_client_t* ws_client = csilk_mcp_client_connect_ws("ws://127.0.0.1:8080/mcp/ws");
+    assert(ws_client != nullptr);
+    csilk_mcp_client_free(ws_client);
+
+    csilk_app_free(app);
+    csilk_mcp_server_free(srv);
+    printf("test_mcp_ws_transport passed\n");
+}
+
+static void
+test_mcp_client_context_injection(void)
+{
+    /* NULL safety */
+    assert(csilk_mcp_client_inject_context(nullptr, nullptr) == -1);
+
+    /* Mock stdio server that serves initialize, prompts/list, and resources/list */
+    const char* script = "/tmp/csilk_mock_mcp_ctx.sh";
+    FILE*       f = fopen(script, "w");
+    assert(f != nullptr);
+    fprintf(f,
+            "#!/bin/sh\n"
+            "while IFS= read -r line; do\n"
+            "  case \"$line\" in\n"
+            "    *'\"method\":\"initialize\"'*)\n"
+            "      printf "
+            "'{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2024-11-05\"}}\\n'\n"
+            "      ;;\n"
+            "    *'\"method\":\"prompts/list\"'*)\n"
+            "      printf "
+            "'{\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"prompts\":[{\"name\":\"code_review\","
+            "\"description\":\"Audit C23 code for safety\"}]}}\\n'\n"
+            "      ;;\n"
+            "    *'\"method\":\"resources/list\"'*)\n"
+            "      printf "
+            "'{\"jsonrpc\":\"2.0\",\"id\":3,\"result\":{\"resources\":[{\"uri\":\"csilk://schema\","
+            "\"name\":\"DB Schema\"}]}}\\n'\n"
+            "      ;;\n"
+            "  esac\n"
+            "done\n");
+    fclose(f);
+
+    char*               argv[] = {"/bin/sh", (char*)script, nullptr};
+    csilk_mcp_client_t* client = csilk_mcp_client_connect_stdio("/bin/sh", argv);
+    assert(client != nullptr);
+
+    csilk_ai_context_t* ctx = csilk_ai_context_new(10);
+    assert(ctx != nullptr);
+
+    int injected = csilk_mcp_client_inject_context(client, ctx);
+    assert(injected == 2);
+    assert(ctx->count == 2);
+    assert(ctx->messages[0].content != nullptr);
+    assert(strstr(ctx->messages[0].content, "code_review") != nullptr);
+    assert(ctx->messages[1].content != nullptr);
+    assert(strstr(ctx->messages[1].content, "csilk://schema") != nullptr);
+
+    csilk_ai_context_free(ctx);
+    csilk_mcp_client_free(client);
+    remove(script);
+    printf("test_mcp_client_context_injection passed\n");
+}
+
 int
 main(void)
 {
@@ -143,6 +225,8 @@ main(void)
     test_mcp_client_import();
     test_mcp_client_bridge_to_registry();
     test_mcp_client_boundary_guards();
+    test_mcp_ws_transport();
+    test_mcp_client_context_injection();
     printf("All test_mcp_server_client tests passed!\n");
     return 0;
 }
