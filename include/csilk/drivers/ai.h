@@ -30,7 +30,7 @@
 #include "csilk/core/json/json.h"
 
 /** @brief Maximum number of AI driver backends that can be registered. */
-enum { MAX_DRIVERS = 8 };
+enum { MAX_DRIVERS = 16 };
 
 /**
  * @brief AI Engine statistics.
@@ -271,6 +271,24 @@ void csilk_ai_embeddings_response_free(csilk_ai_embeddings_response_t* res);
 /** @brief Register a new AI driver.
  * @note Not thread-safe during registration. Call at startup. */
 void csilk_ai_register_driver(const csilk_ai_driver_t* driver);
+
+/** @brief Register the built-in embedded llama.cpp AI driver. */
+void csilk_ai_llama_init_driver(void);
+
+/**
+ * @brief Check if native libllama dynamic library was loaded and is available.
+ * @return 1 if native libllama is active, 0 if running in simulated/fallback mode.
+ */
+int csilk_ai_llama_is_available(void);
+
+/**
+ * @brief Create a new embedded llama AI provider instance.
+ * @param model_path Path to the GGUF model file on disk (or NULL for default/simulated).
+ * @param n_threads Number of CPU inference threads (0 for auto/default).
+ * @param n_ctx Context window size in tokens (0 for default, e.g. 2048).
+ * @return New AI handle, or NULL on failure.
+ */
+csilk_ai_t* csilk_ai_new_llama(const char* model_path, int n_threads, int n_ctx);
 
 /* --- Context Helpers --- */
 

@@ -244,6 +244,15 @@ struct csilk_ai_s {
 void
 csilk_ai_register_driver(const csilk_ai_driver_t* driver)
 {
+    if (!driver || !driver->name) {
+        return;
+    }
+    for (size_t i = 0; i < g_driver_count; i++) {
+        if (strcmp(g_drivers[i]->name, driver->name) == 0) {
+            g_drivers[i] = driver;
+            return;
+        }
+    }
     if (g_driver_count < MAX_DRIVERS) {
         g_drivers[g_driver_count++] = driver;
         CSILK_LOG_I("Registered AI driver: '%s'", driver->name);
@@ -270,6 +279,8 @@ find_driver(const char* name)
 extern void csilk_ai_openai_init_driver(void);
 extern void csilk_ai_ollama_init_driver(void);
 extern void csilk_ai_anthropic_init_driver(void);
+extern void csilk_ai_llama_init_driver(void);
+extern void _csilk_llama_set_params(void* state_ptr, int n_threads, int n_ctx);
 
 /** @brief Create a new AI engine instance bound to a specific driver backend.
  *
@@ -291,10 +302,11 @@ csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url)
      pulling in unused driver dependencies at process startup. */
     static int initialized = 0;
     if (!initialized) {
-        CSILK_LOG_D("Lazy-initializing default AI drivers (OpenAI, Ollama, Anthropic)...");
+        CSILK_LOG_D("Lazy-initializing default AI drivers (OpenAI, Ollama, Anthropic, Llama)...");
         csilk_ai_openai_init_driver();
         csilk_ai_ollama_init_driver();
         csilk_ai_anthropic_init_driver();
+        csilk_ai_llama_init_driver();
         initialized = 1;
     }
 
@@ -324,6 +336,19 @@ csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url)
     CSILK_LOG_I("AI instance successfully created using driver '%s' (base_url: %s)",
                 driver_name,
                 base_url ? base_url : "default");
+    return ai;
+}
+
+csilk_ai_t*
+csilk_ai_new_llama(const char* model_path, int n_threads, int n_ctx)
+{
+    csilk_ai_t* ai = csilk_ai_new("llama", NULL, model_path);
+    if (!ai) {
+        return NULL;
+    }
+    if (n_threads > 0 || n_ctx > 0) {
+        _csilk_llama_set_params(ai->driver_state, n_threads, n_ctx);
+    }
     return ai;
 }
 

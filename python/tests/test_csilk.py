@@ -597,6 +597,24 @@ class TestCsilkIntegration(unittest.TestCase):
             app.free()
 
 class TestCsilkAi(unittest.TestCase):
+    def test_ai_llama_lifecycle(self):
+        ai = AI.llama("models/test.gguf", 2, 1024)
+        self.assertIsNotNone(ai)
+        avail = AI.llama_is_available()
+        self.assertIn(avail, (True, False))
+        
+        # Test chat
+        res = ai.chat("default", [{"role": "user", "content": "Hello llama!"}])
+        self.assertIn("content", res)
+        self.assertTrue(len(res["content"]) > 0)
+        
+        # Test embeddings
+        emb = ai.generate_embeddings("default", ["embedded inference", "csilk"])
+        self.assertEqual(len(emb), 2)
+        self.assertEqual(len(emb[0]), 128)
+        
+        ai.free()
+
     def test_ai_lifecycle(self):
         ai = AI("openai", "mock-key")
         self.assertIsNotNone(ai)

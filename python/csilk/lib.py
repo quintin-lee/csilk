@@ -998,6 +998,12 @@ def get_bindings():
     lib.csilk_ai_new.restype = ctypes.c_void_p
     lib.csilk_ai_new.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
 
+    lib.csilk_ai_new_llama.restype = ctypes.c_void_p
+    lib.csilk_ai_new_llama.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
+
+    lib.csilk_ai_llama_is_available.restype = ctypes.c_int
+    lib.csilk_ai_llama_is_available.argtypes = []
+
     lib.csilk_ai_chat.restype = ctypes.c_int
     lib.csilk_ai_chat.argtypes = [ctypes.c_void_p, ctypes.POINTER(CsilkAiChatRequest), ctypes.POINTER(CsilkAiChatResponse)]
 
