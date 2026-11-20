@@ -43,10 +43,14 @@ class VectorDB:
                 f"Failed to create Vector DB connection for driver '{driver_name}' at '{endpoint}'"
             )
 
-    def __del__(self):
+    def free(self):
+        """Release underlying vector database handle."""
         if hasattr(self, "_db") and self._db:
             self._lib.csilk_vector_db_free(self._db)
             self._db = None
+
+    def __del__(self):
+        self.free()
 
     def upsert(self, collection: str, points: list):
         """Upsert points into a collection.

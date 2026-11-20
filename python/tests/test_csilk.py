@@ -754,6 +754,8 @@ class TestCsilkVector(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             db.search("test_collection", [0.1, 0.2, 0.3])
 
+        db.free()
+
 class TestCsilkGroups(unittest.TestCase):
     def test_route_groups_and_middleware(self):
         app = App()
@@ -1151,8 +1153,4 @@ class TestCsilkResponseExtensionsAndHooks(unittest.TestCase):
             app.free()
 
 if __name__ == '__main__':
-    import gc
-    import sys
-    result = unittest.main(exit=False)
-    gc.collect()
-    sys.exit(not result.result.wasSuccessful())
+    unittest.main()
