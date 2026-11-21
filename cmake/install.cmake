@@ -246,7 +246,11 @@ set(CSILK_WORKFLOW_PC_LIBS_PRIVATE "-lyaml")
 # Umbrella static closure. Requires lists pull the modular CSilk archives;
 # Libs.private supplies implementation dependencies for --static consumers.
 set(CSILK_PC_REQUIRES "csilk-http csilk-permission csilk-db csilk-workflow csilk-wasm")
-set(CSILK_PC_LIBS_PRIVATE "-lyyjson -lssl -lcrypto -lz -lnghttp2 -lcurl -lsqlite3 -lyaml -luv -lpthread -lm")
+if(CSILK_USE_URING)
+  set(CSILK_PC_LIBS_PRIVATE "-lyyjson -lssl -lcrypto -lz -lnghttp2 -lcurl -lsqlite3 -lyaml -luring -lpthread -lm")
+else()
+  set(CSILK_PC_LIBS_PRIVATE "-lyyjson -lssl -lcrypto -lz -lnghttp2 -lcurl -lsqlite3 -lyaml -luv -lpthread -lm")
+endif()
 if(LLHTTP_LIB)
   string(APPEND CSILK_PC_LIBS_PRIVATE " -lllhttp")
 else()
