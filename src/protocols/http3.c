@@ -276,9 +276,9 @@ _h3_callbacks(void)
  * @return The matching csilk_h3_conn_s*, or NULL if not found.
  */
 static struct csilk_h3_conn_s*
-_h3_find_conn(csilk_h3_transport_t* t, const ngtcp2_cid* dcid)
+_h3_find_conn(csilk_h3_transport_t* t, const uint8_t* dcid, size_t dcid_len)
 {
-    if (!dcid || dcid->datalen == 0) {
+    if (!dcid || dcid_len == 0) {
         return NULL;
     }
     for (int i = 0; i < t->conn_count; i++) {
@@ -286,10 +286,13 @@ _h3_find_conn(csilk_h3_transport_t* t, const ngtcp2_cid* dcid)
         if (!c || c->state == 3) {
             continue;
         }
-        /* Match DCID prefix: the stored DCID is the full Initial DCID.
-         * For 1-RTT packets the DCID may be a prefix of the Initial DCID. */
-        size_t matchlen = dcid->datalen < c->dcid_len ? dcid->datalen : c->dcid_len;
-        if (memcmp(dcid->data, c->dcid_data, matchlen) == 0) {
+        /* Match against server SCID (1-RTT/Handshake packets) or Initial DCID. */
+        if (c->scid_len > 0 && dcid_len >= c->scid_len &&
+            memcmp(dcid, c->scid_data, c->scid_len) == 0) {
+            return c;
+        }
+        size_t matchlen = dcid_len < c->dcid_len ? dcid_len : c->dcid_len;
+        if (matchlen > 0 && memcmp(dcid, c->dcid_data, matchlen) == 0) {
             return c;
         }
     }
@@ -527,12 +530,13 @@ _h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn)
         }
 
         uint8_t      pktbuf[NGTCP2_MAX_UDP_PAYLOAD_SIZE + 64];
+        ngtcp2_ssize pdatalen = 0;
         ngtcp2_ssize written = ngtcp2_conn_writev_stream(conn->ngtcp2_conn,
                                                          NULL,
                                                          NULL,
                                                          pktbuf,
                                                          sizeof(pktbuf),
-                                                         NULL,
+                                                         &pdatalen,
                                                          fin ? NGTCP2_WRITE_STREAM_FLAG_FIN : 0,
                                                          stream_id,
                                                          qvec,
@@ -546,7 +550,9 @@ _h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn)
             break;
         }
 
-        nghttp3_conn_add_write_offset(conn->nghttp3_conn, stream_id, (size_t)written);
+        if (pdatalen > 0) {
+            nghttp3_conn_add_write_offset(conn->nghttp3_conn, stream_id, (size_t)pdatalen);
+        }
     }
     return 0;
 }
@@ -578,15 +584,21 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
      * validates the first packet of a connection and decodes the header
      * (including DCID/SCID). For established connections, the DCID is
      * read from the header directly. */
-    ngtcp2_pkt_hd hd;
-    int           rc = ngtcp2_accept(&hd, buf, len);
-    if (rc != 0 && rc != NGTCP2_ERR_VERSION_NEGOTIATION) {
-        /* Not an acceptable first packet; drop it. */
-        return 0;
+    struct csilk_h3_conn_s* conn = NULL;
+    ngtcp2_version_cid      vc;
+    if (ngtcp2_pkt_decode_version_cid(&vc, buf, len, 8) == 0 && vc.dcid && vc.dcidlen > 0) {
+        conn = _h3_find_conn(t, vc.dcid, vc.dcidlen);
     }
 
-    /* Look up (or create) the connection for this DCID. */
-    struct csilk_h3_conn_s* conn = _h3_find_conn(t, &hd.dcid);
+    ngtcp2_pkt_hd hd;
+    if (!conn) {
+        int rc = ngtcp2_accept(&hd, buf, len);
+        if (rc != 0 && rc != NGTCP2_ERR_VERSION_NEGOTIATION) {
+            /* Not an acceptable first packet and not an active conn; drop it. */
+            return 0;
+        }
+        conn = _h3_find_conn(t, hd.dcid.data, hd.dcid.datalen);
+    }
 
     if (!conn) {
         /* New connection: create it + ngtcp2 + crypto + nghttp3 session */
@@ -603,7 +615,7 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
         }
 
         /* Initialize the ngtcp2 crypto context (bridges SSL + QUIC). */
-        rc = ngtcp2_crypto_ossl_ctx_new(&conn->crypto_ctx, conn->ssl);
+        int rc = ngtcp2_crypto_ossl_ctx_new(&conn->crypto_ctx, conn->ssl);
         if (rc != 0) {
             SSL_free(conn->ssl);
             conn->ssl = NULL;
@@ -625,6 +637,8 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
         ngtcp2_cid scid;
         scid.datalen = 8;
         RAND_bytes(scid.data, scid.datalen);
+        conn->scid_len = scid.datalen;
+        memcpy(conn->scid_data, scid.data, scid.datalen);
 
         ngtcp2_settings settings;
         ngtcp2_settings_default(&settings);
@@ -924,18 +938,21 @@ csilk_h3_transport_send(
     ngtcp2_vec nqvec;
     nqvec.base = iov.base;
     nqvec.len = iov.len;
+    ngtcp2_ssize pdatalen = 0;
     ngtcp2_ssize written = ngtcp2_conn_writev_stream(h3c->ngtcp2_conn,
                                                      NULL,
                                                      NULL,
                                                      pktbuf,
                                                      sizeof(pktbuf),
-                                                     NULL,
+                                                     &pdatalen,
                                                      out_fin ? NGTCP2_WRITE_STREAM_FLAG_FIN : 0,
                                                      out_stream_id,
                                                      &nqvec,
                                                      1,
                                                      csilk_io_hrtime());
-    (void)written;
+    if (written >= 0 && pdatalen > 0) {
+        nghttp3_conn_add_write_offset(h3c->nghttp3_conn, out_stream_id, (size_t)pdatalen);
+    }
     _h3_send_quic_packets(t, h3c);
     return 0;
 #else
@@ -1053,10 +1070,8 @@ csilk_h3_transport_destroy(csilk_h3_transport_t* t)
     }
 
 #ifdef CSILK_HAS_NGTCP2
-    for (int i = 0; i < t->conn_count; i++) {
-        if (t->conns[i]) {
-            _h3_del_conn(t, t->conns[i]);
-        }
+    while (t->conn_count > 0) {
+        _h3_del_conn(t, t->conns[t->conn_count - 1]);
     }
     t->conn_count = 0;
     if (t->ssl_ctx) {

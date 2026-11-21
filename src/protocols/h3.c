@@ -137,8 +137,8 @@ csilk_h3_frame_encode(uint64_t       frame_type,
     }
 
     size_t total_header_len = type_len + len_bytes;
-    if (max_buf_len < total_header_len + payload_len) {
-        return 0; /* Insufficient output capacity */
+    if (payload_len > SIZE_MAX - total_header_len || max_buf_len < total_header_len + payload_len) {
+        return 0; /* Insufficient output capacity or overflow */
     }
 
     memcpy(out_buf, type_buf, type_len);
@@ -189,8 +189,8 @@ csilk_h3_frame_decode(const uint8_t* in_buf,
     }
 
     size_t header_len = type_bytes + len_bytes;
-    if (in_len < header_len + (size_t)flen) {
-        return -1; /* Incomplete frame payload */
+    if (flen > (uint64_t)(in_len - header_len)) {
+        return -1; /* Incomplete frame payload or overflow */
     }
 
     *out_type = ftype;

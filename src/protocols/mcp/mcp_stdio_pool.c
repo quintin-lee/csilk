@@ -225,10 +225,42 @@ csilk_mcp_stdio_pool_acquire_keyed(const char* key, const char* command, char* c
     return NULL;
 }
 
+static void
+build_command_argv_key(const char* command, char* const argv[], char* out, size_t out_sz)
+{
+    if (!out || out_sz == 0) {
+        return;
+    }
+    /* Compute FNV-1a 64-bit hash over command and every argv entry so distinct
+     * argument lists never alias onto the same pooled subprocess slot. */
+    uint64_t    h = 14695981039346656037ULL;
+    const char* s = command ? command : "";
+    for (const unsigned char* p = (const unsigned char*)s; *p; p++) {
+        h ^= *p;
+        h *= 1099511628211ULL;
+    }
+    if (argv) {
+        for (size_t i = 0; argv[i]; i++) {
+            h ^= 0xFFU;
+            h *= 1099511628211ULL;
+            for (const unsigned char* p = (const unsigned char*)argv[i]; *p; p++) {
+                h ^= *p;
+                h *= 1099511628211ULL;
+            }
+        }
+    }
+    snprintf(out, out_sz, "%.90s#%016llx", s, (unsigned long long)h);
+}
+
 csilk_mcp_client_t*
 csilk_mcp_stdio_pool_acquire(const char* command, char* const argv[])
 {
-    return csilk_mcp_stdio_pool_acquire_keyed(command, command, argv);
+    if (!command) {
+        return NULL;
+    }
+    char key[128];
+    build_command_argv_key(command, argv, key, sizeof(key));
+    return csilk_mcp_stdio_pool_acquire_keyed(key, command, argv);
 }
 
 void

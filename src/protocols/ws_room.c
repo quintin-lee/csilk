@@ -14,6 +14,7 @@
 #include <string.h>
 #include "csilk/core/internal.h"
 #include "csilk/core/sync.h"
+#include "core/internal/srv_impl.h"
 
 typedef struct {
     csilk_ctx_t** clients;
@@ -63,15 +64,17 @@ typedef struct {
 } ws_room_manager_t;
 
 static ws_room_manager_t g_room_manager;
-static int               g_room_manager_initialized = 0;
+static csilk_once_t      g_room_manager_once = CSILK_ONCE_INIT;
+static atomic_int        g_room_manager_ready = 0;
 
 /** @brief Tear down the global room manager and free all rooms, snapshots, names. */
 static void
 ws_room_manager_cleanup(void)
 {
-    if (!g_room_manager_initialized) {
+    if (!atomic_load_explicit(&g_room_manager_ready, memory_order_acquire)) {
         return;
     }
+    atomic_store_explicit(&g_room_manager_ready, 0, memory_order_release);
     csilk_mutex_lock(&g_room_manager.mutex);
     for (int i = 0; i < g_room_manager.rooms_count; i++) {
         ws_room_t* room = g_room_manager.rooms[i];
@@ -91,20 +94,22 @@ ws_room_manager_cleanup(void)
     g_room_manager.rooms_capacity = 0;
     csilk_mutex_unlock(&g_room_manager.mutex);
     csilk_mutex_destroy(&g_room_manager.mutex);
-    g_room_manager_initialized = 0;
+}
+
+static void
+ws_room_manager_init_once(void)
+{
+    memset(&g_room_manager, 0, sizeof(ws_room_manager_t));
+    csilk_mutex_init(&g_room_manager.mutex);
+    atomic_store_explicit(&g_room_manager_ready, 1, memory_order_release);
+    atexit(ws_room_manager_cleanup);
 }
 
 /** @brief Lazily initialize the global room manager and register an atexit cleanup. */
 static void
 ws_room_manager_init(void)
 {
-    if (g_room_manager_initialized) {
-        return;
-    }
-    memset(&g_room_manager, 0, sizeof(ws_room_manager_t));
-    csilk_mutex_init(&g_room_manager.mutex);
-    g_room_manager_initialized = 1;
-    atexit(ws_room_manager_cleanup);
+    csilk_once(&g_room_manager_once, ws_room_manager_init_once);
 }
 
 /** @brief Linear search of the manager's rooms for one matching @p name. */
@@ -119,10 +124,164 @@ find_room(const char* name)
     return NULL;
 }
 
+typedef struct {
+    csilk_client_t* client;
+    uint64_t        gen;
+    uint8_t*        payload;
+    size_t          len;
+} ws_room_send_job_t;
+
+static void
+_ws_room_send_dispatch_cb(void* arg)
+{
+    ws_room_send_job_t* job = (ws_room_send_job_t*)arg;
+    if (!job) {
+        return;
+    }
+    if (job->client && job->client->generation == job->gen &&
+        csilk_conn_get_state(job->client) == CSILK_CONN_STREAMING) {
+        csilk_ws_send(&job->client->ctx, job->payload, job->len, 1);
+    }
+    if (job->client) {
+        csilk_client_unref(job->client);
+    }
+    free(job->payload);
+    free(job);
+}
+
+typedef struct {
+    csilk_ctx_t* c;
+    char**       rooms;
+    int          count;
+    int          cap;
+} ws_room_membership_t;
+
+static void
+_ws_room_remove_locked(csilk_ctx_t* c, const char* room_name)
+{
+    ws_room_t* room = find_room(room_name);
+    if (!room) {
+        return;
+    }
+    csilk_mutex_lock(&room->mutex);
+    ws_room_snapshot_t* old_snap = atomic_load(&room->snapshot);
+    if (old_snap && old_snap->count > 0) {
+        int found_idx = -1;
+        for (int i = 0; i < old_snap->count; i++) {
+            if (old_snap->clients[i] == c) {
+                found_idx = i;
+                break;
+            }
+        }
+        if (found_idx >= 0) {
+            ws_room_snapshot_t* new_snap = calloc(1, sizeof(ws_room_snapshot_t));
+            if (new_snap) {
+                new_snap->count = old_snap->count - 1;
+                if (new_snap->count > 0) {
+                    new_snap->clients = malloc(sizeof(csilk_ctx_t*) * (size_t)new_snap->count);
+                    if (!new_snap->clients) {
+                        free(new_snap);
+                        new_snap = NULL;
+                    } else {
+                        int write_idx = 0;
+                        for (int i = 0; i < old_snap->count; i++) {
+                            if (i != found_idx) {
+                                new_snap->clients[write_idx++] = old_snap->clients[i];
+                            }
+                        }
+                    }
+                }
+                if (new_snap) {
+                    atomic_init(&new_snap->refs, 1);
+                    atomic_store(&room->snapshot, new_snap);
+                    ws_room_snap_release(old_snap);
+                }
+            }
+        }
+    }
+    csilk_mutex_unlock(&room->mutex);
+}
+
+static void
+ws_room_membership_cleanup(void* data)
+{
+    ws_room_membership_t* mem = (ws_room_membership_t*)data;
+    if (!mem) {
+        return;
+    }
+    if (atomic_load_explicit(&g_room_manager_ready, memory_order_acquire)) {
+        csilk_mutex_lock(&g_room_manager.mutex);
+        if (atomic_load_explicit(&g_room_manager_ready, memory_order_acquire)) {
+            for (int i = 0; i < mem->count; i++) {
+                if (mem->rooms[i]) {
+                    _ws_room_remove_locked(mem->c, mem->rooms[i]);
+                }
+            }
+        }
+        csilk_mutex_unlock(&g_room_manager.mutex);
+    }
+    for (int i = 0; i < mem->count; i++) {
+        free(mem->rooms[i]);
+    }
+    free(mem->rooms);
+    free(mem);
+}
+
+static void
+ws_room_track_join(csilk_ctx_t* c, const char* room_name)
+{
+    ws_room_membership_t* mem = (ws_room_membership_t*)csilk_get(c, "_ws_rooms");
+    if (!mem) {
+        mem = calloc(1, sizeof(ws_room_membership_t));
+        if (!mem) {
+            return;
+        }
+        mem->c = c;
+        csilk_set_ex(c, "_ws_rooms", mem, ws_room_membership_cleanup);
+    }
+    for (int i = 0; i < mem->count; i++) {
+        if (mem->rooms[i] && strcmp(mem->rooms[i], room_name) == 0) {
+            return;
+        }
+    }
+    if (mem->count >= mem->cap) {
+        int    nc = mem->cap == 0 ? 4 : mem->cap * 2;
+        char** nr = realloc(mem->rooms, sizeof(char*) * (size_t)nc);
+        if (!nr) {
+            return;
+        }
+        mem->rooms = nr;
+        mem->cap = nc;
+    }
+    char* dup = strdup(room_name);
+    if (dup) {
+        mem->rooms[mem->count++] = dup;
+    }
+}
+
+static void
+ws_room_track_leave(csilk_ctx_t* c, const char* room_name)
+{
+    ws_room_membership_t* mem = (ws_room_membership_t*)csilk_get(c, "_ws_rooms");
+    if (!mem) {
+        return;
+    }
+    for (int i = 0; i < mem->count; i++) {
+        if (mem->rooms[i] && strcmp(mem->rooms[i], room_name) == 0) {
+            free(mem->rooms[i]);
+            mem->rooms[i] = mem->rooms[--mem->count];
+            break;
+        }
+    }
+}
+
 /** @brief MQ callback: broadcast a "ws.room.<name>" payload to that room's snapshot. */
 static void
 on_room_message(csilk_mq_ctx_t* ctx)
 {
+    if (!atomic_load_explicit(&g_room_manager_ready, memory_order_acquire)) {
+        return;
+    }
     const char*    topic = csilk_mq_get_topic(ctx);
     size_t         payload_len;
     const uint8_t* payload = (const uint8_t*)csilk_mq_get_payload(ctx, &payload_len);
@@ -148,8 +307,38 @@ on_room_message(csilk_mq_ctx_t* ctx)
     /* Broadcast using the COW snapshot without holding the manager lock. */
     if (snap && snap->clients) {
         for (int i = 0; i < snap->count; i++) {
-            if (snap->clients[i]) {
-                csilk_ws_send(snap->clients[i], payload, payload_len, 1);
+            csilk_ctx_t* target = snap->clients[i];
+            if (!target) {
+                continue;
+            }
+            csilk_client_t* cl = (csilk_client_t*)_csilk_get_internal_client(target);
+            if (!cl) {
+                /* Mock/unit-test context without a live worker connection. */
+                csilk_ws_send(target, payload, payload_len, 1);
+                continue;
+            }
+            if (csilk_client_ref(cl) != 0) {
+                continue;
+            }
+            ws_room_send_job_t* job = malloc(sizeof(ws_room_send_job_t));
+            uint8_t*            copy = payload_len > 0 ? malloc(payload_len) : NULL;
+            if (!job || (payload_len > 0 && !copy)) {
+                free(copy);
+                free(job);
+                csilk_client_unref(cl);
+                continue;
+            }
+            if (payload_len > 0) {
+                memcpy(copy, payload, payload_len);
+            }
+            job->client = cl;
+            job->gen = cl->generation;
+            job->payload = copy;
+            job->len = payload_len;
+            if (_csilk_dispatch_try(target, _ws_room_send_dispatch_cb, job) < 0) {
+                free(job->payload);
+                free(job);
+                csilk_client_unref(cl);
             }
         }
     }
@@ -184,14 +373,28 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
         if (g_room_manager.rooms_count >= g_room_manager.rooms_capacity) {
             int new_cap =
                 g_room_manager.rooms_capacity == 0 ? 16 : g_room_manager.rooms_capacity * 2;
-            g_room_manager.rooms = realloc(g_room_manager.rooms, sizeof(ws_room_t*) * new_cap);
+            ws_room_t** next_rooms =
+                realloc(g_room_manager.rooms, sizeof(ws_room_t*) * (size_t)new_cap);
+            if (!next_rooms) {
+                csilk_mutex_unlock(&g_room_manager.mutex);
+                return;
+            }
+            g_room_manager.rooms = next_rooms;
             g_room_manager.rooms_capacity = new_cap;
         }
         room = calloc(1, sizeof(ws_room_t));
-        room->room_name = strdup(room_name);
+        char*               rname = strdup(room_name);
+        ws_room_snapshot_t* empty_snap = calloc(1, sizeof(ws_room_snapshot_t));
+        if (!room || !rname || !empty_snap) {
+            free(empty_snap);
+            free(rname);
+            free(room);
+            csilk_mutex_unlock(&g_room_manager.mutex);
+            return;
+        }
+        room->room_name = rname;
         csilk_mutex_init(&room->mutex);
 
-        ws_room_snapshot_t* empty_snap = calloc(1, sizeof(ws_room_snapshot_t));
         /* Room holds the baseline strong ref to its snapshot (refs starts at 1). */
         atomic_init(&empty_snap->refs, 1);
         atomic_init(&room->snapshot, empty_snap);
@@ -225,11 +428,22 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
 
     /* Allocate new COW snapshot; it inherits the room's baseline ref. */
     ws_room_snapshot_t* new_snap = calloc(1, sizeof(ws_room_snapshot_t));
+    if (!new_snap) {
+        csilk_mutex_unlock(&room->mutex);
+        csilk_mutex_unlock(&g_room_manager.mutex);
+        return;
+    }
     new_snap->count = count + 1;
-    new_snap->clients = malloc(sizeof(csilk_ctx_t*) * new_snap->count);
+    new_snap->clients = malloc(sizeof(csilk_ctx_t*) * (size_t)new_snap->count);
+    if (!new_snap->clients) {
+        free(new_snap);
+        csilk_mutex_unlock(&room->mutex);
+        csilk_mutex_unlock(&g_room_manager.mutex);
+        return;
+    }
     atomic_init(&new_snap->refs, 1);
     if (old_snap && old_snap->clients && count > 0) {
-        memcpy(new_snap->clients, old_snap->clients, sizeof(csilk_ctx_t*) * count);
+        memcpy(new_snap->clients, old_snap->clients, sizeof(csilk_ctx_t*) * (size_t)count);
     }
     new_snap->clients[count] = c;
 
@@ -241,6 +455,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
 
     csilk_mutex_unlock(&room->mutex);
     csilk_mutex_unlock(&g_room_manager.mutex);
+    ws_room_track_join(c, room_name);
 }
 
 /**
@@ -261,46 +476,9 @@ csilk_ws_leave_room(csilk_ctx_t* c, const char* room_name)
 
     ws_room_manager_init();
     csilk_mutex_lock(&g_room_manager.mutex);
-
-    ws_room_t* room = find_room(room_name);
-    if (room) {
-        csilk_mutex_lock(&room->mutex);
-
-        ws_room_snapshot_t* old_snap = atomic_load(&room->snapshot);
-        if (old_snap && old_snap->count > 0) {
-            int found_idx = -1;
-            for (int i = 0; i < old_snap->count; i++) {
-                if (old_snap->clients[i] == c) {
-                    found_idx = i;
-                    break;
-                }
-            }
-
-            if (found_idx >= 0) {
-                ws_room_snapshot_t* new_snap = calloc(1, sizeof(ws_room_snapshot_t));
-                new_snap->count = old_snap->count - 1;
-                if (new_snap->count > 0) {
-                    new_snap->clients = malloc(sizeof(csilk_ctx_t*) * new_snap->count);
-                    int write_idx = 0;
-                    for (int i = 0; i < old_snap->count; i++) {
-                        if (i != found_idx) {
-                            new_snap->clients[write_idx++] = old_snap->clients[i];
-                        }
-                    }
-                }
-                /* new_snap inherits the room's baseline strong ref. */
-                atomic_init(&new_snap->refs, 1);
-                atomic_store(&room->snapshot, new_snap);
-                /* Release the baseline ref the room held on old_snap; in-flight
-                 * readers keep their own refs so it is freed safely. */
-                ws_room_snap_release(old_snap);
-            }
-        }
-
-        csilk_mutex_unlock(&room->mutex);
-    }
-
+    _ws_room_remove_locked(c, room_name);
     csilk_mutex_unlock(&g_room_manager.mutex);
+    ws_room_track_leave(c, room_name);
 }
 
 /**

@@ -294,6 +294,38 @@ main(void)
     test_streaming();
     test_stream_concurrent();
 
+    /* Regression: malformed / boundary gRPC metadata, oversized frames, and nullable out_status */
+    {
+        csilk_kv_t bad_meta[] = {
+            {"grpc-timeout", ""                                       },
+            {"grpc-timeout", "99999999999999999999999999999999999999s"},
+        };
+        int64_t t_ms = -1;
+        assert(csilk_grpc_metadata_parse(bad_meta, 2, NULL, &t_ms) == 0);
+        assert(t_ms == -1);
+
+        uint8_t        huge_hdr[] = {0x00, 0xFF, 0xFF, 0xFF, 0xFF};
+        const uint8_t* p = NULL;
+        size_t         plen = 0;
+        assert(csilk_grpc_frame_parse(huge_hdr, sizeof(huge_hdr), &p, &plen, NULL) == -1);
+        assert(csilk_grpc_frame_encode_ex(huge_hdr, SIZE_MAX, 0, huge_hdr, sizeof(huge_hdr)) == -1);
+
+        csilk_grpc_stream_t* gs =
+            csilk_grpc_stream_new(CSILK_GRPC_STREAM_UNARY, test_on_message, NULL);
+        assert(gs != NULL);
+        assert(csilk_grpc_stream_feed(gs, huge_hdr, sizeof(huge_hdr)) == -1);
+        csilk_grpc_stream_destroy(gs);
+
+        csilk_kv_t tr[] = {
+            {"grpc-status",  "0" },
+            {"grpc-message", "ok"}
+        };
+        char* msg = NULL;
+        assert(csilk_grpc_trailer_parse(tr, 2, NULL, &msg) == 0);
+        assert(msg != NULL && strcmp(msg, "ok") == 0);
+        free(msg);
+    }
+
     printf("==========================================\n");
     printf("All gRPC tests passed!\n");
     return 0;

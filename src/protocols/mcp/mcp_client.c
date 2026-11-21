@@ -291,14 +291,55 @@ mcp_ws_roundtrip(csilk_mcp_client_t* client, const char* req_json, char** out_bo
     if (res == CURLE_OK) {
         size_t sent = 0;
         if (curl_ws_send(curl, req_json, strlen(req_json), &sent, 0, CURLWS_TEXT) == CURLE_OK) {
-            char                        buf[4096];
-            size_t                      nread = 0;
-            const struct curl_ws_frame* meta = NULL;
-            if (curl_ws_recv(curl, buf, sizeof(buf) - 1, &nread, &meta) == CURLE_OK && nread > 0) {
-                buf[nread] = '\0';
-                *out_body = strdup(buf);
-                curl_easy_cleanup(curl);
-                return 0;
+            enum { MCP_WS_MAX_RESP = 16 * 1024 * 1024 };
+            size_t cap = 4096;
+            size_t total = 0;
+            char*  resp = malloc(cap);
+            if (resp) {
+                int ok = 1;
+                for (;;) {
+                    if (cap - total <= 1) {
+                        if (cap >= MCP_WS_MAX_RESP) {
+                            ok = 0;
+                            break;
+                        }
+                        size_t next_cap = cap * 2;
+                        if (next_cap > MCP_WS_MAX_RESP) {
+                            next_cap = MCP_WS_MAX_RESP;
+                        }
+                        char* nb = realloc(resp, next_cap);
+                        if (!nb) {
+                            ok = 0;
+                            break;
+                        }
+                        resp = nb;
+                        cap = next_cap;
+                    }
+                    size_t                      nread = 0;
+                    const struct curl_ws_frame* meta = NULL;
+                    CURLcode rc = curl_ws_recv(curl, resp + total, cap - total - 1, &nread, &meta);
+                    if (rc == CURLE_AGAIN) {
+                        continue;
+                    }
+                    if (rc != CURLE_OK) {
+                        ok = 0;
+                        break;
+                    }
+                    total += nread;
+                    if (!meta || (meta->flags & CURLWS_CLOSE)) {
+                        break;
+                    }
+                    if (!(meta->flags & CURLWS_CONT) && meta->bytesleft == 0) {
+                        break;
+                    }
+                }
+                if (ok && total > 0) {
+                    resp[total] = '\0';
+                    *out_body = resp;
+                    curl_easy_cleanup(curl);
+                    return 0;
+                }
+                free(resp);
             }
         }
     }
@@ -409,6 +450,15 @@ csilk_mcp_client_connect_stdio(const char* command, char* const argv[])
         }
         for (size_t i = 0; i < n; i++) {
             client->argv[i] = strdup(argv[i]);
+            if (!client->argv[i]) {
+                for (size_t j = 0; j < i; j++) {
+                    free(client->argv[j]);
+                }
+                free(client->argv);
+                free(client->command);
+                free(client);
+                return NULL;
+            }
         }
     }
     client->is_stdio = 1;
@@ -606,20 +656,32 @@ mcp_client_fetch_tools(csilk_mcp_client_t* client, csilk_mcp_msg_t** out_resp)
     return 0;
 }
 
-static char*
-mcp_remember_tool_name(csilk_mcp_client_t* client, const char* name)
+static int
+mcp_track_proxy(csilk_mcp_client_t* client, void* proxy)
 {
+    csilk_mutex_lock(&client->mutex);
     char** next = realloc(client->imported_names, (client->imported_count + 1) * sizeof(char*));
     if (!next) {
-        return NULL;
+        csilk_mutex_unlock(&client->mutex);
+        return -1;
     }
     client->imported_names = next;
-    char* copy = strdup(name);
-    if (!copy) {
-        return NULL;
+    client->imported_names[client->imported_count++] = (char*)proxy;
+    csilk_mutex_unlock(&client->mutex);
+    return 0;
+}
+
+static void
+mcp_untrack_proxy(csilk_mcp_client_t* client, void* proxy)
+{
+    csilk_mutex_lock(&client->mutex);
+    for (size_t i = client->imported_count; i > 0; i--) {
+        if (client->imported_names[i - 1] == (char*)proxy) {
+            client->imported_names[i - 1] = client->imported_names[--client->imported_count];
+            break;
+        }
     }
-    client->imported_names[client->imported_count++] = copy;
-    return copy;
+    csilk_mutex_unlock(&client->mutex);
 }
 
 int
@@ -654,24 +716,7 @@ csilk_mcp_client_import_to_registry(csilk_mcp_client_t* client, csilk_ai_tool_re
             continue;
         }
 
-        char* schema_str = schema ? csilk_json_serialize(schema, NULL) : strdup("{}");
-        /* Store proxy struct with name owned by client so registry user_data
-         * stays valid and leak-free until client teardown. */
-        csilk_mutex_lock(&client->mutex);
-        char* stable_name = mcp_remember_tool_name(client, name);
-        csilk_mutex_unlock(&client->mutex);
-        if (!stable_name) {
-            free(schema_str);
-            continue;
-        }
-        /* Pack proxy in imported_names? Use a small heap proxy freed via a
-         * dedicated list on client if unregistered, or allocate inside proxy
-         * list. Better: keep proxy structs tracked in imported_names? Wait —
-         * imported_names stores char*; allocate mcp_tool_proxy_t and store it
-         * as a char* pointer in imported_names since both are freed with free().
-         * stable_name points into proxy->tool_name? No: allocate a single
-         * contiguous block [mcp_tool_proxy_t][name bytes...] so a single
-         * free() releases both! */
+        char*             schema_str = schema ? csilk_json_serialize(schema, NULL) : strdup("{}");
         size_t            nlen = strlen(name) + 1;
         mcp_tool_proxy_t* proxy = malloc(sizeof(mcp_tool_proxy_t) + nlen);
         if (!proxy) {
@@ -682,20 +727,21 @@ csilk_mcp_client_import_to_registry(csilk_mcp_client_t* client, csilk_ai_tool_re
         proxy->tool_name = (char*)(proxy + 1);
         memcpy(proxy->tool_name, name, nlen);
 
+        if (mcp_track_proxy(client, proxy) != 0) {
+            free(proxy);
+            free(schema_str);
+            continue;
+        }
+
         if (csilk_ai_tool_registry_register(reg,
                                             name,
                                             desc ? desc : "",
                                             schema_str ? schema_str : "{}",
                                             mcp_proxy_tool_exec,
                                             proxy) == 0) {
-            /* Replace the remembered name slot with the proxy block so
-             * csilk_mcp_client_free() frees it cleanly. */
-            csilk_mutex_lock(&client->mutex);
-            free(client->imported_names[client->imported_count - 1]);
-            client->imported_names[client->imported_count - 1] = (char*)proxy;
-            csilk_mutex_unlock(&client->mutex);
             imported++;
         } else {
+            mcp_untrack_proxy(client, proxy);
             free(proxy);
         }
         free(schema_str);

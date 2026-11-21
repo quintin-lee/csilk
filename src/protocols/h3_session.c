@@ -67,8 +67,10 @@ _h3_recv_data_cb(nghttp3_conn*  conn,
         csilk_h3_stream_data_t* sd = (csilk_h3_stream_data_t*)stream_user_data;
         if (sd) {
             /* Bound memory usage per stream to max 10MB */
-            if (sd->body_len + datalen <= 10 * 1024 * 1024) {
-                char* new_buf = realloc(sd->body_buf, sd->body_len + datalen + 1);
+            enum { CSILK_H3_MAX_BODY_BYTES = 10 * 1024 * 1024 };
+            if (datalen <= CSILK_H3_MAX_BODY_BYTES &&
+                (size_t)sd->body_len <= CSILK_H3_MAX_BODY_BYTES - datalen) {
+                char* new_buf = realloc(sd->body_buf, (size_t)sd->body_len + datalen + 1);
                 if (new_buf) {
                     sd->body_buf = new_buf;
                     memcpy(sd->body_buf + sd->body_len, data, datalen);
@@ -146,21 +148,29 @@ _h3_recv_header_cb(nghttp3_conn*  conn,
     /* Store in header arrays (bounded allocation) */
     if (sd->num_headers < 64) {
         if (!sd->header_names) {
-            sd->header_names = calloc(64, sizeof(char*));
-            sd->header_values = calloc(64, sizeof(char*));
-        }
-        if (sd->header_names && sd->header_values) {
-            char* hname = malloc(nlen + 1);
-            char* hval = malloc(vlen + 1);
-            if (hname && hval) {
-                memcpy(hname, nbase, nlen);
-                hname[nlen] = '\0';
-                memcpy(hval, vbase, vlen);
-                hval[vlen] = '\0';
-                sd->header_names[sd->num_headers] = hname;
-                sd->header_values[sd->num_headers] = hval;
-                sd->num_headers++;
+            char** names = calloc(64, sizeof(char*));
+            char** values = calloc(64, sizeof(char*));
+            if (!names || !values) {
+                free(names);
+                free(values);
+                return 0;
             }
+            sd->header_names = names;
+            sd->header_values = values;
+        }
+        char* hname = malloc(nlen + 1);
+        char* hval = malloc(vlen + 1);
+        if (hname && hval) {
+            memcpy(hname, nbase, nlen);
+            hname[nlen] = '\0';
+            memcpy(hval, vbase, vlen);
+            hval[vlen] = '\0';
+            sd->header_names[sd->num_headers] = hname;
+            sd->header_values[sd->num_headers] = hval;
+            sd->num_headers++;
+        } else {
+            free(hname);
+            free(hval);
         }
     }
     (void)token;
@@ -411,8 +421,16 @@ csilk_h3_session_send_response(nghttp3_conn*     session,
      * Since nghttp3 has no public getter for the connection-level user_data,
      * we use a stack-allocated buffer. This is thread-safe because each H3
      * connection is serviced by a single worker thread. */
-    nghttp3_nv resp_nv[64];
-    int        resp_nv_cap = 64;
+    nghttp3_nv  stack_nv[64] = {0};
+    int         resp_nv_cap = (headers && nheaders > 0 && nheaders < 65536) ? (nheaders + 1) : 64;
+    nghttp3_nv* resp_nv = stack_nv;
+    if (resp_nv_cap > 64) {
+        resp_nv = calloc((size_t)resp_nv_cap, sizeof(nghttp3_nv));
+        if (!resp_nv) {
+            resp_nv = stack_nv;
+            resp_nv_cap = 64;
+        }
+    }
 
     /* Build response headers: :status pseudo-header */
     int resp_nvlen = 0;
@@ -423,6 +441,7 @@ csilk_h3_session_send_response(nghttp3_conn*     session,
     resp_nv[resp_nvlen].namelen = 7;
     resp_nv[resp_nvlen].value = (const uint8_t*)status_buf;
     resp_nv[resp_nvlen].valuelen = (size_t)status_len;
+    resp_nv[resp_nvlen].flags = NGHTTP3_NV_FLAG_NONE;
     resp_nvlen++;
 
     /* User-provided headers */
@@ -451,6 +470,9 @@ csilk_h3_session_send_response(nghttp3_conn*     session,
     nghttp3_data_reader dr = {.read_data = _h3_read_data_cb};
     int                 rc = nghttp3_conn_submit_response(
         session, stream_id, resp_nv, (size_t)resp_nvlen, (body && body_len > 0) ? &dr : NULL);
+    if (resp_nv != stack_nv) {
+        free(resp_nv);
+    }
     if (rc != 0) {
         CSILK_LOG_E("H3: nghttp3_conn_submit_response failed: %s", nghttp3_strerror(rc));
         return -1;
