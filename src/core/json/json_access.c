@@ -210,8 +210,11 @@ csilk_json_get_int(const csilk_json_t* obj, const char* key)
     if (!v) {
         return 0;
     }
-    if (yyjson_is_int(v)) {
-        return yyjson_get_int(v);
+    if (yyjson_is_sint(v)) {
+        return yyjson_get_sint(v);
+    }
+    if (yyjson_is_uint(v)) {
+        return (int64_t)yyjson_get_uint(v);
     }
     if (yyjson_is_num(v)) {
         return (int64_t)yyjson_get_num(v);
@@ -290,8 +293,11 @@ csilk_json_int_value(const csilk_json_t* v)
         }
         return 0;
     }
-    if (yyjson_is_int((yyjson_val*)v->u.ival)) {
-        return yyjson_get_int((yyjson_val*)v->u.ival);
+    if (yyjson_is_sint((yyjson_val*)v->u.ival)) {
+        return yyjson_get_sint((yyjson_val*)v->u.ival);
+    }
+    if (yyjson_is_uint((yyjson_val*)v->u.ival)) {
+        return (int64_t)yyjson_get_uint((yyjson_val*)v->u.ival);
     }
     if (yyjson_is_num((yyjson_val*)v->u.ival)) {
         return (int64_t)yyjson_get_num((yyjson_val*)v->u.ival);
@@ -321,8 +327,8 @@ csilk_json_uint_value(const csilk_json_t* v)
     if (yyjson_is_uint((yyjson_val*)v->u.ival)) {
         return yyjson_get_uint((yyjson_val*)v->u.ival);
     }
-    if (yyjson_is_int((yyjson_val*)v->u.ival)) {
-        return (uint64_t)yyjson_get_int((yyjson_val*)v->u.ival);
+    if (yyjson_is_sint((yyjson_val*)v->u.ival)) {
+        return (uint64_t)yyjson_get_sint((yyjson_val*)v->u.ival);
     }
     if (yyjson_is_num((yyjson_val*)v->u.ival)) {
         return (uint64_t)yyjson_get_num((yyjson_val*)v->u.ival);

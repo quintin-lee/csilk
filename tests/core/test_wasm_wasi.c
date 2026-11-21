@@ -32,6 +32,9 @@ test_wasm_wasi_and_host_functions(void)
 #else
     assert(plugin != nullptr);
 
+    uint32_t zero_cap = csilk_host_get_input(plugin, 0, 0, "{\"msg\":\"wasi_test\"}");
+    assert(zero_cap == 0);
+
     uint32_t nwritten = csilk_host_get_input(plugin, 0, 64, "{\"msg\":\"wasi_test\"}");
     assert(nwritten > 0);
 

@@ -179,8 +179,12 @@ _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type)
         return;
     }
 
+    csilk_rcu_token_t rcu_tok;
+    (void)csilk_server_router_acquire(s, &rcu_tok);
+
     csilk_hook_array_t* arr = atomic_load_explicit(&s->hooks[type], memory_order_acquire);
     if (!arr || arr->count == 0) {
+        csilk_server_router_release(s, &rcu_tok);
         return;
     }
 
@@ -200,4 +204,6 @@ _csilk_trigger_hooks(csilk_server_t* s, csilk_ctx_t* c, csilk_hook_type_t type)
             handler(c);
         }
     }
+
+    csilk_server_router_release(s, &rcu_tok);
 }

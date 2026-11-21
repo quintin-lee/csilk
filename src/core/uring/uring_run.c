@@ -453,6 +453,10 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                  */
                 if (res > 0 && (cqe->flags & IORING_CQE_F_BUFFER)) {
                     unsigned bid = cqe->flags >> 16;
+                    if (bid >= (unsigned)loop->udp_nbufs || !loop->udp_storage ||
+                        !loop->udp_buf_ring) {
+                        continue;
+                    }
                     /*
                      * The ring slot was allocated by csilk_io_loop_setup_udp_buf_ring
                      * as a single contiguous block.  Each slot is loop->udp_bufsz
@@ -464,25 +468,24 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                     struct io_uring_recvmsg_out* o =
                         io_uring_recvmsg_validate(slot_base, res, &udp->msg);
                     if (o) {
-                        /*
-                         * Layout inside the slot:
-                         *   io_uring_recvmsg_out  (16 B)
-                         *   sender address          (o->namelen bytes)
-                         *   control messages        (o->controllen bytes, usually 0)
-                         *   payload                 (o->payloadlen bytes)
-                         */
-                        char*    payload = (char*)o + sizeof(*o) + o->namelen + o->controllen;
-                        unsigned payload_len = o->payloadlen;
-                        if (payload_len > sizeof(udp->recv_buf)) {
+                        void*    payload = io_uring_recvmsg_payload(o, &udp->msg);
+                        unsigned payload_len = io_uring_recvmsg_payload_length(o, res, &udp->msg);
+                        if (payload && payload_len > sizeof(udp->recv_buf)) {
                             payload_len = sizeof(udp->recv_buf);
                         }
-                        memcpy(udp->recv_buf, payload, payload_len);
+                        if (payload && payload_len > 0) {
+                            memcpy(udp->recv_buf, payload, payload_len);
+                        }
 
-                        /* Cache sender address for subsequent sends. */
-                        void* sender = io_uring_recvmsg_name(o);
-                        if (o->namelen > 0 && sender) {
-                            memcpy(&udp->remote_storage, sender, o->namelen);
-                            udp->remote_len = (int)o->namelen;
+                        /* Cache sender address for subsequent sends (bounded copy). */
+                        void*  sender = io_uring_recvmsg_name(o);
+                        size_t sender_len = o->namelen;
+                        if (sender && sender_len > 0) {
+                            if (sender_len > sizeof(udp->remote_storage)) {
+                                sender_len = sizeof(udp->remote_storage);
+                            }
+                            memcpy(&udp->remote_storage, sender, sender_len);
+                            udp->remote_len = (int)sender_len;
                         }
 
                         if (udp->cb) {
@@ -490,7 +493,7 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                             csbuf.base = udp->recv_buf;
                             csbuf.len = payload_len;
                             const struct sockaddr* sender_addr = (const struct sockaddr*)sender;
-                            udp->cb(udp, payload_len, &csbuf, sender_addr);
+                            udp->cb(udp, (ssize_t)payload_len, &csbuf, sender_addr);
                         }
                     }
 
@@ -499,8 +502,13 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                      * next datagram.  The slot address is the same as before
                      * (ring slots are fixed); only the bid tag changes.
                      */
-                    io_uring_buf_ring_add(
-                        loop->udp_buf_ring, slot_base, (unsigned)loop->udp_bufsz, bid, 0, 0);
+                    io_uring_buf_ring_add(loop->udp_buf_ring,
+                                          slot_base,
+                                          (unsigned)loop->udp_bufsz,
+                                          (unsigned short)bid,
+                                          io_uring_buf_ring_mask(loop->udp_nbufs),
+                                          0);
+                    io_uring_buf_ring_advance(loop->udp_buf_ring, 1);
                 } else if (res == -EAGAIN) {
                     /*
                      * Transient: the socket has no pending data at this instant.

@@ -332,6 +332,7 @@ logger_consumer_loop(void* arg)
         while ((raw_node = csilk_lfq_dequeue(&g_logger.queue)) != NULL) {
             csilk_log_node_t* node = (csilk_log_node_t*)raw_node;
 
+            csilk_mutex_lock(&g_logger.fallback_mutex);
             /* Check file rotation */
             if (g_logger.config.max_file_size > 0 &&
                 g_logger.current_size + node->len >= g_logger.config.max_file_size) {
@@ -342,14 +343,19 @@ logger_consumer_loop(void* arg)
                 fwrite(node->buf, 1, node->len, g_logger.fp);
                 g_logger.current_size += node->len;
             }
+            csilk_mutex_unlock(&g_logger.fallback_mutex);
 
             log_pool_push(node);
             processed++;
             atomic_fetch_add_explicit(&g_logger.flushed_seq, 1, memory_order_release);
         }
 
-        if (processed > 0 && g_logger.fp) {
-            fflush(g_logger.fp);
+        if (processed > 0) {
+            csilk_mutex_lock(&g_logger.fallback_mutex);
+            if (g_logger.fp) {
+                fflush(g_logger.fp);
+            }
+            csilk_mutex_unlock(&g_logger.fallback_mutex);
         }
 
         if (!atomic_load_explicit(&g_logger.running, memory_order_acquire) &&
@@ -367,9 +373,11 @@ logger_consumer_loop(void* arg)
         }
     }
 
+    csilk_mutex_lock(&g_logger.fallback_mutex);
     if (g_logger.fp) {
         fflush(g_logger.fp);
     }
+    csilk_mutex_unlock(&g_logger.fallback_mutex);
 }
 
 /* ================================================================

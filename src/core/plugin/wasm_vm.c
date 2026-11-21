@@ -247,13 +247,8 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
             }
             return NULL;
         }
-        csilk_mutex_unlock(&plugin->mutex);
-
-        /* Extract the return value.
-         * argv[0] holds the i32 return (or first 32 bits of i64).
-         * Convention: a non-zero i32 return is an offset into WASM linear
-         * memory pointing to a NUL-terminated string (typically JSON).
-         * A zero return means void — use the default success JSON. */
+        /* Extract the return value while holding plugin->mutex so the instance's
+         * linear memory cannot be reset/freed concurrently. */
         char*    res = NULL;
         uint32_t ret = argv[0];
         if (ret != 0) {
@@ -262,13 +257,12 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
             uint32_t      mem_size = mem ? wasm_runtime_get_linear_memory_size(mem) : 0;
             if (mem && ret < mem_size && (size_t)mem_size - ret >= 1) {
                 const char* p = (const char*)mem + ret;
-                size_t      str_len = strnlen(p, (size_t)(mem_size - ret));
-                /* Cap at 1 MB to prevent a corrupt offset from exhausting memory */
-                if (str_len > (size_t)(1024 * 1024)) {
-                    str_len = 1024 * 1024;
-                }
-                /* Verify the string is NUL-terminated within the cap */
-                if (str_len == 0 || p[str_len] != '\0') {
+                size_t      avail = (size_t)(mem_size - ret);
+                size_t      max_scan =
+                    avail < (size_t)(1024 * 1024 + 1) ? avail : (size_t)(1024 * 1024 + 1);
+                size_t str_len = strnlen(p, max_scan);
+                /* Verify the string is non-empty and NUL-terminated strictly within bounds */
+                if (str_len == 0 || str_len >= max_scan) {
                     fprintf(stderr,
                             "[csilk][WASM] memory offset %u returned non-NUL-terminated "
                             "string; falling back to default result\n",
@@ -286,6 +280,7 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
                         mem_size);
             }
         }
+        csilk_mutex_unlock(&plugin->mutex);
         if (!res) {
             res = strdup("{\"status\":\"ok\",\"result\":\"wasm_execution_success\"}");
         }

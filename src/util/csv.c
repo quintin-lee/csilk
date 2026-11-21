@@ -32,19 +32,26 @@ csilk_csv_escape(char* out, size_t out_sz, const char* in)
         return snprintf(out, out_sz, "%s", in);
     }
 
+    if (out_sz == 1) {
+        out[0] = '\0';
+        return 0;
+    }
+
     size_t j = 0;
     out[j++] = '"';
-    for (const char* p = in; *p && j < out_sz - 2; p++) {
+    for (const char* p = in; *p && j + 2 < out_sz; p++) {
         if (*p == '"') {
-            out[j++] = '"';
-            if (j < out_sz - 2) {
+            if (j + 3 < out_sz) {
                 out[j++] = '"';
+                out[j++] = '"';
+            } else {
+                break;
             }
         } else {
             out[j++] = *p;
         }
     }
-    if (j < out_sz - 1) {
+    if (j + 1 < out_sz) {
         out[j++] = '"';
     }
     out[j] = '\0';

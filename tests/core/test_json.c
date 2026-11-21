@@ -111,6 +111,33 @@ test_json_error()
     printf("csilk_json_error passed!\n");
 }
 
+void
+test_json_64bit_int_and_zero_leak_views(void)
+{
+    printf("Testing 64-bit JSON ints and zero-leak scratch views...\n");
+    const char*   raw = "{\"big\":9007199254740993,\"neg\":-5000000000,\"k\":123}";
+    csilk_json_t* doc = csilk_json_parse(raw);
+    assert(doc != nullptr);
+
+    assert(csilk_json_get_int(doc, "big") == 9007199254740993LL);
+    assert(csilk_json_get_int(doc, "neg") == -5000000000LL);
+
+    const csilk_json_t* big_v = csilk_json_get(doc, "big");
+    assert(csilk_json_int_value(big_v) == 9007199254740993LL);
+    const csilk_json_t* neg_v = csilk_json_get(doc, "neg");
+    assert(csilk_json_int_value(neg_v) == -5000000000LL);
+
+    /* Wrap the 64-slot scratch ring multiple times without freeing views */
+    for (int i = 0; i < 300; i++) {
+        csilk_json_t* v = csilk_json_get(doc, "k");
+        assert(v != nullptr);
+        assert(csilk_json_int_value(v) == 123);
+    }
+
+    csilk_json_free(doc);
+    printf("test_json_64bit_int_and_zero_leak_views passed!\n");
+}
+
 int
 main()
 {
@@ -118,6 +145,7 @@ main()
     test_json_response();
     test_bind_json_err();
     test_json_error();
+    test_json_64bit_int_and_zero_leak_views();
     printf("All JSON tests passed!\n");
     return 0;
 }

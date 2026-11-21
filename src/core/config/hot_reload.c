@@ -8,6 +8,7 @@
 #include "csilk/core/internal.h"
 #include "../internal/srv_internal.h"
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,8 +40,35 @@ typedef struct {
     csilk_io_fs_event_t fs_event;       /**< I/O filesystem watcher (libuv or io_uring). */
     csilk_io_timer_t    debounce_timer; /**< Debounce timer (100 ms). */
     int                 is_watching;    /**< 1 if filesystem watcher is active. */
+    atomic_int          stopping;       /**< 1 once stop has been requested. */
+    atomic_int          pending_closes; /**< Pending async handle closes before freeing ctx. */
     csilk_mutex_t       reload_mutex;   /**< Mutex ensuring serialized reload executions. */
 } hot_reload_ctx_t;
+
+static void
+hot_reload_ctx_destroy(hot_reload_ctx_t* ctx)
+{
+    if (!ctx) {
+        return;
+    }
+    csilk_mutex_destroy(&ctx->reload_mutex);
+    free(ctx->lib_path);
+    free(ctx->init_sym);
+    free(ctx);
+}
+
+static void
+on_hot_reload_handle_close(csilk_io_handle_t* handle)
+{
+    if (!handle) {
+        return;
+    }
+    hot_reload_ctx_t* ctx = (hot_reload_ctx_t*)handle->data;
+    handle->data = NULL;
+    if (ctx && atomic_fetch_sub_explicit(&ctx->pending_closes, 1, memory_order_acq_rel) == 1) {
+        hot_reload_ctx_destroy(ctx);
+    }
+}
 
 #ifdef _WIN32
 /**
@@ -281,7 +309,10 @@ load_and_swap_router(hot_reload_ctx_t* ctx)
 static void
 on_debounce_timer(csilk_io_timer_t* handle)
 {
-    hot_reload_ctx_t* ctx = (hot_reload_ctx_t*)handle->data;
+    hot_reload_ctx_t* ctx = handle ? (hot_reload_ctx_t*)handle->data : NULL;
+    if (!ctx || atomic_load_explicit(&ctx->stopping, memory_order_acquire)) {
+        return;
+    }
     CSILK_LOG_I("[Hot-Reload] File change detected. Reloading %s...", ctx->lib_path);
     load_and_swap_router(ctx);
 }
@@ -290,10 +321,13 @@ on_debounce_timer(csilk_io_timer_t* handle)
 static void
 on_file_change(csilk_io_fs_event_t* handle, const char* filename, int events, int status)
 {
-    hot_reload_ctx_t* ctx = (hot_reload_ctx_t*)handle->data;
+    hot_reload_ctx_t* ctx = handle ? (hot_reload_ctx_t*)handle->data : NULL;
     (void)filename;
     (void)events;
     (void)status;
+    if (!ctx || atomic_load_explicit(&ctx->stopping, memory_order_acquire)) {
+        return;
+    }
 
     /* Debounce: restart a 100ms timer to wait for compilation/file writing to settle */
     csilk_io_timer_start(&ctx->debounce_timer, on_debounce_timer, 100, 0);
@@ -369,13 +403,15 @@ csilk_dev_hot_reload_stop(csilk_server_t* server)
     }
     hot_reload_ctx_t* ctx = (hot_reload_ctx_t*)server->hot_reload_ctx;
     server->hot_reload_ctx = NULL;
+    atomic_store_explicit(&ctx->stopping, 1, memory_order_release);
 
+    int defer_free = 0;
     if (ctx->is_watching) {
         csilk_io_timer_stop(&ctx->debounce_timer);
         csilk_io_fs_event_stop(&ctx->fs_event);
-        csilk_io_close((csilk_io_handle_t*)&ctx->debounce_timer, NULL);
-        csilk_io_close((csilk_io_handle_t*)&ctx->fs_event, NULL);
+        atomic_store_explicit(&ctx->pending_closes, 2, memory_order_release);
         ctx->is_watching = 0;
+        defer_free = 1;
     }
 
     /* Grab the active router produced by hot reload so it is reclaimed by EBR */
@@ -407,8 +443,11 @@ csilk_dev_hot_reload_stop(csilk_server_t* server)
         }
     }
 
-    csilk_mutex_destroy(&ctx->reload_mutex);
-    free(ctx->lib_path);
-    free(ctx->init_sym);
-    free(ctx);
+    if (defer_free) {
+        /* Free ctx only after both handles complete closing on the event loop. */
+        csilk_io_close((csilk_io_handle_t*)&ctx->debounce_timer, on_hot_reload_handle_close);
+        csilk_io_close((csilk_io_handle_t*)&ctx->fs_event, on_hot_reload_handle_close);
+    } else {
+        hot_reload_ctx_destroy(ctx);
+    }
 }

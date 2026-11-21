@@ -285,7 +285,7 @@ read_secret_from_file(const char* filepath, char* out, size_t out_size)
 const char*
 csilk_secret_get(const char* key, char* out, size_t out_size)
 {
-    if (!key || !key[0]) {
+    if (!key || !key[0] || (out && out_size == 0)) {
         return NULL;
     }
 
@@ -441,7 +441,7 @@ validate_and_return:
 const char*
 csilk_env_get(const char* key, char* out, size_t out_size, const char* default_val)
 {
-    if (!key || !key[0]) {
+    if (!key || !key[0] || (out && out_size == 0)) {
         return default_val;
     }
 

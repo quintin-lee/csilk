@@ -161,13 +161,20 @@ struct_to_cjson_internal(csilk_json_t*             obj,
                 continue;
             }
             for (size_t j = 0; j < descs[i].array_length; j++) {
-                const char* item_addr = field_addr + (j * descs[i].size);
-                csilk_json_array_append(arr, serialize_scalar(item_addr, &descs[i], depth + 1));
+                const char*   item_addr = field_addr + (j * descs[i].size);
+                csilk_json_t* child = serialize_scalar(item_addr, &descs[i], depth + 1);
+                if (child && !csilk_json_array_append(arr, child)) {
+                    csilk_json_free(child);
+                }
             }
-            csilk_json_add_object(obj, descs[i].json_key, arr);
+            if (!csilk_json_add_object(obj, descs[i].json_key, arr)) {
+                csilk_json_free(arr);
+            }
         } else {
-            csilk_json_add_object(
-                obj, descs[i].json_key, serialize_scalar(field_addr, &descs[i], depth + 1));
+            csilk_json_t* child = serialize_scalar(field_addr, &descs[i], depth + 1);
+            if (child && !csilk_json_add_object(obj, descs[i].json_key, child)) {
+                csilk_json_free(child);
+            }
         }
     }
 }
