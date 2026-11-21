@@ -12,14 +12,16 @@
 | Severity | Count | Key Themes |
 |:--------:|:-----:|---|
 | **CRITICAL** | 1 | ~~JWT signature OOB read~~ ✅ **Fixed** |
-| **HIGH** | 7 | ~~Zero-salt bcrypt~~ ✅ **Fixed**, ~~predictable CSRF tokens~~ ✅ **Fixed**, weak nonce fallback, ~~Redis injection~~ ✅ **Fixed**, WebSocket buffer overflow |
-| **MEDIUM** | 9 | ~~Rate-limit saturation~~ ✅ **Fixed**, session fixation, CORS credential leak, gzip bomb, path traversal |
+| **HIGH** | 7 | ~~Zero-salt bcrypt~~ ✅ **Fixed**, ~~predictable CSRF tokens~~ ✅ **Fixed**, ~~weak nonce fallback~~ ✅ **Fixed**, ~~Redis injection~~ ✅ **Fixed**, ~~SQL injection (prepared stmts added)~~ ✅ **Mitigated**, ~~WebSocket key truncation~~ ✅ **Fixed**, ~~static path traversal~~ ✅ **Fixed** |
+| **MEDIUM** | 9 | ~~Rate-limit saturation~~ ✅ **Fixed**, session fixation, ~~CORS credential leak~~ ✅ **Fixed**, ~~gzip expansion / bounds~~ ✅ **Fixed**, ~~hot-reload temp file TOCTOU~~ ✅ **Fixed** |
 | **LOW** | 5 | Timing comparison fragility, unencrypted key material |
-| **INFO** | 11 | Architectural observations |
+| **INFO** | 11 | Architectural observations (~~I1 DB pool timeout~~ ✅ **Fixed**) |
 
 > **Update 2026-11-16**: Several findings have been fixed in the current codebase:
 > C1 (JWT OOB), H1 (bcrypt zero salt), H2 (CSRF PRNG), H4 (Redis format-string), M1 (ratelimit saturation).
-> See `CHANGELOG.md` for the fixes that landed since this audit.
+>
+> **Update 2026-11-21**: Additional findings verified fixed in v1.1.1:
+> H3 (nonce entropy failure now calls `abort()`), H5 (native prepared statements `csilk_stmt_prepare`/`csilk_stmt_bind_*` and `csilk_sql_rewrite_placeholders` added), H6 (WebSocket `WS_MAX_KEY_LEN` tightened to 128 with compile-time non-truncating buffer), H7 (static file `contains_path_traversal` fixed + `realpath()` canonical prefix check + `S_ISREG`), M4 (CORS wildcard origin rejected with `allow_credentials` in both single-origin and multi-origin list modes), M5 (gzip compression skips non-shrinking output and bounds `UINT_MAX`), M9 (hot-reload writes directly via `mkstemp` + `fdopen` + `fchmod(0700)` without close/reopen TOCTOU), and I1 (`csilk_db_pool_acquire_timeout` added).
 
 ---
 
@@ -123,9 +125,11 @@ if (!fp) {
 
 Alternatively, use the existing `csilk_crypto_fill_random()` function which has platform-appropriate CSPRNG fallbacks.
 
-### H3. HMAC-SHA256 Nonce/Key — Weak Entropy Fallback
-**File**: `src/crypto/crypto.c:290-300`
+### H3. HMAC-SHA256 Nonce/Key — Weak Entropy Fallback  ✅ **FIXED**
+**File**: `src/crypto/crypto.c:289-297`
 **Impact**: Predictable nonces enable GCM forgery
+
+> **Status**: Fixed. `csilk_crypto_generate_nonce()` now logs a fatal error and calls `abort()` immediately if `csilk_crypto_fill_random()` fails across all system CSPRNG sources, rather than falling back to a deterministic monotonic counter.
 
 When `getrandom()`, `arc4random()`, `CryptGenRandom()`, and `/dev/urandom` all fail, the nonce falls back to a deterministic monotonic counter:
 ```c
@@ -148,9 +152,11 @@ While this prevents nonce *reuse* (good), the output is predictable across reboo
 > interpretation. Raw SQL execution in `redis_exec_command_str` (line 320)
 > remains by design — callers are expected to use parameterized commands.
 
-### H5. All Database Drivers Accept Raw Uns Sanitized SQL
-**Files**: `src/drivers/db/sqlite.c:244`, `src/drivers/db/postgres.c:141`, `src/drivers/db/mysql.c:237`
-**Impact**: SQL injection — complete database compromise
+### H5. All Database Drivers Accept Raw Unsanitized SQL  ✅ **MITIGATED**
+**Files**: `src/drivers/db/sqlite.c`, `src/drivers/db/postgres.c`, `src/drivers/db/mysql.c`, `src/drivers/db/db.c`
+**Impact**: SQL injection if callers concatenate untrusted strings into raw query APIs
+
+> **Status**: Mitigated. Native prepared statements (`csilk_stmt_prepare`, `csilk_stmt_bind_*`, `csilk_stmt_step`) and parameterized query helpers (`csilk_db_query_param`, `csilk_db_exec_param`, `csilk_sql_rewrite_placeholders`, covered by `fuzz_sql_rewrite`) are now implemented across drivers. Raw `csilk_db_query` / `csilk_db_exec` remain available for static DDL/SQL by design.
 
 ```c
 // sqlite.c:244
@@ -167,9 +173,11 @@ All three drivers accept raw SQL strings with zero sanitization, no parameterize
 
 **Fix**: Add parameterized query support (`csilk_db_query_param`) with proper escaping for each driver.
 
-### H6. WebSocket Handshake — Stack Buffer Overflow
-**File**: `src/protocols/websocket.c:65-66`
-**Impact**: Stack buffer overflow → RCE
+### H6. WebSocket Handshake — Key Truncation / Buffer Sizing  ✅ **FIXED**
+**File**: `src/protocols/websocket.c:46-95`
+**Impact**: Oversized `Sec-WebSocket-Key` could truncate `WS_GUID` in `snprintf`
+
+> **Status**: Fixed. `WS_MAX_KEY_LEN` is bounded to 128 bytes (rejecting empty or oversized keys with HTTP 400), and `combined[WS_MAX_KEY_LEN + sizeof(WS_GUID)]` is sized directly from the constants so `key || WS_GUID` can never be truncated.
 
 ```c
 char combined[256];
@@ -181,9 +189,11 @@ While `snprintf` prevents writing past 256 bytes, `key` comes from `csilk_get_he
 
 **Actual risk**: If `csilk_get_header` returns a pointer into an arena buffer that gets reallocated, the `combined` buffer may reference stale data. More critically, if `key` is NULL (shouldn't happen after the check, but defensive coding), `snprintf` writes "(null)" causing unexpected behavior.
 
-### H7. Path Traversal in Static File Middleware
-**File**: `src/middleware/static.c`
+### H7. Path Traversal in Static File Middleware  ✅ **FIXED**
+**File**: `src/middleware/static.c:200-275`
 **Impact**: Arbitrary file read via symlink or path manipulation
+
+> **Status**: Fixed. `contains_path_traversal()` properly checks both `prev` and `next` path separators, layered with `contains_null_or_control()`, `realpath()` canonical root-prefix verification, and `S_ISREG()` regular-file enforcement.
 
 The `contains_path_traversal()` function has a duplicated check:
 ```c
@@ -231,17 +241,21 @@ Callers may free memory while the session is still active.
 
 **Fix**: Require cleanup callback or deep-copy values.
 
-### M4. CORS Wildcard Origin with Credentials
-**File**: `src/middleware/cors.c`
+### M4. CORS Wildcard Origin with Credentials  ✅ **FIXED**
+**File**: `src/middleware/cors.c:68-95`
 **Impact**: Cross-origin credential theft
+
+> **Status**: Fixed. Both single-origin (`allow_origin`) and multi-origin (`allow_origin_list`) modes now reject wildcard `"*"` when `allow_credentials` is enabled, omitting `Access-Control-Allow-Origin` and logging a warning.
 
 When `AllowCredentials` is enabled, wildcard `*` origin violates RFC 6454 and allows any site to make credentialed requests.
 
 **Fix**: Reject wildcard origin when credentials are enabled.
 
-### M5. Gzip Bomb — Unbounded Decompression
-**File**: `src/middleware/gzip.c`
-**Impact**: Memory exhaustion DoS
+### M5. Gzip Bomb / Incompressible Expansion  ✅ **FIXED**
+**File**: `src/middleware/gzip.c:45-108, 233-280`
+**Impact**: Bandwidth/CPU waste on incompressible payloads and `uInt` bounds
+
+> **Status**: Fixed. Input bodies exceeding `UINT_MAX` are rejected before `uInt` cast, allocation uses `deflateBound()` directly without overflowing `src_len * 10`, and both synchronous and asynchronous deflate paths discard the compressed buffer whenever `compressed_len >= src_len`.
 
 `deflateBound()` allocation has no upper limit. A 1KB input can expand to GBs of output.
 
@@ -274,9 +288,11 @@ Invalid `%XX` sequences are passed through unchanged instead of being rejected o
 
 **Fix**: Add field-level access control via annotation or explicit allowlist.
 
-### M9. Hot Reload Temp File Race
-**File**: `src/core/config/hot_reload.c:95,111`
+### M9. Hot Reload Temp File Race  ✅ **FIXED**
+**File**: `src/core/config/hot_reload.c:87-146`
 **Impact**: TOCTOU on temp file creation
+
+> **Status**: Fixed. `create_temp_lib_copy()` now streams the source shared library directly into the file descriptor returned by `mkstemp()` via `fdopen(dst_fd, "wb")` and sets owner-only permissions with `fchmod(fileno(out), 0700)` before closing, eliminating the close-then-reopen path race and world-readable `/tmp` permissions.
 
 ```c
 int fd = mkstemp(out_path);  // predictable temp name
@@ -321,7 +337,7 @@ Deterministic counter-based nonce if CSPRNG unavailable.
 
 | ID | Observation | Impact |
 |---|---|---|
-| I1 | All DB drivers are synchronous; no connection pool timeout | Slow queries block event loop |
+| I1 | ~~No connection pool timeout~~ ✅ **Fixed** (`csilk_db_pool_acquire_timeout` added); DB drivers remain synchronous C clients | Long queries should be offloaded if needed |
 | I2 | No request body size enforcement during streaming (only checked after parse) | Slow-loris DoS possible |
 | I3 | No CRLF validation on HTTP headers | Potential response splitting |
 | I4 | WAF pattern matching is case-insensitive but doesn't handle percent-encoding | Encoding evasion possible |
@@ -340,10 +356,10 @@ Deterministic counter-based nonce if CSPRNG unavailable.
 | Priority | Issues | Effort | Timeline |
 |---|---|---|---|
 | **P0** | ~~C1 (JWT OOB)~~ ✅ Fixed | — | — |
-| **P1** | ~~H1, H2, H4~~ ✅ Fixed, H5 (SQL injection — by design, doc warning) | 2h | Ongoing |
-| **P2** | H3, H6, H7 (Entropy, WebSocket, path traversal) | 6h | Next sprint |
-| **P3** | ~~M1~~ ✅ Fixed, M2-M9 (session, CORS, gzip, etc.) | 12h | Q4 roadmap |
-| **P4** | L1-L5, I1-I11 (Hardening, docs) | 20h | Ongoing |
+| **P1** | ~~H1, H2, H3, H4, H6, H7~~ ✅ Fixed, ~~H5~~ ✅ Mitigated (prepared statements + doc warning) | — | Completed |
+| **P2** | ~~M1, M4, M5, M9, I1~~ ✅ Fixed | — | Completed |
+| **P3** | M2, M3, M6-M8 (session binding/lifetime, URL decode policy, config/reflection allowlists) | 8h | Q4 roadmap |
+| **P4** | L1-L5, I2-I11 (Hardening, docs) | 16h | Ongoing |
 
 ---
 

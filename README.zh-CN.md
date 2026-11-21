@@ -130,7 +130,7 @@ graph TB
     subgraph infra["fa:fa-hdd Infrastructure"]
         UV["fa:fa-sync-alt libuv / io_uring (Async I/O)"]
         LL["fa:fa-file-code llhttp (HTTP/1.1)"]
-        CJ["fa:fa-file-code cJSON"]
+        CJ["fa:fa-file-code yyjson"]
         YM["fa:fa-file-text libyaml"]
         ZL["fa:fa-archive zlib"]
         CL["fa:fa-download libcurl"]
@@ -170,14 +170,14 @@ graph TB
 - [libuv](https://github.com/libuv/libuv) 或 [liburing](https://github.com/axboe/liburing) — 异步 I/O 库
 - [llhttp](https://github.com/nodejs/llhttp) — HTTP/1.1 解析器
 - [nghttp2](https://github.com/nghttp2/nghttp2) — HTTP/2 库
-- [cJSON](https://github.com/DaveGamble/cJSON) — JSON 解析器
+- [yyjson](https://github.com/ibireme/yyjson) — 高性能 JSON 解析与序列化引擎
 - [libyaml](https://github.com/yaml/libyaml) — YAML 解析器
 - [OpenSSL](https://www.openssl.org/) — TLS/SSL 和加密库
 - [zlib](https://www.zlib.net/) — Gzip 压缩
 - [libcurl](https://curl.se/libcurl/) — HTTP 客户端（AI 驱动）
 - [sqlite3](https://www.sqlite.org/) — 嵌入式 SQL 数据库
 
-libuv（默认）、liburing（可选，`-DCSILK_USE_URING=ON`）、nghttp2 和 cJSON 会在构建时通过 CMake 的 FetchContent 自动获取。llhttp 优先使用系统版本，否则自动获取。libyaml、OpenSSL、zlib、libcurl 和 sqlite3 必须作为系统依赖安装。
+yyjson（以及 `-DCSILK_USE_URING=ON` 时的 liburing，或系统未安装时的 llhttp/nghttp2）会在构建时通过 CMake 的 FetchContent 自动获取。libuv（默认 I/O 后端）、libyaml、OpenSSL、zlib、libcurl 和 sqlite3 作为系统依赖被发现。
 
 在 C/C++ 依赖管理中，`csilk` 已提供主流的全球包管理生态支持：
 
@@ -216,7 +216,7 @@ csilk **MUST** 使用支持 C23 的编译器编译（`static constexpr`、`nullp
 
 | 依赖     | 最低版本 | 用途                        |
 |----------|:-------:|----------------------------|
-| CMake    | 3.11    | 构建系统                   |
+| CMake    | 3.24    | 构建系统                   |
 | OpenSSL  | 1.1.1   | TLS、加密、JWT（HS256）     |
 | libcurl  | 7.80.0  | HTTP 客户端（AI 驱动）      |
 | libyaml  | 0.2.0   | 配置解析                   |
@@ -228,7 +228,7 @@ csilk **MUST** 使用支持 C23 的编译器编译（`static constexpr`、`nullp
 
 ### 前提条件
 
-- CMake 3.11 或更高版本（**MUST** 在 `$PATH` 中可用）
+- CMake 3.24 或更高版本（**MUST** 在 `$PATH` 中可用）
 - 支持 C23 的 C 编译器（GCC 13+ 或 Clang 19+）
 - Git（用于获取依赖）
 - 系统依赖：`sudo apt install libyaml-dev libssl-dev zlib1g-dev libcurl4-openssl-dev libsqlite3-dev`
@@ -258,7 +258,7 @@ make
 # 可用 CMake 选项：
 #   -DCSILK_BUILD_SHARED=ON               同时构建动态共享库与静态库（默认 ON）
 #   -DCSILK_USE_URING=ON                  使用 io_uring 后端替代 libuv（仅 Linux，默认 OFF）
-#   -DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF 关闭实验性/模拟桩模块，按 ENOTSUP/NULL 失败关闭（默认 ON）
+#   -DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF 关闭实验性/模拟桩模块，按 ENOTSUP/NULL 失败关闭（默认 OFF）
 #   -DUSE_ASAN=ON                         启用 AddressSanitizer（默认 OFF）
 #   -DUSE_TSAN=ON                         启用 ThreadSanitizer（默认 OFF）
 #   -DUSE_FUZZER=ON                       启用 libFuzzer（默认 OFF）
@@ -269,22 +269,32 @@ ctest --output-on-failure
 
 ## 模块化子库与集成方式
 
-> **实验性与模拟模块能力边界声明**：框架核心的 HTTP/1.1、HTTP/2（`nghttp2`）、TLS 1.3（`OpenSSL`）、Trie 路由、Arena、MQ/Raft、SQLite/MySQL/PostgreSQL/Redis 及 HNSW 引擎均为真实完整实现；而 `csilk_bypass`（**AF_XDP** / **DPDK** 进程内内存环模拟及 `io_perf_probe` 权限探测）、`csilk_wasm`（**WASM/WASI** 魔数校验与 fuel 计数桩运行时）、**HTTP/3** `csilk_h3_listener_*`（无 QUIC/TLS/QPACK 传输层的 UDP/ConnID 骨架，完整 HTTP/3 推迟至 v1.1+）以及 **MongoDB 多文档事务**（`transaction_*` 按 `-1` 失败关闭，仅具备单文档原子性）属于实验性或受限边界。在加固构建中可传入 `-DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF` 使模拟桩入口按 `ENOTSUP`/`NULL` 失败关闭。
+> **实验性与模拟模块能力边界声明**：框架核心的 HTTP/1.1、HTTP/2（`nghttp2`）、TLS 1.3（`OpenSSL`）、Trie 路由、Arena、MQ/Raft、SQLite/MySQL/PostgreSQL/Redis、HNSW 向量引擎及 Workflow/ReAct/MCP 均为真实生产级实现。此外，`csilk_wasm` 在开启 `-DCSILK_ENABLE_WAMR=ON` 时集成真实 WAMR 2.4.4 WebAssembly 运行时，`csilk_http2` 在开启 `-DCSILK_ENABLE_HTTP3=ON` 时提供基于 `ngtcp2` + `nghttp3` 的真实 HTTP/3 QUIC 数据面（默认均按 fail-closed 关闭）。相比之下，`csilk_bypass` 中的 **AF_XDP** / **DPDK** 环形缓冲模拟入口（`af_xdp.c`、`dpdk_pmd.c`；而 `udp.c` 提供真实的 `io_uring` multishot UDP 接收）、未开启 WAMR 时的 **WASM 桩虚拟机**、独立 **HTTP/3 UDP 监听骨架**（`csilk_h3_listener_*`）以及 **MongoDB 多文档事务**（`transaction_*` 按 `-1` 失败关闭，仅具备单文档原子性）属于实验性或受限边界。默认构建（`-DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF`）下模拟桩入口按 `ENOTSUP`/`NULL` 失败关闭。
 
-csilk 采用高内聚低耦合的模块化设计，提供静态库（`.a`）与动态共享库（`.so`）双重构建产物：
+csilk 采用高内聚低耦合的模块化设计，拆分为 19 个模块子库（外加 `csilk::core` 兼容别名与 `csilk::csilk` 单体伞库），同时提供静态库（`.a`）与动态共享库（`.so`）：
 
 | 模块 Target | 动态库 Target | 静态库归档 | 动态共享库 | 说明 |
 |:---|:---|:---|:---|:---|
-| `csilk::base` | `csilk::base_shared` | `libcsilk-base.a` | `libcsilk-base.so` | 基础抽象层、全局定义与跨后端线程同步原语 |
-| `csilk::core` | `csilk::core_shared` | `libcsilk-core.a` | `libcsilk-core.so` | 核心 Arena、上下文 Context、字典树路由、日志与基础加密原语 |
-| `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | HTTP/1 服务、App 骨架、连接池管理、内置中间件与 Swagger |
-| `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | OpenSSL TLS 1.3 加密引擎与对称/非对称加密驱动 |
-| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (nghttp2) 会话、零拷贝头部物化与流回收池 |
-| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | 数据库抽象层、SQLite3、嵌入式 HNSW SIMD 向量检索引擎 |
-| `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | AI 大模型客户端驱动（OpenAI、Ollama、DeepSeek） |
+| `csilk::base` | `csilk::base_shared` | `libcsilk-base.a` | `libcsilk-base.so` | 基础原语：Arena、HeaderMap、有界缓冲、KV 存储、URL/Query 解析 |
+| `csilk::json` | `csilk::json_shared` | `libcsilk-json.a` | `libcsilk-json.so` | 基于 yyjson 的高性能 JSON 解析与序列化引擎 |
+| `csilk::crypto` | `csilk::crypto_shared` | `libcsilk-crypto.a` | `libcsilk-crypto.so` | 密码学原语（bcrypt、TOTP、SHA-1、Base64、UUID）与 OpenSSL 加密驱动 |
+| `csilk::runtime` (`csilk::core`) | `csilk::runtime_shared` (`csilk::core_shared`) | `libcsilk-runtime.a` | `libcsilk-runtime.so` | 核心运行时：Context、SIMD 字典树路由、多 Worker 服务、RCU 热重载、io_uring、配置、Secret、MVCC 缓存 |
+| `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | OpenSSL TLS 1.3 加密传输引擎 |
+| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2（`nghttp2`）会话/流池与 HTTP/3（`ngtcp2`/`nghttp3`）QUIC 协议栈 |
+| `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | HTTP/1.1 解析（`llhttp`）、流水线、SWAR 加速与零拷贝响应写出 |
+| `csilk::protocols` | `csilk::protocols_shared` | `libcsilk-protocols.a` | `libcsilk-protocols.so` | WebSocket 与房间广播、OpenAPI 3.0 与 Swagger UI、MCP（JSON-RPC/stdio 池/WS）、gRPC 帧编解码 |
+| `csilk::middleware` | `csilk::middleware_shared` | `libcsilk-middleware.a` | `libcsilk-middleware.so` | 23 个内置中间件（Auth、JWT、CORS、CSRF、WAF、XDP-WAF、限流、熔断、OTLP、Gzip、SSE、Static 等） |
+| `csilk::app` | `csilk::app_shared` | `libcsilk-app.a` | `libcsilk-app.so` | 高层 `csilk_app_t` 应用构建器、路由组与统一管理后台 |
+| `csilk::reflection` | `csilk::reflection_shared` | `libcsilk-reflection.a` | `libcsilk-reflection.so` | C 结构体与 JSON 自动序列化/反序列化反射引擎 |
+| `csilk::permission` | `csilk::permission_shared` | `libcsilk-permission.a` | `libcsilk-permission.so` | 可插拔 RBAC 权限控制引擎 |
+| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | 数据库抽象层（SQLite/MySQL/PG/Redis/MongoDB）、原生预编译语句、保存点与 Flyway 风格迁移引擎 |
+| `csilk::vector` | `csilk::vector_shared` | `libcsilk-vector.a` | `libcsilk-vector.so` | 内嵌式 AVX2 SIMD HNSW 向量索引（含零拷贝 mmap 持久化）与 Milvus/Qdrant 驱动 |
+| `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | AI 大模型客户端驱动（OpenAI、Ollama、Anthropic、内嵌 llama.cpp）、工具注册中心与 AI 追踪 |
 | `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | 异步消息队列、PubSub、WAL 持久化与 Raft 分布式共识引擎 |
-| `csilk::workflow` | `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | Workflow DAG 任务编排引擎、断点续传、DSL 与 MCP 协议栈 |
-| `csilk::csilk` | `csilk::csilk_shared` | `libcsilk.a` | `libcsilk.so` | 全功能单体复合伞库 |
+| `csilk::workflow` | `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | Workflow DAG 调度引擎、WAL 恢复、YAML DSL、ReAct Agent 循环与 Linux seccomp 沙箱 Skill |
+| `csilk::wasm` | `csilk::wasm_shared` | `libcsilk-wasm.a` | `libcsilk-wasm.so` | WebAssembly 插件沙箱（可选 WAMR 2.4.4 运行时或 fail-closed 桩） |
+| `csilk::bypass` | `csilk::bypass_shared` | `libcsilk-bypass.a` | `libcsilk-bypass.so` | 原生 `io_uring` multishot UDP 传输、I/O 性能探针与实验性 AF_XDP/DPDK 桩 |
+| `csilk::csilk` | `csilk::shared` | `libcsilk.a` | `libcsilk.so` | 全功能单体复合伞库 |
 
 ### CMake 业务应用链接
 
@@ -324,15 +334,16 @@ src/
    ├── crypto/         # base64、sha1、url、uuid、加密原语、bcrypt
    ├── app/            # 应用层（app、admin dashboard、workflow engine）
    ├── drivers/        # 驱动实现
-   │   ├── ai/         # AI 引擎 + OpenAI/Ollama 后端
+   │   ├── ai/         # AI 引擎 + OpenAI/Ollama/Anthropic/llama.cpp 后端
    │   ├── cipher/     # 密码驱动（OpenSSL）
    │   ├── perm/       # 权限驱动（管理器 + simple 后端）
    │   ├── db/         # 数据库抽象 + 后端（SQLite、MySQL、PG、Mongo、Redis）
-   │   └── vector/     # 向量数据库驱动（Qdrant、Milvus）
-   ├── messaging/      # 内部事件总线（消息队列）
+   │   └── vector/     # 内嵌 HNSW SIMD 向量库 + Qdrant/Milvus 驱动
+   ├── messaging/      # 内部事件总线（消息队列 + Raft 共识）
    ├── reflection/     # 反射引擎实现
-   ├── protocols/      # 协议扩展（WebSocket、Swagger）
-   └── middleware/     # 15 个内置中间件模块
+   ├── protocols/      # 协议扩展（WebSocket、HTTP/3、Swagger、MCP、gRPC）
+   ├── workflow/       # Workflow DAG 调度器、ReAct Agent 循环、Agent Skill 沙箱
+   └── middleware/     # 23 个内置中间件模块
 
 include/csilk/        # 公共分层头文件
   ├── core/           # 核心内部定义
@@ -342,8 +353,8 @@ include/csilk/        # 公共分层头文件
   ├── test/           # OOM 模拟测试框架
   └── csilk.h         # 主入口（包含所有模块）
 
-tools/                  # 开发者工具（csilkskel 脚手架生成器）
-tests/                  # 120+ 个全面的单元测试
+scripts/                # 开发者工具（csilkskel 脚手架生成器、基准测试、打包脚本）
+tests/                  # 271 个全面的单元与集成测试
 examples/               # 功能示例（Server、App、AI、WS/TLS/MQ 等）
 ```
 
@@ -358,7 +369,7 @@ examples/               # 功能示例（Server、App、AI、WS/TLS/MQ 等）
 | 路由系统 | [router.md](docs/zh-CN/module-design/router.md) | 分段前缀树、SIMD 加速匹配、参数提取 |
 | 上下文 Context | [context.md](docs/zh-CN/module-design/context.md) | 请求/响应生命周期、Arena 分配器、延迟清理、异步操作生命周期 |
 | 内存池 Arena | [arena.md](docs/zh-CN/module-design/arena.md) | Bump 分配器、零拷贝请求头、SIMD 内存拷贝 |
-| 中间件 | [middleware.md](docs/zh-CN/module-design/middleware.md) | 洋葱模型、调用链组装、15 个内置中间件 |
+| 中间件 | [middleware.md](docs/zh-CN/module-design/middleware.md) | 洋葱模型、调用链组装、23 个内置中间件 |
 | 数据访问 | [data.md](docs/zh-CN/module-design/data.md) | DB 抽象层、可插拔驱动、连接池 |
 | 消息总线 | [messaging.md](docs/zh-CN/module-design/messaging.md) | 事件总线、Pub/Sub、uv_async_t 派发、WAL 持久化、Raft 共识 |
 | 安全系统 | [security.md](docs/zh-CN/module-design/security.md) | RBAC、JWT、CSRF、CORS、WAF 防火墙、滑动窗口限流 |
