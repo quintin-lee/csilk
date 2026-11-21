@@ -18,12 +18,11 @@ void        on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf
 
 /* --- Rejected connection --- */
 
-#ifndef CSILK_USE_URING
 /** @brief Close callback for rejected (connection-limited) TCP handles.
  *
  *  When the server reaches max_connections, excess connections are accepted
  *  and immediately closed. The handle (a temporary csilk_io_tcp_t allocated in
- *  on_new_connection) is freed here. This drains the kernel TCP backlog
+ *  reject_connection) is freed here. This drains the kernel TCP backlog
  *  without allocating a full csilk_client_t.
  *
  *  @param handle The temporary TCP handle to free.
@@ -33,30 +32,20 @@ on_rejected_close(csilk_io_handle_t* handle)
 {
     free(handle);
 }
-#endif
 
 static void
 reject_connection(csilk_io_stream_t* server_stream)
 {
-#ifdef CSILK_USE_URING
-    csilk_io_tcp_t tmp;
-    csilk_io_tcp_init(server_stream->loop, &tmp);
-    if (csilk_io_accept(server_stream, (csilk_io_stream_t*)&tmp) == 0) {
-        csilk_io_close((csilk_io_handle_t*)&tmp, NULL);
-    }
-#else
     csilk_io_tcp_t* tmp = malloc(sizeof(csilk_io_tcp_t));
-    if (tmp) {
-        csilk_io_tcp_init(server_stream->loop, tmp);
-        if (csilk_io_accept(server_stream, (csilk_io_stream_t*)tmp) == 0) {
-            extern void on_rejected_close(csilk_io_handle_t * handle);
-            csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
-        } else {
-            extern void on_rejected_close(csilk_io_handle_t * handle);
-            csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
-        }
+    if (!tmp) {
+        return;
     }
-#endif
+    if (csilk_io_tcp_init(server_stream->loop, tmp) != 0) {
+        free(tmp);
+        return;
+    }
+    (void)csilk_io_accept(server_stream, (csilk_io_stream_t*)tmp);
+    csilk_io_close((csilk_io_handle_t*)tmp, on_rejected_close);
 }
 
 /* --- Accept new connection --- */
