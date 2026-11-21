@@ -278,6 +278,113 @@ csilk_add_module(csilk_protocols CSILK_PROTOCOLS_SOURCES "csilk-protocols")
 csilk_add_module(csilk_middleware CSILK_MIDDLEWARE_SOURCES "csilk-middleware")
 csilk_add_module(csilk_app CSILK_APP_SOURCES "csilk-app")
 
+# ── Plugin targets (built as standalone shared libraries) ────────────────
+# Plugin targets reuse the OBJECT libraries from csilk_add_module but link
+# only against core + their direct dependencies.  Each plugin .so exports
+# the csilk_plugin_entry symbol and registers via csilk_core_register_plugin.
+
+if(CSILK_BUILD_PLUGIN_AI)
+  add_library(csilk_plugin_ai SHARED $<TARGET_OBJECTS:csilk_ai_objects>)
+  set_target_properties(csilk_plugin_ai PROPERTIES
+      OUTPUT_NAME "csilk_ai"
+      LIBRARY_OUTPUT_DIRECTORY "${CSILK_PLUGIN_DIR}"
+      SOVERSION 1
+      VERSION "${CSILK_VERSION}")
+  csilk_target_setup(csilk_plugin_ai PUBLIC SHARED)
+  target_link_libraries(csilk_plugin_ai PRIVATE
+      csilk_runtime csilk_json CURL::libcurl)
+  target_compile_definitions(csilk_plugin_ai PRIVATE CSILK_PLUGIN_BUILD)
+endif()
+
+if(CSILK_BUILD_PLUGIN_MQ)
+  add_library(csilk_plugin_mq SHARED $<TARGET_OBJECTS:csilk_mq_objects>)
+  set_target_properties(csilk_plugin_mq PROPERTIES
+      OUTPUT_NAME "csilk_mq"
+      LIBRARY_OUTPUT_DIRECTORY "${CSILK_PLUGIN_DIR}"
+      SOVERSION 1
+      VERSION "${CSILK_VERSION}")
+  csilk_target_setup(csilk_plugin_mq PUBLIC SHARED)
+  target_link_libraries(csilk_plugin_mq PRIVATE csilk_runtime)
+  target_compile_definitions(csilk_plugin_mq PRIVATE CSILK_PLUGIN_BUILD)
+endif()
+
+if(CSILK_BUILD_PLUGIN_DB)
+  add_library(csilk_plugin_db SHARED $<TARGET_OBJECTS:csilk_db_objects>)
+  set_target_properties(csilk_plugin_db PROPERTIES
+      OUTPUT_NAME "csilk_db"
+      LIBRARY_OUTPUT_DIRECTORY "${CSILK_PLUGIN_DIR}"
+      SOVERSION 1
+      VERSION "${CSILK_VERSION}")
+  csilk_target_setup(csilk_plugin_db PUBLIC SHARED)
+  target_link_libraries(csilk_plugin_db PRIVATE
+      csilk_runtime csilk_json SQLite3::SQLite3)
+  target_compile_definitions(csilk_plugin_db PRIVATE CSILK_PLUGIN_BUILD)
+endif()
+
+if(CSILK_BUILD_PLUGIN_VECTOR)
+  add_library(csilk_plugin_vector SHARED $<TARGET_OBJECTS:csilk_vector_objects>)
+  set_target_properties(csilk_plugin_vector PROPERTIES
+      OUTPUT_NAME "csilk_vector"
+      LIBRARY_OUTPUT_DIRECTORY "${CSILK_PLUGIN_DIR}"
+      SOVERSION 1
+      VERSION "${CSILK_VERSION}")
+  csilk_target_setup(csilk_plugin_vector PUBLIC SHARED)
+  target_link_libraries(csilk_plugin_vector PRIVATE
+      csilk_runtime csilk_json CURL::libcurl)
+  target_compile_definitions(csilk_plugin_vector PRIVATE CSILK_PLUGIN_BUILD)
+endif()
+
+if(CSILK_BUILD_PLUGIN_WORKFLOW)
+  add_library(csilk_plugin_workflow SHARED $<TARGET_OBJECTS:csilk_workflow_objects>)
+  set_target_properties(csilk_plugin_workflow PROPERTIES
+      OUTPUT_NAME "csilk_workflow"
+      LIBRARY_OUTPUT_DIRECTORY "${CSILK_PLUGIN_DIR}"
+      SOVERSION 1
+      VERSION "${CSILK_VERSION}")
+  csilk_target_setup(csilk_plugin_workflow PUBLIC SHARED)
+  target_link_libraries(csilk_plugin_workflow PRIVATE
+      csilk_runtime csilk_json CURL::libcurl)
+  target_compile_definitions(csilk_plugin_workflow PRIVATE CSILK_PLUGIN_BUILD)
+endif()
+
+if(CSILK_BUILD_PLUGIN_PROTOCOL)
+  add_library(csilk_plugin_protocol SHARED $<TARGET_OBJECTS:csilk_protocols_objects>)
+  set_target_properties(csilk_plugin_protocol PROPERTIES
+      OUTPUT_NAME "csilk_protocol"
+      LIBRARY_OUTPUT_DIRECTORY "${CSILK_PLUGIN_DIR}"
+      SOVERSION 1
+      VERSION "${CSILK_VERSION}")
+  csilk_target_setup(csilk_plugin_protocol PUBLIC SHARED)
+  target_link_libraries(csilk_plugin_protocol PRIVATE
+      csilk_http csilk_http2 csilk_runtime csilk_json csilk_reflection
+      csilk_workflow csilk_mq csilk_ai CURL::libcurl)
+  target_compile_definitions(csilk_plugin_protocol PRIVATE CSILK_PLUGIN_BUILD)
+endif()
+
+if(CSILK_BUILD_PLUGIN_WASM)
+  add_library(csilk_plugin_wasm SHARED $<TARGET_OBJECTS:csilk_wasm_objects>)
+  set_target_properties(csilk_plugin_wasm PROPERTIES
+      OUTPUT_NAME "csilk_wasm"
+      LIBRARY_OUTPUT_DIRECTORY "${CSILK_PLUGIN_DIR}"
+      SOVERSION 1
+      VERSION "${CSILK_VERSION}")
+  csilk_target_setup(csilk_plugin_wasm PUBLIC SHARED)
+  target_link_libraries(csilk_plugin_wasm PRIVATE csilk_runtime)
+  target_compile_definitions(csilk_plugin_wasm PRIVATE CSILK_PLUGIN_BUILD)
+endif()
+
+if(CSILK_BUILD_PLUGIN_BYPASS)
+  add_library(csilk_plugin_bypass SHARED $<TARGET_OBJECTS:csilk_bypass_objects>)
+  set_target_properties(csilk_plugin_bypass PROPERTIES
+      OUTPUT_NAME "csilk_bypass"
+      LIBRARY_OUTPUT_DIRECTORY "${CSILK_PLUGIN_DIR}"
+      SOVERSION 1
+      VERSION "${CSILK_VERSION}")
+  csilk_target_setup(csilk_plugin_bypass PUBLIC SHARED)
+  target_link_libraries(csilk_plugin_bypass PRIVATE csilk_runtime)
+  target_compile_definitions(csilk_plugin_bypass PRIVATE CSILK_PLUGIN_BUILD)
+endif()
+
 # ── Compatibility target ─────────────────────────────────────────────────
 # Keep csilk::core as a stable consumer entry point while runtime owns the
 # implementation sources.

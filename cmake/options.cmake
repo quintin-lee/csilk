@@ -76,3 +76,16 @@ set(CSILK_ARENA_TIER_COUNT 3   CACHE STRING "Number of arena chunk size tiers")
 set(CSILK_MAX_TLS_CHUNKS  8   CACHE STRING "Max cached arena chunks per tier")
 set(CSILK_TLS_DISPATCH_CAPACITY 128 CACHE STRING "TLS dispatch queue capacity (per worker)")
 set(CSILK_WF_CLUSTER_MAX_BINDINGS 128 CACHE STRING "Max workflow-to-Raft cluster bindings")
+
+# ── Plugin build options ─────────────────────────────────────────────────
+# Each optional module can be built as a standalone shared-library plugin
+# instead of being linked into the monolithic libcsilk.
+option(CSILK_BUILD_PLUGIN_AI     "Build csilk-ai plugin (LLM drivers)"     OFF)
+option(CSILK_BUILD_PLUGIN_MQ     "Build csilk-mq plugin (message queue)"   OFF)
+option(CSILK_BUILD_PLUGIN_DB     "Build csilk-db plugin (database drivers)" OFF)
+option(CSILK_BUILD_PLUGIN_VECTOR "Build csilk-vector plugin (HNSW index)"  OFF)
+option(CSILK_BUILD_PLUGIN_WORKFLOW "Build csilk-workflow plugin (AI agent graph)" OFF)
+option(CSILK_BUILD_PLUGIN_PROTOCOL "Build csilk-protocol plugin (WS/SSE/MCP)" OFF)
+option(CSILK_BUILD_PLUGIN_WASM   "Build csilk-wasm plugin (WASM sandbox)"  OFF)
+option(CSILK_BUILD_PLUGIN_BYPASS "Build csilk-bypass plugin (AF_XDP/DPDK)" OFF)
+option(CSILK_PLUGIN_DIR          "Install directory for plugin .so files"  "${CMAKE_INSTALL_LIBDIR}/csilk/plugins")
