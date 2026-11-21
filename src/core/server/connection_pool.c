@@ -120,7 +120,7 @@ pool_get(worker_pool_t* wp)
         client->write_timer.generation = gen;
         client->request_timer.generation = gen;
 #endif
-        client->ctx.conn_closed = 0;
+        atomic_store_explicit(&client->ctx.conn_closed, 0, memory_order_relaxed);
         client->ctx.file_fd = -1;
         client->primary_write_in_flight = 0;
     }
@@ -198,7 +198,7 @@ reset_hot_state(csilk_client_t* client)
     client->ctx.storage_head = NULL;
     client->ctx.stream_id = 0;
     client->ctx.next_stream = NULL;
-    client->ctx.conn_closed = 0;
+    atomic_store_explicit(&client->ctx.conn_closed, 0, memory_order_relaxed);
     client->ctx.on_ws_message = NULL;
     client->ctx.on_ws_send = NULL;
     client->ctx.read_buffers = client->ctx.read_buffers_embedded;

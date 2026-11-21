@@ -273,7 +273,7 @@ csilk_h2_remove_stream(csilk_client_t* client, int32_t stream_id)
             }
             *curr = found->next_stream;
             found->next_stream = NULL;
-            found->stream_closed = 1;
+            atomic_store_explicit(&found->stream_closed, 1, memory_order_release);
             found->stream_state = CSILK_STREAM_STATE_CLOSED;
             map->count--;
 
@@ -309,7 +309,7 @@ csilk_h2_free_streams(csilk_client_t* client)
         while (curr) {
             csilk_ctx_t* next = curr->next_stream;
             curr->next_stream = NULL;
-            curr->stream_closed = 1;
+            atomic_store_explicit(&curr->stream_closed, 1, memory_order_release);
             curr->stream_state = CSILK_STREAM_STATE_CLOSED;
             _csilk_stream_unref(curr);
             curr = next;

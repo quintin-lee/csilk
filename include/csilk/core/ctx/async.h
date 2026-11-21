@@ -95,6 +95,18 @@ int csilk_async_op_complete(csilk_async_op_t* op, void* result);
  */
 int csilk_async_op_cancel(csilk_async_op_t* op);
 
+/**
+ * @brief Thread-safe liveness check for an in-flight async operation.
+ *
+ * Verifies that @p op has not completed/cancelled/timed out and that its
+ * underlying connection or HTTP/2 stream has not closed. Safe to call from
+ * background/sampler threads before attempting completion dispatch.
+ *
+ * @param op The async operation handle.
+ * @return 1 if alive, 0 if stale, closed, cancelled, or NULL.
+ */
+int csilk_async_op_is_alive(const csilk_async_op_t* op);
+
 #ifdef __cplusplus
 }
 #endif

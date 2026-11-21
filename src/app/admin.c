@@ -14,12 +14,11 @@
 
 #include "csilk/core/json/json.h"
 #include "csilk/core/internal.h"
+#include "csilk/core/ctx/async.h"
+#include "csilk/core/sync.h"
 #include "csilk/drivers/db.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/util/flamegraph.h"
-
-/* Internal dispatch with return value (from srv_impl.h via internal.h chain) */
-extern int _csilk_dispatch_try(csilk_ctx_t* c, void (*cb)(void* arg), void* arg);
 
 /* Weak fallbacks for optional sub-modules (AI, DB) */
 #if defined(__GNUC__) || defined(__clang__)
@@ -49,67 +48,193 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
 }
 #endif
 
-/* --- Async flame-graph completion (dispatched from sampler thread) --- */
+/* --- Async flame-graph session state --- */
 
 typedef struct {
-    csilk_ctx_t* ctx;
-    char*        svg;
-    size_t       svg_len;
-} admin_fg_result_t;
+    csilk_async_op_t* op;
+    csilk_server_t*   server;
+    _Atomic(char*)    svg;
+    size_t            svg_len;
+    atomic_int        cancelled;
+    atomic_int        ref_count;
+} admin_fg_session_t;
+
+static csilk_mutex_t       g_admin_fg_mutex;
+static csilk_once_t        g_admin_fg_once = CSILK_ONCE_INIT;
+static admin_fg_session_t* g_active_fg_session = NULL;
+static uint64_t            last_req_count = 0;
+static uint64_t            last_check_time = 0;
 
 static void
-admin_fg_complete_dispatch_cb(void* arg)
+admin_fg_init_once(void)
 {
-    admin_fg_result_t* r = (admin_fg_result_t*)arg;
-    if (!r || !r->ctx) {
-        free(r);
+    csilk_mutex_init(&g_admin_fg_mutex);
+}
+
+static inline void
+admin_fg_init(void)
+{
+    csilk_once(&g_admin_fg_once, admin_fg_init_once);
+}
+
+static void
+admin_fg_session_unref(admin_fg_session_t* s)
+{
+    if (!s) {
+        return;
+    }
+    if (atomic_fetch_sub_explicit(&s->ref_count, 1, memory_order_acq_rel) > 1) {
+        return;
+    }
+    char* leftover = atomic_exchange_explicit(&s->svg, NULL, memory_order_acq_rel);
+    free(leftover);
+    free(s);
+}
+
+static void
+admin_fg_defer_cleanup(void* arg)
+{
+    admin_fg_session_t* s = (admin_fg_session_t*)arg;
+    if (!s) {
+        return;
+    }
+    atomic_store_explicit(&s->cancelled, 1, memory_order_release);
+    char* leftover = atomic_exchange_explicit(&s->svg, NULL, memory_order_acq_rel);
+    free(leftover);
+    admin_fg_session_unref(s);
+}
+
+static void
+admin_fg_on_server_stop(csilk_server_t* server)
+{
+    admin_fg_init();
+    bool should_stop = false;
+    csilk_mutex_lock(&g_admin_fg_mutex);
+    if (g_active_fg_session && g_active_fg_session->server == server) {
+        atomic_store_explicit(&g_active_fg_session->cancelled, 1, memory_order_release);
+        should_stop = true;
+    }
+    csilk_mutex_unlock(&g_admin_fg_mutex);
+
+    if (should_stop) {
+        csilk_flamegraph_stop(NULL, NULL);
+    }
+}
+
+static void
+admin_fg_on_complete(csilk_ctx_t* c, void* result)
+{
+    admin_fg_session_t* s = (admin_fg_session_t*)result;
+    if (!c) {
         return;
     }
 
-    if (r->svg) {
-        csilk_set_header(r->ctx, "Content-Type", "image/svg+xml");
-        csilk_set_header(r->ctx, "Cache-Control", "no-cache");
-        csilk_status(r->ctx, 200);
-        csilk_set_response_body(r->ctx, r->svg, r->svg_len, 0);
+    char*  svg = s ? atomic_exchange_explicit(&s->svg, NULL, memory_order_acq_rel) : NULL;
+    size_t svg_len = s ? s->svg_len : 0;
+
+    if (svg) {
+        csilk_set_header(c, "Content-Type", "image/svg+xml");
+        csilk_set_header(c, "Cache-Control", "no-cache");
+        csilk_status(c, 200);
+        csilk_set_response_body(c, svg, svg_len, 1);
     } else {
-        csilk_json_error(r->ctx, 500, "No samples collected");
+        csilk_json_error(c, 500, "No samples collected");
     }
-    free(r->svg);
-    free(r);
+    _csilk_send_response(c);
 }
 
 /** @brief Flame-graph done callback (runs on sampler thread).
- *  Marshals the SVG result back to the worker via csilk_dispatch. */
+ *  Verifies connection/request liveness before marshalling back via csilk_async_op_t. */
 static void
 admin_fg_done_cb(char* svg, size_t svg_len, void* user_data)
 {
-    csilk_ctx_t* c = (csilk_ctx_t*)user_data;
+    admin_fg_session_t* s = (admin_fg_session_t*)user_data;
+    if (!s) {
+        free(svg);
+        return;
+    }
+
+    admin_fg_init();
+    csilk_mutex_lock(&g_admin_fg_mutex);
+    if (g_active_fg_session == s) {
+        g_active_fg_session = NULL;
+    }
+    csilk_mutex_unlock(&g_admin_fg_mutex);
+
+    if (atomic_load_explicit(&s->cancelled, memory_order_acquire) ||
+        !csilk_async_op_is_alive(s->op)) {
+        free(svg);
+        csilk_async_op_cancel(s->op);
+        admin_fg_session_unref(s);
+        return;
+    }
+
+    s->svg_len = svg_len;
+    atomic_store_explicit(&s->svg, svg, memory_order_release);
+
+    if (csilk_async_op_complete(s->op, s) < 0) {
+        char* leftover = atomic_exchange_explicit(&s->svg, NULL, memory_order_acq_rel);
+        free(leftover);
+    }
+    admin_fg_session_unref(s);
+}
+
+static void
+admin_start_flamegraph_async(csilk_ctx_t* c, useconds_t interval_us, uint64_t duration_ms)
+{
     if (!c) {
-        free(svg);
         return;
     }
 
-    admin_fg_result_t* r = (admin_fg_result_t*)malloc(sizeof(admin_fg_result_t));
-    if (!r) {
-        free(svg);
+    admin_fg_session_t* s = calloc(1, sizeof(admin_fg_session_t));
+    if (!s) {
+        csilk_json_error(c, 500, "Failed to allocate profiler session");
         return;
     }
-    r->ctx = c;
-    r->svg = svg;
-    r->svg_len = svg_len;
+    s->server = csilk_ctx_get_server(c);
+    atomic_init(&s->svg, NULL);
+    atomic_init(&s->cancelled, 0);
+    atomic_init(&s->ref_count, 2); /* 1 for csilk_ctx_defer, 1 for sampler done_cb */
 
-    if (_csilk_dispatch_try(c, admin_fg_complete_dispatch_cb, r) < 0) {
-        free(svg);
-        free(r);
+    s->op = csilk_async_op_begin(c, 0, admin_fg_on_complete, NULL, s);
+    if (!s->op) {
+        free(s);
+        csilk_json_error(c, 500, "Failed to start async operation");
+        return;
+    }
+
+    if (csilk_ctx_defer(c, admin_fg_defer_cleanup, s) != 0) {
+        csilk_async_op_cancel(s->op);
+        csilk_ctx_set_async(c, 0);
+        free(s);
+        csilk_json_error(c, 500, "Failed to register async cleanup");
+        return;
+    }
+
+    admin_fg_init();
+    csilk_mutex_lock(&g_admin_fg_mutex);
+    g_active_fg_session = s;
+    csilk_mutex_unlock(&g_admin_fg_mutex);
+
+    if (csilk_flamegraph_start_async(interval_us, duration_ms, admin_fg_done_cb, s) != 0) {
+        csilk_mutex_lock(&g_admin_fg_mutex);
+        if (g_active_fg_session == s) {
+            g_active_fg_session = NULL;
+        }
+        csilk_mutex_unlock(&g_admin_fg_mutex);
+
+        atomic_store_explicit(&s->cancelled, 1, memory_order_release);
+        csilk_async_op_cancel(s->op);
+        admin_fg_session_unref(s);
+        csilk_ctx_set_async(c, 0);
+        csilk_json_error(c, 500, "Failed to start profiler");
+        return;
     }
 }
 
 /* Externs from metrics.c */
 extern uint64_t atomic_load_http_requests(void);
 extern uint64_t atomic_load_http_duration(void);
-
-static uint64_t last_req_count = 0;
-static uint64_t last_check_time = 0;
 
 /** @brief Helper to serve the admin UI HTML. */
 static void
@@ -277,13 +402,10 @@ admin_flamegraph_handler(csilk_ctx_t* c)
         return;
     }
 
-    if (csilk_flamegraph_start_async(10000, 5000, admin_fg_done_cb, c) != 0) {
-        csilk_json_error(c, 500, "Failed to start profiler");
-        return;
-    }
+    admin_start_flamegraph_async(c, 10000, 5000);
 
-    /* Handler returns without sending a response; the dispatched callback
-     * will write the SVG when sampling completes. */
+    /* Handler returns without sending a response; the async op callback
+     * will write and flush the SVG when sampling completes. */
 }
 
 /** @brief Quick CPU profile — always available, non-blocking.
@@ -324,10 +446,7 @@ admin_profile_quick_handler(csilk_ctx_t* c)
     }
 
     /* Non-blocking: sampler auto-stops after 100 ms and dispatches result */
-    if (csilk_flamegraph_start_async(5000, 100, admin_fg_done_cb, c) != 0) {
-        csilk_json_error(c, 500, "Failed to start profiler");
-        return;
-    }
+    admin_start_flamegraph_async(c, 5000, 100);
 }
 
 typedef struct {
@@ -437,6 +556,12 @@ csilk_admin_serve_secure(csilk_app_t* app, const char* app_path, csilk_handler_t
     csilk_GET(group, "/profile", admin_profile_quick_handler); /* GET /admin/profile */
 
     CSILK_LOG_D("Admin routes registered relative to group prefix '%s'", app_path);
+
+    /* Ensure any active async flame-graph sampler stops cleanly before server teardown */
+    csilk_server_t* srv = csilk_app_server(app);
+    if (srv) {
+        csilk_server_add_hook(srv, CSILK_HOOK_SERVER_STOP, (void*)admin_fg_on_server_stop);
+    }
 
     /* The group struct and its middleware list have been copied into the router's 
      * handler chains for each registered route. The group builder object can now be freed. */

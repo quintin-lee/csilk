@@ -211,6 +211,25 @@ test_async_op_h2_aba_protection(void)
     printf("✓ test_async_op_h2_aba_protection passed\n");
 }
 
+static void
+test_async_op_is_alive_checks(void)
+{
+    csilk_ctx_t* c = csilk_test_ctx_new();
+    assert(c != NULL);
+    assert(csilk_async_op_is_alive(NULL) == 0);
+
+    csilk_async_op_t* op = csilk_async_op_begin(c, 0, _test_complete_cb, _test_timeout_cb, NULL);
+    assert(op != NULL);
+    assert(csilk_async_op_is_alive(op) == 1);
+
+    c->conn_closed = 1;
+    assert(csilk_async_op_is_alive(op) == 0);
+
+    assert(csilk_async_op_cancel(op) == 0);
+    csilk_test_ctx_free(c);
+    printf("✓ test_async_op_is_alive_checks passed\n");
+}
+
 int
 main(void)
 {
@@ -222,6 +241,7 @@ main(void)
     test_async_op_h2_stream_close_before_complete();
     test_async_op_timeout_cancellation_active_timer();
     test_async_op_h2_aba_protection();
+    test_async_op_is_alive_checks();
     printf("All csilk_async_op_t tests passed successfully!\n");
     return 0;
 }

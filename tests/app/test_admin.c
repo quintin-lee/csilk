@@ -3,17 +3,25 @@
  * @brief Tests for the admin dashboard module.
  * @copyright MIT License
  */
+#include <arpa/inet.h>
+#include <assert.h>
+#include <errno.h>
+#include <netinet/in.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 
 #include "csilk/app/admin.h"
 #include "csilk/app/app.h"
 #include "csilk/core/json/json.h"
+#include "csilk/core/sync.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
+#include "csilk/util/flamegraph.h"
 
 static int tests_run = 0;
 static int tests_passed = 0;
@@ -160,6 +168,219 @@ test_admin_serve_secure_and_stats_endpoint(void)
     csilk_app_free(app);
 }
 
+typedef struct {
+    csilk_app_t* app;
+    int          port;
+    atomic_int   ready;
+} admin_test_srv_t;
+
+static void
+admin_test_srv_thread(void* arg)
+{
+    admin_test_srv_t* srv = (admin_test_srv_t*)arg;
+    atomic_store(&srv->ready, 1);
+    csilk_app_run(srv->app, srv->port);
+}
+
+static int
+admin_pick_ephemeral_port(void)
+{
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        return -1;
+    }
+    int opt = 1;
+    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    addr.sin_port = 0;
+
+    int port = -1;
+    if (bind(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+        socklen_t len = sizeof(addr);
+        if (getsockname(sock, (struct sockaddr*)&addr, &len) == 0) {
+            port = ntohs(addr.sin_port);
+        }
+    }
+    close(sock);
+    return port;
+}
+
+static int
+admin_connect_localhost(int port)
+{
+    for (int attempt = 0; attempt < 50; attempt++) {
+        int sock = socket(AF_INET, SOCK_STREAM, 0);
+        if (sock < 0) {
+            return -1;
+        }
+        struct sockaddr_in addr = {0};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = htons((uint16_t)port);
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+            return sock;
+        }
+        close(sock);
+        usleep(10000);
+    }
+    return -1;
+}
+
+static void
+test_admin_profile_async_response(void)
+{
+    int port = admin_pick_ephemeral_port();
+    assert(port > 0);
+
+    csilk_app_t* app = csilk_app_new(nullptr);
+    assert(app != nullptr);
+    csilk_config_t*       full_cfg = csilk_app_config(app);
+    csilk_server_config_t cfg = full_cfg->server;
+    free(full_cfg);
+    /* Keep single worker for lightweight unit test */
+    cfg.worker_threads = 1;
+    csilk_app_set_server_config(app, cfg);
+    csilk_admin_serve_secure(app, "/admin", dummy_admin_auth_mw);
+
+    admin_test_srv_t srv = {app, port, 0};
+    csilk_thread_t   tid;
+    assert(csilk_thread_create(&tid, admin_test_srv_thread, &srv) == 0);
+    while (!atomic_load(&srv.ready)) {
+        csilk_thread_yield();
+    }
+
+    int sock = admin_connect_localhost(port);
+    if (sock < 0) {
+        csilk_server_stop(csilk_app_server(app));
+        csilk_thread_join(&tid);
+        csilk_app_free(app);
+        FAIL("could not connect to admin test server");
+        return;
+    }
+
+    const char* req = "GET /admin/profile HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    ssize_t     sent = send(sock, req, strlen(req), 0);
+    assert(sent == (ssize_t)strlen(req));
+
+    struct timeval tv = {3, 0};
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    char   buf[4096];
+    size_t total = 0;
+    buf[0] = '\0';
+    while (total < sizeof(buf) - 1) {
+        ssize_t n = recv(sock, buf + total, sizeof(buf) - 1 - total, 0);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        if (n <= 0) {
+            break;
+        }
+        total += (size_t)n;
+        buf[total] = '\0';
+        if (strstr(buf, "\r\n\r\n") && (strstr(buf, "</svg>") || strstr(buf, "No samples"))) {
+            break;
+        }
+    }
+    buf[total] = '\0';
+    close(sock);
+
+    csilk_server_stop(csilk_app_server(app));
+    csilk_thread_join(&tid);
+    csilk_app_free(app);
+
+    if (total > 0 && (strstr(buf, "HTTP/1.1 200") != nullptr ||
+                      strstr(buf, "No samples collected") != nullptr)) {
+        PASS();
+    } else {
+        FAIL("admin /profile async response missing or timed out");
+    }
+}
+
+static void
+test_admin_profile_disconnect_before_complete_no_uaf(void)
+{
+    int port = admin_pick_ephemeral_port();
+    assert(port > 0);
+
+    csilk_app_t*          app = csilk_app_new(nullptr);
+    csilk_config_t*       full_cfg = csilk_app_config(app);
+    csilk_server_config_t cfg = full_cfg->server;
+    free(full_cfg);
+    cfg.worker_threads = 1;
+    /* Short request timeout forces on_close() BEFORE 150ms sampler finishes */
+    cfg.read_timeout_ms = 30;
+    cfg.request_timeout_ms = 30;
+    csilk_app_set_server_config(app, cfg);
+    csilk_admin_serve_secure(app, "/admin", dummy_admin_auth_mw);
+
+    admin_test_srv_t srv = {app, port, 0};
+    csilk_thread_t   tid;
+    assert(csilk_thread_create(&tid, admin_test_srv_thread, &srv) == 0);
+    while (!atomic_load(&srv.ready)) {
+        csilk_thread_yield();
+    }
+
+    int sock = admin_connect_localhost(port);
+    assert(sock >= 0);
+
+    const char* req = "GET /admin/profile HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    ssize_t     sent = send(sock, req, strlen(req), 0);
+    assert(sent == (ssize_t)strlen(req));
+
+    /* Close client socket immediately and wait for timeout + sampler completion */
+    close(sock);
+    usleep(220000);
+
+    csilk_server_stop(csilk_app_server(app));
+    csilk_thread_join(&tid);
+    csilk_app_free(app);
+    PASS();
+}
+
+static void
+test_admin_flamegraph_server_stop_cancels_sampler(void)
+{
+    int port = admin_pick_ephemeral_port();
+    assert(port > 0);
+
+    csilk_app_t*          app = csilk_app_new(nullptr);
+    csilk_config_t*       full_cfg = csilk_app_config(app);
+    csilk_server_config_t cfg = full_cfg->server;
+    free(full_cfg);
+    cfg.worker_threads = 1;
+    csilk_app_set_server_config(app, cfg);
+    csilk_admin_serve_secure(app, "/admin", dummy_admin_auth_mw);
+
+    admin_test_srv_t srv = {app, port, 0};
+    csilk_thread_t   tid;
+    assert(csilk_thread_create(&tid, admin_test_srv_thread, &srv) == 0);
+    while (!atomic_load(&srv.ready)) {
+        csilk_thread_yield();
+    }
+
+    int sock = admin_connect_localhost(port);
+    assert(sock >= 0);
+
+    /* /admin/flamegraph starts a 5-second profiler; stopping the server mid-flight
+     * must cancel and join the sampler cleanly without waiting 5s or triggering UAF. */
+    const char* req =
+        "GET /admin/flamegraph HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    ssize_t sent = send(sock, req, strlen(req), 0);
+    assert(sent == (ssize_t)strlen(req));
+    usleep(40000);
+    close(sock);
+
+    csilk_server_stop(csilk_app_server(app));
+    csilk_thread_join(&tid);
+    csilk_app_free(app);
+    assert(csilk_flamegraph_is_running() == 0);
+    PASS();
+}
+
 int
 main(void)
 {
@@ -170,6 +391,9 @@ main(void)
     test_admin_ctx_storage_overflow();
     test_admin_serve_requires_auth();
     test_admin_serve_secure_and_stats_endpoint();
+    test_admin_profile_async_response();
+    test_admin_profile_disconnect_before_complete_no_uaf();
+    test_admin_flamegraph_server_stop_cancels_sampler();
 
     printf("\n=== Results: %d passed, %d failed ===\n", tests_passed, tests_run - tests_passed);
     return (tests_passed == tests_run) ? EXIT_SUCCESS : EXIT_FAILURE;

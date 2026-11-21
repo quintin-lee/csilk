@@ -431,7 +431,7 @@ csilk_async_token_validate(const csilk_async_token_t* token)
         return 0;
     }
     csilk_ctx_t* c = token->ctx;
-    if (c->conn_closed) {
+    if (atomic_load_explicit(&c->conn_closed, memory_order_acquire)) {
         return 0;
     }
     if (c->request_seq != token->request_seq) {
@@ -468,7 +468,7 @@ csilk_ctx_get_request_seq(csilk_ctx_t* c)
 int
 csilk_ctx_is_closed(csilk_ctx_t* c)
 {
-    return (!c || c->conn_closed);
+    return (!c || atomic_load_explicit(&c->conn_closed, memory_order_acquire));
 }
 
 /**
