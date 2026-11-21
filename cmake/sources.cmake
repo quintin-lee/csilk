@@ -236,6 +236,7 @@ set(CSILK_AI_SOURCES
     src/drivers/ai/anthropic.c
     src/drivers/ai/llama.c
     src/drivers/ai/tool_registry.c
+    src/plugins/ai/ai_plugin.c
 )
 
 # ── MQ Module (Message queue & Raft consensus) ───────────────────────────
