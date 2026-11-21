@@ -68,6 +68,8 @@ csilk_h2_send_response(csilk_ctx_t* c)
         p_prd = &prd;
     }
 
+    csilk_client_ref(client);
+    _csilk_stream_ref(c);
     nghttp2_submit_response(client->h2_session, c->stream_id, nva, (size_t)header_count, p_prd);
     if (nva != stack_hdrs) {
         free(nva);
@@ -76,6 +78,8 @@ csilk_h2_send_response(csilk_ctx_t* c)
     nghttp2_session_send(client->h2_session);
 
     _csilk_trigger_hooks(client->server, c, CSILK_HOOK_REQUEST_END);
+    _csilk_stream_unref(c);
+    csilk_client_unref(client);
 }
 
 /* --- Server push --- */
@@ -127,13 +131,10 @@ csilk_h2_submit_push(csilk_ctx_t* c, const char* method, const char* path)
 
     /* Build the request pseudo-headers for the pushed resource */
     nghttp2_nv push_headers[] = {
-        {(uint8_t*)":method",    (uint8_t*)method, 7, (uint8_t)strlen(method),    NGHTTP2_NV_FLAG_NONE},
-        {(uint8_t*)":path",      (uint8_t*)path,   5, (uint8_t)strlen(path),      NGHTTP2_NV_FLAG_NONE},
-        {(uint8_t*)":authority",
-         (uint8_t*)authority,
-         10,                                          (uint8_t)strlen(authority),
-         NGHTTP2_NV_FLAG_NONE                                                                         },
-        {(uint8_t*)":scheme",    (uint8_t*)scheme, 7, (uint8_t)strlen(scheme),    NGHTTP2_NV_FLAG_NONE},
+        {(uint8_t*)":method",    (uint8_t*)method,    7,  strlen(method),    NGHTTP2_NV_FLAG_NONE},
+        {(uint8_t*)":path",      (uint8_t*)path,      5,  strlen(path),      NGHTTP2_NV_FLAG_NONE},
+        {(uint8_t*)":authority", (uint8_t*)authority, 10, strlen(authority), NGHTTP2_NV_FLAG_NONE},
+        {(uint8_t*)":scheme",    (uint8_t*)scheme,    7,  strlen(scheme),    NGHTTP2_NV_FLAG_NONE},
     };
 
     /* Check if push is enabled by client */

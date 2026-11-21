@@ -56,7 +56,7 @@ _csilk_runtime_config_init(csilk_runtime_config_t* rc, const csilk_server_config
     unsigned int req_t = cfg ? cfg->request_timeout_ms : 0;
     size_t body = cfg && cfg->max_body_size ? cfg->max_body_size : CSILK_DEFAULT_MAX_BODY_SIZE;
     size_t hdr = cfg && cfg->max_header_size ? cfg->max_header_size : CSILK_DEFAULT_MAX_HEADER_SIZE;
-    size_t url = cfg ? cfg->max_url_size : 0;
+    size_t url = cfg && cfg->max_url_size ? cfg->max_url_size : CSILK_DEFAULT_MAX_URL_SIZE;
     size_t hdr_cnt = cfg ? cfg->max_headers_count : 0;
     int    max_conn = cfg ? cfg->max_connections : 0;
     int    simd = cfg ? cfg->enable_simd : 1;
@@ -114,6 +114,7 @@ csilk_server_new(csilk_router_t* router)
     s->config.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
     s->config.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
     s->config.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
+    s->config.max_url_size = CSILK_DEFAULT_MAX_URL_SIZE;
     s->config.listen_backlog = CSILK_DEFAULT_LISTEN_BACKLOG;
 
     /* Centralized initialization of all server atomics and runtime configs */
@@ -659,9 +660,10 @@ csilk_server_run(csilk_server_t* server, int port)
         csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
     }
     if (server->worker_pools && server->worker_pool_count > 0) {
+        worker_pool_t* wp0 = &server->worker_pools[0];
+        _csilk_worker_drain_dispatch(wp0);
         /* Force-teardown any client that remained on active_clients because
          * the loop exited early or its handle never finished closing. */
-        worker_pool_t* wp0 = &server->worker_pools[0];
         while (wp0->active_clients) {
             csilk_client_t* leftover = wp0->active_clients;
             if (leftover->state != CSILK_CONN_CLOSING) {
@@ -670,6 +672,7 @@ csilk_server_run(csilk_server_t* server, int port)
             client_list_remove(server, leftover);
             client_destroy(leftover);
         }
+        _csilk_worker_drain_dispatch(wp0);
     }
     return ret;
 }

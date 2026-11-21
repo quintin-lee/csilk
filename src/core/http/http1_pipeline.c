@@ -74,10 +74,11 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
         csilk_client_read_start(client);
     } else {
         CSILK_LOG_I("_csilk_handle_post_response: closing handle");
-        extern void csilk_conn_set_state(csilk_client_t * client, csilk_conn_state_t new_state);
         extern void on_close(csilk_io_handle_t * handle);
-        csilk_conn_set_state(client, CSILK_CONN_CLOSING);
         if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+            /* Do not pre-set CSILK_CONN_CLOSING here; on_close() performs the
+             * state transition, hook trigger, list removal, timer stop, and
+             * base ref release atomically once the close callback fires. */
             csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
         }
     }

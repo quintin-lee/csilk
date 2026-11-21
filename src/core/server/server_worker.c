@@ -397,6 +397,9 @@ worker_thread(void* arg)
     for (int i = 0; i < 1000 && csilk_io_loop_alive(loop_ptr); i++) {
         csilk_io_run(loop_ptr, CSILK_IO_RUN_NOWAIT);
     }
+    /* Drain queued cross-thread tasks while remaining clients are still valid
+     * so in-flight callbacks never dereference destroyed client pointers. */
+    _csilk_worker_drain_dispatch(wp);
     /* Ensure any active client whose handle close did not complete inside
      * the drain window is unlinked and returned to the worker pool before
      * the loop closes and csilk_server_free() releases pool entries. */
@@ -408,6 +411,7 @@ worker_thread(void* arg)
         client_list_remove(server, leftover);
         client_destroy(leftover);
     }
+    _csilk_worker_drain_dispatch(wp);
     csilk_arena_flush_free_list();
     csilk_body_pool_cleanup();
     csilk_io_loop_close(loop_ptr);

@@ -59,6 +59,20 @@ main()
     csilk_test_ctx_set_body(ctx, "{\"id\":", 6);
     assert(csilk_bind_reflect(ctx, "reflect_test_t", &data) == 0);
 
+    // 6b. Non-NUL-terminated borrowed body must not over-read past body_len
+    {
+        char non_nul_buf[64];
+        memset(non_nul_buf, 'X', sizeof(non_nul_buf));
+        const char* valid = "{\"id\":77,\"name\":\"bounded\"}";
+        size_t      vlen = strlen(valid);
+        memcpy(non_nul_buf, valid, vlen);
+        csilk_test_ctx_set_body(ctx, non_nul_buf, vlen);
+        reflect_test_t out = {0};
+        assert(csilk_bind_reflect(ctx, "reflect_test_t", &out) == 1);
+        assert(out.id == 77);
+        assert(strcmp(out.name, "bounded") == 0);
+    }
+
     // 7. csilk_json_reflect nullptr checks
     csilk_json_reflect(nullptr, 200, "reflect_test_t", &data); // Should not crash
     csilk_json_reflect(ctx, 200, "reflect_test_t", nullptr);   // Should not crash

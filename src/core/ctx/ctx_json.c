@@ -142,7 +142,20 @@ csilk_bind_reflect(csilk_ctx_t* c, const char* type_name, void* ptr)
         CSILK_LOG_D("Context: csilk_bind_reflect failed: no type name specified or inferred");
         return 0;
     }
-    int ret = csilk_json_unmarshal(type_name, c->request.body, ptr);
+    size_t body_len = c->request.body_len;
+    if (body_len == 0) {
+        CSILK_LOG_D("Context: csilk_bind_reflect failed: empty request body");
+        return 0;
+    }
+    char* json_buf = malloc(body_len + 1);
+    if (!json_buf) {
+        CSILK_LOG_W("Context: csilk_bind_reflect failed: OOM");
+        return 0;
+    }
+    memcpy(json_buf, c->request.body, body_len);
+    json_buf[body_len] = '\0';
+    int ret = csilk_json_unmarshal(type_name, json_buf, ptr);
+    free(json_buf);
     if (!ret) {
         CSILK_LOG_W("Context: failed to unmarshal request body JSON to type '%s'", type_name);
     } else {
