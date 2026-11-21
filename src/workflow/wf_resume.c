@@ -49,6 +49,11 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
     if (!f) {
         return;
     }
+    size_t ncnt = wf->node_count;
+    if (ncnt == 0) {
+        fclose(f);
+        return;
+    }
     csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
     if (!ctx) {
         fclose(f);
@@ -57,7 +62,6 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
     atomic_init(&ctx->nodes_active, 0);
     ctx->wf = wf;
     ctx->callback = callback;
-    size_t ncnt = wf->node_count > 0 ? wf->node_count : 1;
     ctx->node_input_counts = calloc(ncnt, sizeof(int));
     ctx->node_approved = calloc(ncnt, sizeof(int));
     ctx->node_outputs = calloc(ncnt, sizeof(csilk_data_t*));
@@ -92,7 +96,7 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
         }
         char* payload = NULL;
         if (header.payload_len > 0) {
-            payload = malloc((size_t)header.payload_len + 1);
+            payload = calloc((size_t)header.payload_len + 1U, 1U);
             if (!payload) {
                 break;
             }
@@ -100,14 +104,13 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
                 free(payload);
                 break;
             }
-            payload[header.payload_len] = '\0';
         }
         switch (header.type) {
         case WF_EV_NODE_START:
             if (!payload) {
                 break;
             }
-            for (size_t i = 0; i < wf->node_count; i++) {
+            for (size_t i = 0; i < ncnt; i++) {
                 if (strcmp(wf->nodes[i]->id, payload) == 0) {
                     node_started[i] = 1;
                     break;
@@ -130,7 +133,7 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
             }
             char* data_val = data_type + dtype_len + 1;
 
-            for (size_t i = 0; i < wf->node_count; i++) {
+            for (size_t i = 0; i < ncnt; i++) {
                 if (strcmp(wf->nodes[i]->id, node_id) == 0) {
                     node_finished[i] = 1;
                     ctx->node_outputs[i] =
@@ -171,7 +174,11 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
     } else if (ctx->is_paused) {
         _wf_cleanup_ctx(ctx);
     } else {
-        for (size_t i = 0; i < wf->node_count; i++) {
+        size_t n_limit = wf->node_count;
+        if (n_limit > ncnt) {
+            n_limit = ncnt;
+        }
+        for (size_t i = 0; i < n_limit; i++) {
             csilk_wf_node_t* n = wf->nodes[i];
             int              trigger = 0;
             csilk_data_t*    trigger_input = ctx->initial_input;
@@ -184,7 +191,7 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
                 }
             }
             if (trigger) {
-                for (size_t j = 0; j < wf->node_count; j++) {
+                for (size_t j = 0; j < n_limit; j++) {
                     csilk_wf_node_t* p = wf->nodes[j];
                     for (size_t k = 0; k < p->edge_count; k++) {
                         if (p->edges[k].target == n && node_finished[j]) {
@@ -239,6 +246,11 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
         return;
     }
 
+    size_t ncnt = wf->node_count;
+    if (ncnt == 0) {
+        fclose(f);
+        return;
+    }
     csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
     if (!ctx) {
         fclose(f);
@@ -247,7 +259,6 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
     atomic_init(&ctx->nodes_active, 0);
     ctx->wf = wf;
     ctx->callback = callback;
-    size_t ncnt = wf->node_count > 0 ? wf->node_count : 1;
     ctx->node_input_counts = calloc(ncnt, sizeof(int));
     ctx->node_approved = calloc(ncnt, sizeof(int));
     ctx->node_outputs = calloc(ncnt, sizeof(csilk_data_t*));
@@ -280,7 +291,7 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
         }
         char* payload = NULL;
         if (header.payload_len > 0) {
-            payload = malloc((size_t)header.payload_len + 1);
+            payload = calloc((size_t)header.payload_len + 1U, 1U);
             if (!payload) {
                 break;
             }
@@ -288,7 +299,6 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
                 free(payload);
                 break;
             }
-            payload[header.payload_len] = '\0';
         }
         switch (header.type) {
         case WF_EV_NODE_FINISH: {
