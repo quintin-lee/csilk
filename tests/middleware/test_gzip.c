@@ -19,13 +19,30 @@ _csilk_send_response(csilk_ctx_t* c)
 
 /* Configurable mock downstream handler body. */
 static size_t g_mock_body_len = 2000;
+static int    g_mock_incompressible = 0;
+
+static void
+fill_xorshift64(char* dst, size_t len)
+{
+    uint64_t x = 0x9E3779B97F4A7C15ULL;
+    for (size_t i = 0; i < len; i++) {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        dst[i] = (char)(x & 0xFFu);
+    }
+}
 
 static void
 mock_handler(csilk_ctx_t* c)
 {
     char* body = malloc(g_mock_body_len ? g_mock_body_len : 1);
-    for (size_t i = 0; i < g_mock_body_len; i++) {
-        body[i] = 'A';
+    if (g_mock_incompressible) {
+        fill_xorshift64(body, g_mock_body_len);
+    } else {
+        for (size_t i = 0; i < g_mock_body_len; i++) {
+            body[i] = 'A';
+        }
     }
     csilk_set_response_body(c, body, g_mock_body_len, 1);
     csilk_status(c, CSILK_STATUS_OK);
@@ -210,6 +227,49 @@ test_gzip_skip_below_min_length(void)
     printf("skip below min length passed!\n");
 }
 
+static void
+test_gzip_skip_incompressible_payload_sync_and_async(void)
+{
+    printf("Testing gzip skip incompressible pseudo-random payload (sync & async)...\n");
+
+    /* 1. Sync inline path (< 32768 bytes) */
+    g_mock_incompressible = 1;
+    csilk_ctx_t* c_sync = run_gzip(0, 2048, "gzip", NULL, NULL);
+    g_mock_incompressible = 0;
+    size_t      sync_len = 0;
+    const char* sync_body = csilk_get_response_body(c_sync, &sync_len);
+    assert(sync_len == 2048);
+    assert(sync_body != NULL);
+    assert(csilk_get_response_header(c_sync, "Content-Encoding") == NULL);
+    csilk_test_ctx_free(c_sync);
+
+    /* 2. Async work/after callback path (>= 32768 bytes) */
+    csilk_ctx_t* c_async = csilk_test_ctx_new();
+    char*        raw = malloc(40000);
+    assert(raw != NULL);
+    fill_xorshift64(raw, 40000);
+    csilk_set_response_body(c_async, raw, 40000, 1);
+    csilk_status(c_async, CSILK_STATUS_OK);
+
+    gzip_async_state_t* st = calloc(1, sizeof(gzip_async_state_t));
+    assert(st != NULL);
+    csilk_set(c_async, "gzip_state", st);
+
+    csilk_io_work_t* req = csilk_get_work_req(c_async);
+    req->data = c_async;
+    _csilk_gzip_work_cb(req);
+    _csilk_gzip_after_work_cb(req, 0);
+
+    size_t      async_len = 0;
+    const char* async_body = csilk_get_response_body(c_async, &async_len);
+    assert(async_len == 40000);
+    assert(async_body != NULL);
+    assert(csilk_get_response_header(c_async, "Content-Encoding") == NULL);
+    csilk_test_ctx_free(c_async);
+
+    printf("skip incompressible pseudo-random payload passed!\n");
+}
+
 int
 main(void)
 {
@@ -222,6 +282,7 @@ main(void)
     test_gzip_skip_incompressible();
     test_gzip_skip_no_accept_encoding();
     test_gzip_skip_below_min_length();
+    test_gzip_skip_incompressible_payload_sync_and_async();
     printf("test_gzip: ALL PASSED\n");
     return 0;
 }

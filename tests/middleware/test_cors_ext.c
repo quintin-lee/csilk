@@ -181,6 +181,28 @@ test_cors_preflight_short_circuit()
     printf("test_cors_preflight_short_circuit passed\n");
 }
 
+void
+test_cors_origin_list_wildcard_with_credentials_rejected(void)
+{
+    printf("Testing CORS multi-origin list rejects wildcard with credentials...\n");
+    const char* list[] = {"*", NULL};
+
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    csilk_test_ctx_set_request(ctx, "GET", "/");
+    csilk_set_request_header(ctx, "Origin", "*");
+
+    csilk_cors_config_t config = {
+        .allow_origin_list = list, .echo_origin = 0, .allow_credentials = 1};
+    csilk_cors_middleware(ctx, &config);
+
+    assert(get_response_header(ctx, "Access-Control-Allow-Origin") == nullptr);
+    const char* creds = get_response_header(ctx, "Access-Control-Allow-Credentials");
+    assert(creds != nullptr && strcmp(creds, "true") == 0);
+
+    csilk_test_ctx_free(ctx);
+    printf("test_cors_origin_list_wildcard_with_credentials_rejected passed\n");
+}
+
 int
 main()
 {
@@ -191,6 +213,7 @@ main()
     test_cors_max_age_set();
     test_cors_wildcard_with_credentials_rejected();
     test_cors_origin_list_match_and_echo();
+    test_cors_origin_list_wildcard_with_credentials_rejected();
     test_cors_preflight_short_circuit();
     printf("test_cors_ext: ALL PASSED\n");
     return 0;

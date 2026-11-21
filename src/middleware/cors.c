@@ -67,11 +67,16 @@ csilk_cors_middleware(csilk_ctx_t* c, const csilk_cors_config_t* config)
         }
         if (matched) {
             const char* allow = config->echo_origin ? origin : matched_origin;
-            CSILK_LOG_T("CORS: Origin %s matched allow_origin_list; allowing %s", origin, allow);
-            csilk_set_header(c, "Access-Control-Allow-Origin", allow);
-            /* Echoed (or specific) origin is non-wildcard -> add Vary: Origin. */
-            if (strcmp(allow, "*") != 0) {
-                csilk_set_header(c, "Vary", "Origin");
+            if (config->allow_credentials && strcmp(allow, "*") == 0) {
+                CSILK_LOG_W("CORS: Cannot use wildcard origin with credentials");
+            } else {
+                CSILK_LOG_T(
+                    "CORS: Origin %s matched allow_origin_list; allowing %s", origin, allow);
+                csilk_set_header(c, "Access-Control-Allow-Origin", allow);
+                /* Echoed (or specific) origin is non-wildcard -> add Vary: Origin. */
+                if (strcmp(allow, "*") != 0) {
+                    csilk_set_header(c, "Vary", "Origin");
+                }
             }
         } else {
             CSILK_LOG_D("CORS: Origin %s not in allow_origin_list; no allow-origin header",
