@@ -61,6 +61,7 @@ set(CSILK_RUNTIME_SOURCES
     src/core/server/server_rcu.c
     src/core/server/server_shutdown.c
     src/core/server/server_worker.c
+    src/core/plugin/loader.c
     src/util/flamegraph.c
     src/util/csv.c
 )
