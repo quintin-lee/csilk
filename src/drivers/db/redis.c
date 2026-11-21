@@ -67,14 +67,15 @@ redis_parse_dsn(const char* dsn, char** host, int* port, char** password, int* d
         return;
     }
 
-    char* token = strtok(buf, ";");
+    char* saveptr = NULL;
+    char* token = strtok_r(buf, ";", &saveptr);
     while (token) {
         while (*token == ' ') {
             token++;
         }
         char* eq = strchr(token, '=');
         if (!eq) {
-            token = strtok(NULL, ";");
+            token = strtok_r(NULL, ";", &saveptr);
             continue;
         }
         *eq = '\0';
@@ -93,7 +94,7 @@ redis_parse_dsn(const char* dsn, char** host, int* port, char** password, int* d
             *db = atoi(val);
         }
 
-        token = strtok(NULL, ";");
+        token = strtok_r(NULL, ";", &saveptr);
     }
     free(buf);
 }

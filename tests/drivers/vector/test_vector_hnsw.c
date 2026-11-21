@@ -390,6 +390,78 @@ test_hnsw_mmap_cold_start_and_db_api(void)
     printf("test_hnsw_mmap_cold_start_and_db_api passed\n");
 }
 
+static void
+test_hnsw_corrupt_snapshot_rejected(void)
+{
+    /* Craft a minimal truncated/corrupt v2 snapshot header with reversed string/graph
+     * offsets and out-of-bounds neighbor/string offsets — both load and mmap_open
+     * must reject it cleanly without OOB reads or huge allocations. */
+    const char* bad_path = "/tmp/test_hnsw_bad_v2.bin";
+    uint8_t     buf[256];
+    memset(buf, 0, sizeof(buf));
+
+    uint32_t magic = 0x57534E48U; /* CSILK_HNSW_MAGIC */
+    uint32_t ver = 2;
+    uint32_t dim = 4;
+    uint32_t metric = 0;
+    uint32_t m = 8;
+    uint32_t ef_c = 16;
+    uint32_t ef_s = 16;
+    uint32_t enter_id = 0;
+    int32_t  max_level = 0;
+    uint32_t node_count = 1;
+    uint32_t stride = 16;
+    FILE*    fp = fopen(bad_path, "wb");
+    assert(fp != nullptr);
+    uint32_t words[12] = {magic,
+                          ver,
+                          dim,
+                          metric,
+                          m,
+                          ef_c,
+                          ef_s,
+                          enter_id,
+                          (uint32_t)max_level,
+                          node_count,
+                          stride,
+                          1};
+    memset(buf, 0, sizeof(buf));
+    memcpy(buf, words, sizeof(words));
+    fwrite(buf, 1, sizeof(buf), fp);
+    fclose(fp);
+
+    /* Non-existent / corrupt headers return NULL cleanly without crash */
+    assert(csilk_hnsw_load(bad_path) == nullptr);
+    assert(csilk_hnsw_mmap_open(bad_path) == nullptr);
+
+    /* Valid snapshot mutated to invert string_offset > graph_offset (bytes 64..79) must be rejected */
+    csilk_hnsw_index_t* idx = csilk_hnsw_index_new(4, 0);
+    assert(idx != nullptr);
+    float vec[4] = {1.0f, 0.0f, 0.0f, 0.0f};
+    assert(csilk_hnsw_insert(idx, "n0", vec) == 0);
+    assert(csilk_hnsw_save(idx, bad_path) == 0);
+    csilk_hnsw_index_free(idx);
+
+    FILE* fp2 = fopen(bad_path, "r+b");
+    assert(fp2 != nullptr);
+    uint8_t raw[128];
+    size_t  nr = fread(raw, 1, sizeof(raw), fp2);
+    assert(nr == 128);
+    /* Set string_offset = 0x00FF.. and graph_offset = 0x00FF.. (out of bounds + underflow) */
+    uint64_t bad_str_off = 200;
+    uint64_t bad_graph_off = 150;
+    memcpy(raw + 64, &bad_str_off, sizeof(bad_str_off));
+    memcpy(raw + 72, &bad_graph_off, sizeof(bad_graph_off));
+    fseek(fp2, 0, SEEK_SET);
+    fwrite(raw, 1, sizeof(raw), fp2);
+    fclose(fp2);
+
+    assert(csilk_hnsw_load(bad_path) == nullptr);
+    assert(csilk_hnsw_mmap_open(bad_path) == nullptr);
+    remove(bad_path);
+    printf("test_hnsw_corrupt_snapshot_rejected passed\n");
+}
+
 int
 main(void)
 {
@@ -398,6 +470,7 @@ main(void)
     test_hnsw_save_load_persistence();
     test_hnsw_1000dim_recall_95pct();
     test_hnsw_mmap_cold_start_and_db_api();
+    test_hnsw_corrupt_snapshot_rejected();
     printf("All test_vector_hnsw tests passed successfully!\n");
     return 0;
 }

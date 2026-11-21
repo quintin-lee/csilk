@@ -23,28 +23,47 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "csilk/core/sync.h"
 #include "csilk/csilk.h"
 
 /** @brief Global driver registry (fixed-size array, max 16). */
 static csilk_perm_driver_t* drivers[16];
 static int                  driver_count = 0;
 /** @brief Currently active default driver for authorization checks. */
-static csilk_perm_driver_t* default_driver = NULL;
-static atomic_int           perm_initialized = 0;
+static _Atomic(csilk_perm_driver_t*) default_driver = NULL;
+static csilk_once_t                  perm_init_once = CSILK_ONCE_INIT;
+static csilk_mutex_t                 s_perm_mutex;
+static csilk_once_t                  s_perm_mutex_once = CSILK_ONCE_INIT;
+
+static void
+perm_mutex_init_once(void)
+{
+    csilk_mutex_init(&s_perm_mutex);
+}
+
+static void
+perm_mutex_lock(void)
+{
+    csilk_once(&s_perm_mutex_once, perm_mutex_init_once);
+    csilk_mutex_lock(&s_perm_mutex);
+}
+
+static void
+perm_do_init_once(void)
+{
+    CSILK_LOG_I("Permissions: Initializing permission subsystem");
+    csilk_perm_simple_init();
+}
 
 /** @brief Initialize the permission subsystem.
  *
  * Installs the built-in "simple" permission driver on first call.
- * Idempotent via atomic CAS — subsequent calls are no-ops.
+ * Thread-safe via csilk_once — concurrent callers block until initialization finishes.
  * @note Must be called before any authorization checks. */
 void
 csilk_perm_init(void)
 {
-    int expected = 0;
-    if (atomic_compare_exchange_strong(&perm_initialized, &expected, 1)) {
-        CSILK_LOG_I("Permissions: Initializing permission subsystem");
-        csilk_perm_simple_init();
-    }
+    csilk_once(&perm_init_once, perm_do_init_once);
 }
 
 /** @brief Register a permission driver in the global registry.
@@ -60,24 +79,33 @@ csilk_perm_init(void)
 int
 csilk_perm_register_driver(const char* name, csilk_perm_driver_t* driver)
 {
-    if (!name || !driver || driver_count >= 16) {
-        CSILK_LOG_E("Permissions: Failed to register driver '%s': %s",
-                    name ? name : "NULL",
-                    (!name || !driver) ? "invalid arguments" : "registry is full");
+    if (!name || !driver) {
+        CSILK_LOG_E("Permissions: Failed to register driver '%s': invalid arguments",
+                    name ? name : "NULL");
         return -1;
     }
 
-    if (csilk_perm_get_driver(name)) {
-        return 0;
+    perm_mutex_lock();
+    for (int i = 0; i < driver_count; i++) {
+        if (strcmp(drivers[i]->name, name) == 0) {
+            csilk_mutex_unlock(&s_perm_mutex);
+            return 0;
+        }
+    }
+    if (driver_count >= 16) {
+        csilk_mutex_unlock(&s_perm_mutex);
+        CSILK_LOG_E("Permissions: Failed to register driver '%s': registry is full", name);
+        return -1;
     }
 
     driver->name = name;
     drivers[driver_count++] = driver;
     CSILK_LOG_I("Permissions: Registered driver '%s'", name);
-    if (!default_driver) {
-        default_driver = driver;
+    if (!atomic_load_explicit(&default_driver, memory_order_acquire)) {
+        atomic_store_explicit(&default_driver, driver, memory_order_release);
         CSILK_LOG_I("Permissions: Set '%s' as the default driver", name);
     }
+    csilk_mutex_unlock(&s_perm_mutex);
     return 0;
 }
 
@@ -92,12 +120,16 @@ csilk_perm_get_driver(const char* name)
     if (!name) {
         return NULL;
     }
+    perm_mutex_lock();
+    csilk_perm_driver_t* found = NULL;
     for (int i = 0; i < driver_count; i++) {
         if (strcmp(drivers[i]->name, name) == 0) {
-            return drivers[i];
+            found = drivers[i];
+            break;
         }
     }
-    return NULL;
+    csilk_mutex_unlock(&s_perm_mutex);
+    return found;
 }
 
 /** @brief Set the default permission driver by name.
@@ -112,7 +144,7 @@ csilk_perm_set_default(const char* name)
         CSILK_LOG_E("Permissions: Failed to set default driver to '%s': driver not found", name);
         return -1;
     }
-    default_driver = d;
+    atomic_store_explicit(&default_driver, d, memory_order_release);
     CSILK_LOG_I("Permissions: Set default driver to '%s'", name);
     return 0;
 }
@@ -127,11 +159,12 @@ csilk_perm_set_default(const char* name)
 int
 csilk_perm_check(csilk_ctx_t* c, const char* permission, const char* resource)
 {
-    if (!default_driver || !default_driver->check) {
+    csilk_perm_driver_t* drv = atomic_load_explicit(&default_driver, memory_order_acquire);
+    if (!drv || !drv->check) {
         CSILK_LOG_E("Permissions: Permission check failed: no default driver set");
         return -1;
     }
-    return default_driver->check(c, permission, resource);
+    return drv->check(c, permission, resource);
 }
 
 /** @brief Require a permission and abort the request if denied.

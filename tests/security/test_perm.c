@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "csilk/drivers/perm.h"
 #include "csilk/test/test.h"
 
@@ -353,10 +354,36 @@ test_perm_auto_middleware_no_handler()
     printf("test_perm_auto_middleware_no_handler passed\n");
 }
 
+static void
+perm_init_worker(void* arg)
+{
+    (void)arg;
+    csilk_perm_init();
+    csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_set(c, "role", "guest");
+    (void)csilk_perm_check(c, "read", "doc:1");
+    csilk_test_ctx_free(c);
+}
+
+static void
+test_perm_concurrent_init_check(void)
+{
+    csilk_thread_t tids[4];
+    for (int i = 0; i < 4; i++) {
+        assert(csilk_thread_create(&tids[i], perm_init_worker, nullptr) == 0);
+    }
+    for (int i = 0; i < 4; i++) {
+        assert(csilk_thread_join(&tids[i]) == 0);
+    }
+    printf("test_perm_concurrent_init_check passed\n");
+}
+
 int
 main()
 {
     csilk_perm_init();
+
+    test_perm_concurrent_init_check();
 
     test_perm_simple_no_role();
     test_perm_simple_role_from_csilk_get();

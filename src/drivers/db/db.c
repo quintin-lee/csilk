@@ -1624,7 +1624,8 @@ _csilk_db_bind_typed_param(csilk_stmt_t* stmt, int index, const csilk_db_param_t
 static csilk_json_t*
 _csilk_db_run_param_stmt_query(csilk_db_pool_t* pool, const char* sql, const char** params)
 {
-    if (!pool || !sql) {
+    if (!pool || !sql || !pool->driver || !pool->driver->stmt_prepare ||
+        !pool->driver->stmt_query_json || !pool->driver->stmt_close) {
         return NULL;
     }
 
@@ -1691,7 +1692,8 @@ _csilk_db_run_param_stmt_query_typed(csilk_db_pool_t*        pool,
                                      const char*             sql,
                                      const csilk_db_param_t* params)
 {
-    if (!pool || !sql || !params) {
+    if (!pool || !sql || !params || !pool->driver || !pool->driver->stmt_prepare ||
+        !pool->driver->stmt_query_json || !pool->driver->stmt_close) {
         return NULL;
     }
 
@@ -1759,7 +1761,8 @@ _csilk_db_run_param_stmt_query_typed(csilk_db_pool_t*        pool,
 static int
 _csilk_db_run_param_stmt_exec(csilk_db_pool_t* pool, const char* sql, const char** params)
 {
-    if (!pool || !sql || !params) {
+    if (!pool || !sql || !params || !pool->driver || !pool->driver->stmt_prepare ||
+        !pool->driver->stmt_execute || !pool->driver->stmt_close) {
         return -1;
     }
 
@@ -1819,7 +1822,8 @@ _csilk_db_run_param_stmt_exec_typed(csilk_db_pool_t*        pool,
                                     const char*             sql,
                                     const csilk_db_param_t* params)
 {
-    if (!pool || !sql || !params) {
+    if (!pool || !sql || !params || !pool->driver || !pool->driver->stmt_prepare ||
+        !pool->driver->stmt_execute || !pool->driver->stmt_close) {
         return -1;
     }
 
