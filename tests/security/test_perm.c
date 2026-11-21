@@ -244,6 +244,49 @@ test_perm_router_route_extended_perm()
     printf("test_perm_router_route_extended_perm passed\n");
 }
 
+/** @brief Verify that the simple driver can be re-initialized after the
+ * rule table has been cleared (csilk_perm_simple_clear()).
+ *
+ * The simple driver is a process-lifetime singleton: csilk_perm_simple_clear()
+ * empties the rule table but must leave the driver fully usable, so
+ * csilk_perm_simple_init() (as called by Perm.init() on every new csilk app)
+ * can re-register it and allow fresh rules without crashing on a destroyed
+ * or double-registered mutex.
+ *
+ * NOTE: this function must run BEFORE test_perm_custom_driver, which switches
+ * the default driver to "mock" and does not restore it.  The re-init sequence
+ * relies on the simple driver being the active default. */
+void
+test_perm_reinit_after_clear()
+{
+    printf("Testing simple perm re-init after clear...\n");
+    csilk_ctx_t* c = csilk_test_ctx_new();
+    csilk_set(c, "role", "user");
+
+    /* Ensure the simple driver is the active default. */
+    csilk_perm_set_default("simple");
+
+    csilk_perm_simple_allow("user", "read", "articles:*");
+    int rc = csilk_perm_check(c, "read", "articles:99");
+    assert(rc == 0);
+
+    /* Clear the table: the driver registration must survive. */
+    csilk_perm_simple_clear();
+    rc = csilk_perm_check(c, "read", "articles:99");
+    assert(rc == -1); /* no rules -> denied */
+
+    /* Re-init exactly as csilk_perm_init() does on the next app startup. */
+    csilk_perm_simple_init();
+    csilk_perm_simple_allow("user", "write", "orders:*");
+    rc = csilk_perm_check(c, "write", "orders:77");
+    assert(rc == 0);
+    rc = csilk_perm_check(c, "read", "articles:99");
+    assert(rc == -1); /* old rule was cleared */
+
+    csilk_test_ctx_free(c);
+    printf("test_perm_reinit_after_clear passed\n");
+}
+
 void
 test_perm_auto_middleware_allowed()
 {
@@ -323,29 +366,11 @@ main()
     test_perm_simple_deny_no_rule();
     test_perm_simple_exact_match();
     test_perm_simple_prefix_resource();
-    test_perm_custom_driver();
     test_perm_router_route_perm();
     test_perm_router_route_extended_perm();
+    test_perm_reinit_after_clear();
 
-    /*
-     * csilk_perm_simple_clear() must leave the driver in a usable state:
-     * the rule table is emptied but the process-lifetime mutex stays valid,
-     * so checks on a fresh context are denied (no rules) rather than
-     * aborting via pthread EINVAL.  Without this the Python integration
-     * suite (which runs clear() between apps) hit SIGABRT on the next
-     * Perm.check().
-     */
-    {
-        csilk_ctx_t* c2 = csilk_test_ctx_new();
-        csilk_set(c2, "role", "user");
-        csilk_perm_simple_clear();
-        int rc = csilk_perm_check(c2, "read", "articles:123");
-        assert(rc == -1);
-        csilk_perm_simple_allow("user", "write", "orders:*");
-        rc = csilk_perm_check(c2, "write", "orders:77");
-        assert(rc == 0);
-        csilk_test_ctx_free(c2);
-    }
+    test_perm_custom_driver();
 
     test_perm_auto_middleware_allowed();
     test_perm_auto_middleware_denied();
