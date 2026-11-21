@@ -18,6 +18,7 @@
 
 /* Forward declarations — avoids pulling the entire public API via csilk.h.
    types.h defines csilk_storage_driver_t which this header needs. */
+#include "csilk/core/sys_io.h"
 #include "csilk/core/types.h"
 
 /**
@@ -674,6 +675,39 @@ int csilk_db_exec_param_async(csilk_db_pool_t*       pool,
                               const char**           params,
                               csilk_db_exec_async_cb cb,
                               void*                  user_data);
+
+/**
+ * @brief Callback type for csilk_db_query_async() with error category.
+ *
+ * @param result    JSON array of row objects (caller owns and must csilk_json_free),
+ *                  or NULL on failure.
+ * @param err       Error category (CSILK_DB_OK on success).
+ * @param user_data Opaque user data pointer passed to csilk_db_query_async().
+ */
+typedef void (*csilk_db_query_async_cb)(csilk_json_t* result, csilk_db_err_t err, void* user_data);
+
+/**
+ * @brief Execute a slow SQL query asynchronously on the I/O thread pool.
+ *
+ * Deep-copies @p sql and optional @p params, schedules execution via
+ * csilk_io_queue_work() on @p loop (defaults to csilk_io_default_loop() when NULL),
+ * acquires an idle pool connection, executes the query outside pool->mutex,
+ * and delivers the result and error category on @p loop.
+ *
+ * @param pool      Connection pool (must not be NULL).
+ * @param sql       SQL SELECT query (with optional ? placeholders when @p params != NULL).
+ * @param params    NULL-terminated array of string parameter values, or NULL for raw query.
+ * @param loop      Target event loop for completion callback, or NULL for csilk_io_default_loop().
+ * @param cb        Completion callback invoked on @p loop (must not be NULL).
+ * @param user_data Opaque pointer forwarded to @p cb.
+ * @return 0 if queued successfully, -1 on invalid arguments or allocation failure.
+ */
+int csilk_db_query_async(csilk_db_pool_t*        pool,
+                         const char*             sql,
+                         const char**            params,
+                         csilk_io_loop_t*        loop,
+                         csilk_db_query_async_cb cb,
+                         void*                   user_data);
 
 /**
  * @brief Execute a statement that produces no result rows.

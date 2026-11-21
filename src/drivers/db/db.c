@@ -53,6 +53,17 @@ static atomic_uint_fast64_t db_execs_total = 0;
 static atomic_uint_fast64_t db_errors_total = 0;
 static atomic_uint_fast64_t db_duration_us_total = 0;
 
+/* --- Thread-local active connection & error binding for unlocked execution --- */
+static _Thread_local csilk_db_pool_t* tls_bound_pool = NULL;
+static _Thread_local void*            tls_bound_conn = NULL;
+static _Thread_local csilk_db_err_t   tls_last_err = CSILK_DB_OK;
+
+/* --- Driver Registry --- */
+static csilk_db_driver_t* drivers[16];
+static int                driver_count = 0;
+static csilk_mutex_t      registry_mutex;
+static int                registry_initialized = 0;
+
 char*
 csilk_sql_rewrite_placeholders(const char* sql, int* out_param_count)
 {
@@ -140,7 +151,189 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
 void*
 csilk_db_pool_get_connection(csilk_db_pool_t* pool)
 {
-    return pool ? pool->connection : NULL;
+    if (!pool) {
+        return NULL;
+    }
+    if (tls_bound_pool == pool && tls_bound_conn != NULL) {
+        return tls_bound_conn;
+    }
+    return pool->connection;
+}
+
+static bool
+_db_pool_has_any_conn_locked(const csilk_db_pool_t* pool)
+{
+    if (!pool) {
+        return false;
+    }
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
+    if (n > 1) {
+        for (int i = 0; i < n; i++) {
+            if (pool->connections[i]) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return pool->connection != NULL;
+}
+
+static bool
+_db_pool_has_free_slot_locked(const csilk_db_pool_t* pool)
+{
+    if (!pool) {
+        return false;
+    }
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
+    if (n > 1) {
+        for (int i = 0; i < n; i++) {
+            if (pool->connections[i] && !pool->conn_holder_flags[i]) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return (pool->connection != NULL && !pool->conn_holder_set);
+}
+
+static bool
+_db_claim_slot_locked(csilk_db_pool_t* pool,
+                      csilk_thread_t   me,
+                      bool             pin_slot0,
+                      int*             out_slot,
+                      void**           out_conn,
+                      bool*            out_reentrant)
+{
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
+    if (n > 1) {
+        /* 1. Check if calling thread already holds a slot (reentrant/idempotent). */
+        for (int i = 0; i < n; i++) {
+            if (pool->connections[i] && pool->conn_holder_flags[i] && pool->conn_holders[i] == me) {
+                *out_slot = i;
+                *out_conn = pool->connections[i];
+                *out_reentrant = true;
+                return true;
+            }
+        }
+        /* 2. Claim an available slot (or slot 0 only when pin_slot0 is requested). */
+        int limit = pin_slot0 ? 1 : n;
+        for (int i = 0; i < limit; i++) {
+            if (!pool->connections[i]) {
+                continue;
+            }
+            if (!pool->conn_holder_flags[i]) {
+                pool->conn_holder_flags[i] = true;
+                pool->conn_holders[i] = me;
+                *out_slot = i;
+                *out_conn = pool->connections[i];
+                *out_reentrant = false;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if (!pool->connection) {
+        return false;
+    }
+    if (pool->conn_holder_set) {
+        if (pool->conn_holder == me) {
+            *out_slot = 0;
+            *out_conn = pool->connection;
+            *out_reentrant = true;
+            return true;
+        }
+        return false;
+    }
+    pool->conn_holder = me;
+    pool->conn_holder_set = true;
+    *out_slot = 0;
+    *out_conn = pool->connection;
+    *out_reentrant = false;
+    return true;
+}
+
+static void
+_db_release_slot_locked(csilk_db_pool_t* pool, int slot)
+{
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
+    if (n > 1) {
+        if (slot >= 0 && slot < n) {
+            pool->conn_holder_flags[slot] = false;
+        }
+    } else {
+        pool->conn_holder_set = false;
+    }
+}
+
+typedef struct {
+    csilk_db_pool_t* pool;
+    csilk_db_pool_t* prev_pool;
+    void*            prev_conn;
+    void*            conn;
+    int              slot;
+    bool             reentrant;
+    bool             active;
+} db_slot_guard_t;
+
+static int
+_db_slot_enter(csilk_db_pool_t* pool, db_slot_guard_t* g, bool pin_slot0)
+{
+    memset(g, 0, sizeof(*g));
+    if (!pool) {
+        return -1;
+    }
+    csilk_thread_t me = csilk_thread_self();
+    csilk_mutex_lock(&pool->mutex);
+    if (pool->pool_closing || !_db_pool_has_any_conn_locked(pool)) {
+        csilk_mutex_unlock(&pool->mutex);
+        return -1;
+    }
+    while (!_db_claim_slot_locked(pool, me, pin_slot0, &g->slot, &g->conn, &g->reentrant)) {
+        csilk_cond_wait(&pool->pool_cond, &pool->mutex);
+        if (pool->pool_closing || !_db_pool_has_any_conn_locked(pool)) {
+            csilk_mutex_unlock(&pool->mutex);
+            return -1;
+        }
+    }
+    csilk_mutex_unlock(&pool->mutex);
+
+    g->pool = pool;
+    g->prev_pool = tls_bound_pool;
+    g->prev_conn = tls_bound_conn;
+    tls_bound_pool = pool;
+    tls_bound_conn = g->conn;
+    g->active = true;
+    return 0;
+}
+
+static void
+_db_slot_leave_with_err(db_slot_guard_t* g, bool update_err, csilk_db_err_t err)
+{
+    if (!g || !g->active) {
+        return;
+    }
+    if (update_err) {
+        tls_last_err = err;
+    }
+    tls_bound_pool = g->prev_pool;
+    tls_bound_conn = g->prev_conn;
+    if (g->pool) {
+        if (!g->reentrant) {
+            csilk_mutex_lock(&g->pool->mutex);
+            if (update_err) {
+                g->pool->last_err = err;
+            }
+            _db_release_slot_locked(g->pool, g->slot);
+            csilk_cond_signal(&g->pool->pool_cond);
+            csilk_mutex_unlock(&g->pool->mutex);
+        } else if (update_err) {
+            csilk_mutex_lock(&g->pool->mutex);
+            g->pool->last_err = err;
+            csilk_mutex_unlock(&g->pool->mutex);
+        }
+    }
+    g->active = false;
 }
 
 /** @brief Explicitly acquire the pool's connection with holder tracking.
@@ -305,9 +498,12 @@ csilk_db_pool_acquire_timeout(csilk_db_pool_t* pool, void** conn, uint64_t timeo
 
     uint64_t deadline_ns = csilk_io_hrtime() + timeout_ms * 1000000ULL;
     while (1) {
-        /* Compute remaining time. */
+        /*Compute remaining time. */
         uint64_t now_ns = csilk_io_hrtime();
         if (now_ns >= deadline_ns) {
+            if (_db_pool_has_free_slot_locked(pool)) {
+                csilk_cond_signal(&pool->pool_cond);
+            }
             CSILK_LOG_W("csilk_db_pool_acquire_timeout: pool '%s' exhausted after %llu ms wait",
                         pool->driver ? pool->driver->name : "(null)",
                         (unsigned long long)timeout_ms);
@@ -318,6 +514,9 @@ csilk_db_pool_acquire_timeout(csilk_db_pool_t* pool, void** conn, uint64_t timeo
         int      rc = csilk_cond_timedwait(&pool->pool_cond, &pool->mutex, remaining_ns);
         if (rc != 0) {
             /* Timeout (or spurious wake with no time left). */
+            if (_db_pool_has_free_slot_locked(pool)) {
+                csilk_cond_signal(&pool->pool_cond);
+            }
             csilk_mutex_unlock(&pool->mutex);
             return -1;
         }
@@ -498,23 +697,45 @@ csilk_db_with_conn(csilk_db_pool_t* pool, csilk_db_with_conn_fn fn, void* user_c
         return -1;
     }
 
+    csilk_thread_t me = csilk_thread_self();
+    int            slot = -1;
+    void*          conn = NULL;
+    bool           reentrant = false;
+
     csilk_mutex_lock(&pool->mutex);
-    if (!pool->connection) {
+    if (pool->pool_closing || !_db_pool_has_any_conn_locked(pool)) {
         csilk_mutex_unlock(&pool->mutex);
         CSILK_LOG_E("csilk_db_with_conn: pool '%s' has no open connection",
                     pool->driver ? pool->driver->name : "(null)");
         return -1;
     }
-    /* Set holder so a concurrent csilk_db_pool_put from another thread is
-     * refused by the holder check. */
-    pool->conn_holder = csilk_thread_self();
-    pool->conn_holder_set = true;
-
-    int rc = fn(pool->connection, user_ctx);
-
-    pool->conn_holder_set = false;
-    csilk_cond_broadcast(&pool->pool_cond); /* wake any timed acquire waiters */
+    while (!_db_claim_slot_locked(pool, me, false, &slot, &conn, &reentrant)) {
+        csilk_cond_wait(&pool->pool_cond, &pool->mutex);
+        if (pool->pool_closing || !_db_pool_has_any_conn_locked(pool)) {
+            csilk_mutex_unlock(&pool->mutex);
+            return -1;
+        }
+    }
+    /* Release pool->mutex immediately after acquiring a connection slot so
+     * slow callbacks do not block other pool operations or idle slots. */
     csilk_mutex_unlock(&pool->mutex);
+
+    csilk_db_pool_t* prev_pool = tls_bound_pool;
+    void*            prev_conn = tls_bound_conn;
+    tls_bound_pool = pool;
+    tls_bound_conn = conn;
+
+    int rc = fn(conn, user_ctx);
+
+    tls_bound_pool = prev_pool;
+    tls_bound_conn = prev_conn;
+
+    if (!reentrant) {
+        csilk_mutex_lock(&pool->mutex);
+        _db_release_slot_locked(pool, slot);
+        csilk_cond_signal(&pool->pool_cond);
+        csilk_mutex_unlock(&pool->mutex);
+    }
     return rc;
 }
 
@@ -716,6 +937,7 @@ csilk_db_pool_new_ex(const char* driver_name, const char* dsn, int max_conns)
                 }
             }
             csilk_mutex_destroy(&pool->mutex);
+            csilk_cond_destroy(&pool->pool_cond);
             free(pool);
             return NULL;
         }
@@ -757,6 +979,13 @@ csilk_db_pool_free(csilk_db_pool_t* pool)
     CSILK_LOG_D("Freeing database pool (%d conn) for driver '%s'",
                 n,
                 pool->driver ? pool->driver->name : "unknown");
+    /* Wake any threads blocked in csilk_db_pool_acquire_timeout or csilk_db_with_conn
+     * so they can observe pool_closing and return -1 promptly. */
+    csilk_mutex_lock(&pool->mutex);
+    pool->pool_closing = 1;
+    csilk_cond_broadcast(&pool->pool_cond);
+    csilk_mutex_unlock(&pool->mutex);
+
     /* Capture the driver vtable pointer before the loop: a driver's disconnect
      * may NULL out pool->driver (or the vtable) as part of teardown, and the
      * next iteration must not re-read a stale/dangling vtable pointer. */
@@ -769,13 +998,24 @@ csilk_db_pool_free(csilk_db_pool_t* pool)
             }
         }
     }
-    /* Wake any threads blocked in csilk_db_pool_acquire_timeout so they
-     * can observe pool_closing and return -1 promptly. */
-    pool->pool_closing = 1;
-    csilk_cond_broadcast(&pool->pool_cond);
     csilk_mutex_destroy(&pool->mutex);
     csilk_cond_destroy(&pool->pool_cond);
     free(pool);
+}
+
+static csilk_db_err_t
+_csilk_db_classify_error(csilk_db_pool_t* pool, bool had_connection)
+{
+    if (!pool || !had_connection) {
+        return CSILK_DB_ERR_CONN;
+    }
+    if (pool->driver && pool->driver->last_error) {
+        csilk_db_err_t err = CSILK_DB_ERR_SQL;
+        if (pool->driver->last_error(pool, &err) == 0 && err != CSILK_DB_OK) {
+            return err;
+        }
+    }
+    return CSILK_DB_ERR_SQL;
 }
 
 /*
@@ -792,21 +1032,11 @@ _csilk_db_record_error(csilk_db_pool_t* pool, bool had_connection)
     if (!pool) {
         return;
     }
-    if (!had_connection) {
-        /* No connection — the failure is a connection-level problem. */
-        pool->last_err = CSILK_DB_ERR_CONN;
-        return;
-    }
-    /* Consult the driver's last_error callback when present. */
-    if (pool->driver && pool->driver->last_error) {
-        csilk_db_err_t err = CSILK_DB_ERR_SQL;
-        if (pool->driver->last_error(pool, &err) == 0) {
-            pool->last_err = err;
-            return;
-        }
-    }
-    /* Generic fallback. */
-    pool->last_err = CSILK_DB_ERR_SQL;
+    csilk_db_err_t err = _csilk_db_classify_error(pool, had_connection);
+    tls_last_err = err;
+    csilk_mutex_lock(&pool->mutex);
+    pool->last_err = err;
+    csilk_mutex_unlock(&pool->mutex);
 }
 
 /** @brief Register an on-open hook (csilk#4). */
@@ -835,7 +1065,10 @@ csilk_db_last_error(csilk_db_pool_t* pool)
     if (!pool) {
         return CSILK_DB_ERR_CONN;
     }
-    return pool->last_err;
+    csilk_mutex_lock(&pool->mutex);
+    csilk_db_err_t err = pool->last_err;
+    csilk_mutex_unlock(&pool->mutex);
+    return err;
 }
 
 /**
@@ -912,10 +1145,16 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
     uint64_t start = csilk_io_hrtime();
     CSILK_LOG_D("Database query initiated: %s", sql);
 
-    csilk_mutex_lock(&pool->mutex);
-    void*         conn_snapshot = pool->connection;
-    csilk_json_t* result = csilk_db_query_json_locked(pool, sql, NULL);
-    csilk_mutex_unlock(&pool->mutex);
+    db_slot_guard_t guard;
+    bool            had_conn = (_db_slot_enter(pool, &guard, false) == 0);
+    csilk_json_t*   result = NULL;
+    if (had_conn) {
+        result = csilk_db_query_json_locked(pool, sql, NULL);
+        csilk_db_err_t err = result ? CSILK_DB_OK : _csilk_db_classify_error(pool, true);
+        _db_slot_leave_with_err(&guard, true, err);
+    } else {
+        _csilk_db_record_error(pool, false);
+    }
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
     atomic_fetch_add(&db_duration_us_total, duration);
@@ -924,11 +1163,9 @@ csilk_db_query_json(csilk_db_pool_t* pool, const char* sql)
 
     if (!result) {
         atomic_fetch_add(&db_errors_total, 1);
-        _csilk_db_record_error(pool, conn_snapshot != NULL);
         CSILK_LOG_E(
             "Database query failed (duration: %.2f ms): %s", (double)duration / 1000.0, sql);
     } else {
-        pool->last_err = CSILK_DB_OK;
         atomic_fetch_add(&db_queries_total, 1);
         CSILK_LOG_T(
             "Database query succeeded (duration: %.2f ms): %s", (double)duration / 1000.0, sql);
@@ -940,21 +1177,25 @@ typedef enum {
     DB_ASYNC_QUERY = 0,
     DB_ASYNC_EXEC = 1,
     DB_ASYNC_QUERY_PARAM = 2,
-    DB_ASYNC_EXEC_PARAM = 3
+    DB_ASYNC_EXEC_PARAM = 3,
+    DB_ASYNC_QUERY_EX = 4
 } db_async_op_t;
 
 typedef struct {
-    csilk_io_work_t        req;
-    db_async_op_t          op;
-    csilk_db_pool_t*       pool;
-    char*                  sql;
-    char**                 params;
-    size_t                 param_count;
-    csilk_db_async_cb      query_cb;
-    csilk_db_exec_async_cb exec_cb;
-    void*                  user_data;
-    csilk_json_t*          result;
-    int                    exec_rc;
+    csilk_io_work_t         req;
+    db_async_op_t           op;
+    csilk_db_pool_t*        pool;
+    char*                   sql;
+    char**                  params;
+    size_t                  param_count;
+    bool                    has_params;
+    csilk_db_async_cb       query_cb;
+    csilk_db_query_async_cb query_ex_cb;
+    csilk_db_exec_async_cb  exec_cb;
+    void*                   user_data;
+    csilk_json_t*           result;
+    csilk_db_err_t          err;
+    int                     exec_rc;
 } db_async_work_ctx_t;
 
 static void
@@ -1002,18 +1243,31 @@ static void
 db_async_work_cb(csilk_io_work_t* req)
 {
     db_async_work_ctx_t* ctx = (db_async_work_ctx_t*)req;
+    tls_last_err = CSILK_DB_OK;
     switch (ctx->op) {
     case DB_ASYNC_QUERY:
         ctx->result = csilk_db_query_json(ctx->pool, ctx->sql);
+        ctx->err = ctx->result ? CSILK_DB_OK : tls_last_err;
         break;
     case DB_ASYNC_EXEC:
         ctx->exec_rc = csilk_db_exec(ctx->pool, ctx->sql);
+        ctx->err = (ctx->exec_rc == 0) ? CSILK_DB_OK : tls_last_err;
         break;
     case DB_ASYNC_QUERY_PARAM:
         ctx->result = csilk_db_query_param_json(ctx->pool, ctx->sql, (const char**)ctx->params);
+        ctx->err = ctx->result ? CSILK_DB_OK : tls_last_err;
         break;
     case DB_ASYNC_EXEC_PARAM:
         ctx->exec_rc = csilk_db_exec_param(ctx->pool, ctx->sql, (const char**)ctx->params);
+        ctx->err = (ctx->exec_rc == 0) ? CSILK_DB_OK : tls_last_err;
+        break;
+    case DB_ASYNC_QUERY_EX:
+        if (ctx->has_params) {
+            ctx->result = csilk_db_query_param_json(ctx->pool, ctx->sql, (const char**)ctx->params);
+        } else {
+            ctx->result = csilk_db_query_json(ctx->pool, ctx->sql);
+        }
+        ctx->err = ctx->result ? CSILK_DB_OK : tls_last_err;
         break;
     }
 }
@@ -1025,7 +1279,13 @@ db_async_after_work_cb(csilk_io_work_t* req, int status)
 {
     (void)status;
     db_async_work_ctx_t* ctx = (db_async_work_ctx_t*)req;
-    if (ctx->op == DB_ASYNC_QUERY || ctx->op == DB_ASYNC_QUERY_PARAM) {
+    if (ctx->op == DB_ASYNC_QUERY_EX) {
+        if (ctx->query_ex_cb) {
+            ctx->query_ex_cb(ctx->result, ctx->err, ctx->user_data);
+        } else if (ctx->result) {
+            csilk_json_free(ctx->result);
+        }
+    } else if (ctx->op == DB_ASYNC_QUERY || ctx->op == DB_ASYNC_QUERY_PARAM) {
         if (ctx->query_cb) {
             ctx->query_cb(ctx->result, ctx->user_data);
         } else if (ctx->result) {
@@ -1040,18 +1300,23 @@ db_async_after_work_cb(csilk_io_work_t* req, int status)
 }
 
 static int
-db_async_submit(db_async_op_t          op,
-                csilk_db_pool_t*       pool,
-                const char*            sql,
-                const char**           params,
-                csilk_db_async_cb      query_cb,
-                csilk_db_exec_async_cb exec_cb,
-                void*                  user_data)
+db_async_submit_ex(db_async_op_t           op,
+                   csilk_db_pool_t*        pool,
+                   const char*             sql,
+                   const char**            params,
+                   csilk_io_loop_t*        target_loop,
+                   csilk_db_async_cb       query_cb,
+                   csilk_db_query_async_cb query_ex_cb,
+                   csilk_db_exec_async_cb  exec_cb,
+                   void*                   user_data)
 {
     if (!pool || !sql) {
         return -1;
     }
     if ((op == DB_ASYNC_QUERY || op == DB_ASYNC_QUERY_PARAM) && !query_cb) {
+        return -1;
+    }
+    if (op == DB_ASYNC_QUERY_EX && !query_ex_cb) {
         return -1;
     }
     if ((op == DB_ASYNC_EXEC || op == DB_ASYNC_EXEC_PARAM) && !exec_cb) {
@@ -1066,27 +1331,58 @@ db_async_submit(db_async_op_t          op,
     ctx->pool = pool;
     ctx->sql = strdup(sql);
     ctx->query_cb = query_cb;
+    ctx->query_ex_cb = query_ex_cb;
     ctx->exec_cb = exec_cb;
     ctx->user_data = user_data;
+    ctx->err = CSILK_DB_OK;
     ctx->exec_rc = -1;
     if (!ctx->sql) {
         db_async_free_ctx(ctx);
         return -1;
     }
-    if (op == DB_ASYNC_QUERY_PARAM || op == DB_ASYNC_EXEC_PARAM) {
+    if (op == DB_ASYNC_QUERY_PARAM || op == DB_ASYNC_EXEC_PARAM ||
+        (op == DB_ASYNC_QUERY_EX && params != NULL)) {
+        ctx->has_params = true;
         if (db_async_clone_params(ctx, params) != 0) {
             db_async_free_ctx(ctx);
             return -1;
         }
     }
 
-    csilk_io_loop_t* loop = csilk_io_default_loop();
+    csilk_io_loop_t* loop = target_loop ? target_loop : csilk_io_default_loop();
     int rc = csilk_io_queue_work(loop, &ctx->req, db_async_work_cb, db_async_after_work_cb);
     if (rc != 0) {
         db_async_free_ctx(ctx);
         return -1;
     }
     return 0;
+}
+
+static int
+db_async_submit(db_async_op_t          op,
+                csilk_db_pool_t*       pool,
+                const char*            sql,
+                const char**           params,
+                csilk_db_async_cb      query_cb,
+                csilk_db_exec_async_cb exec_cb,
+                void*                  user_data)
+{
+    return db_async_submit_ex(op, pool, sql, params, NULL, query_cb, NULL, exec_cb, user_data);
+}
+
+int
+csilk_db_query_async(csilk_db_pool_t*        pool,
+                     const char*             sql,
+                     const char**            params,
+                     csilk_io_loop_t*        loop,
+                     csilk_db_query_async_cb cb,
+                     void*                   user_data)
+{
+    if (!pool || !sql || !cb) {
+        return -1;
+    }
+    return db_async_submit_ex(
+        DB_ASYNC_QUERY_EX, pool, sql, params, loop, NULL, cb, NULL, user_data);
 }
 
 /**
@@ -1157,10 +1453,16 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
     uint64_t start = csilk_io_hrtime();
     CSILK_LOG_D("Database exec initiated: %s", sql);
 
-    csilk_mutex_lock(&pool->mutex);
-    void* conn_snapshot = pool->connection;
-    int   rc = pool->driver->exec(pool, sql);
-    csilk_mutex_unlock(&pool->mutex);
+    db_slot_guard_t guard;
+    bool            had_conn = (_db_slot_enter(pool, &guard, false) == 0);
+    int             rc = -1;
+    if (had_conn) {
+        rc = pool->driver->exec(pool, sql);
+        csilk_db_err_t err = (rc == 0) ? CSILK_DB_OK : _csilk_db_classify_error(pool, true);
+        _db_slot_leave_with_err(&guard, true, err);
+    } else {
+        _csilk_db_record_error(pool, false);
+    }
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
     atomic_fetch_add(&db_duration_us_total, duration);
@@ -1169,13 +1471,11 @@ csilk_db_exec(csilk_db_pool_t* pool, const char* sql)
 
     if (rc != 0) {
         atomic_fetch_add(&db_errors_total, 1);
-        _csilk_db_record_error(pool, conn_snapshot != NULL);
         CSILK_LOG_E("Database exec failed with rc %d (duration: %.2f ms): %s",
                     rc,
                     (double)duration / 1000.0,
                     sql);
     } else {
-        pool->last_err = CSILK_DB_OK;
         atomic_fetch_add(&db_execs_total, 1);
         CSILK_LOG_T(
             "Database exec succeeded (duration: %.2f ms): %s", (double)duration / 1000.0, sql);
@@ -1331,11 +1631,18 @@ _csilk_db_run_param_stmt_query(csilk_db_pool_t* pool, const char* sql, const cha
     uint64_t start = csilk_io_hrtime();
     CSILK_LOG_D("Parameterized database query initiated (prepared): %s", sql);
 
-    csilk_mutex_lock(&pool->mutex);
+    db_slot_guard_t guard;
+    if (_db_slot_enter(pool, &guard, false) != 0) {
+        _csilk_db_record_error(pool, false);
+        atomic_fetch_add(&db_errors_total, 1);
+        return NULL;
+    }
+
     csilk_stmt_t* stmt = NULL;
     int           rc = pool->driver->stmt_prepare(pool, sql, &stmt);
     if (rc != 0 || !stmt) {
-        csilk_mutex_unlock(&pool->mutex);
+        csilk_db_err_t err = _csilk_db_classify_error(pool, true);
+        _db_slot_leave_with_err(&guard, true, err);
         CSILK_LOG_E("Parameterized query failed to prepare statement: %s", sql);
         atomic_fetch_add(&db_errors_total, 1);
         return NULL;
@@ -1354,8 +1661,9 @@ _csilk_db_run_param_stmt_query(csilk_db_pool_t* pool, const char* sql, const cha
     if (bind_ok) {
         result = pool->driver->stmt_query_json(stmt);
     }
+    csilk_db_err_t err = result ? CSILK_DB_OK : _csilk_db_classify_error(pool, true);
     pool->driver->stmt_close(stmt);
-    csilk_mutex_unlock(&pool->mutex);
+    _db_slot_leave_with_err(&guard, true, err);
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
     atomic_fetch_add(&db_duration_us_total, duration);
@@ -1390,11 +1698,18 @@ _csilk_db_run_param_stmt_query_typed(csilk_db_pool_t*        pool,
     uint64_t start = csilk_io_hrtime();
     CSILK_LOG_D("Parameterized database query initiated (typed prepared): %s", sql);
 
-    csilk_mutex_lock(&pool->mutex);
+    db_slot_guard_t guard;
+    if (_db_slot_enter(pool, &guard, false) != 0) {
+        _csilk_db_record_error(pool, false);
+        atomic_fetch_add(&db_errors_total, 1);
+        return NULL;
+    }
+
     csilk_stmt_t* stmt = NULL;
     int           rc = pool->driver->stmt_prepare(pool, sql, &stmt);
     if (rc != 0 || !stmt) {
-        csilk_mutex_unlock(&pool->mutex);
+        csilk_db_err_t err = _csilk_db_classify_error(pool, true);
+        _db_slot_leave_with_err(&guard, true, err);
         CSILK_LOG_E("Typed parameterized query failed to prepare statement: %s", sql);
         atomic_fetch_add(&db_errors_total, 1);
         return NULL;
@@ -1420,8 +1735,9 @@ _csilk_db_run_param_stmt_query_typed(csilk_db_pool_t*        pool,
     if (all_binds_ok) {
         result = pool->driver->stmt_query_json(stmt);
     }
+    csilk_db_err_t err = result ? CSILK_DB_OK : _csilk_db_classify_error(pool, true);
     pool->driver->stmt_close(stmt);
-    csilk_mutex_unlock(&pool->mutex);
+    _db_slot_leave_with_err(&guard, true, err);
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
     atomic_fetch_add(&db_duration_us_total, duration);
@@ -1450,11 +1766,17 @@ _csilk_db_run_param_stmt_exec(csilk_db_pool_t* pool, const char* sql, const char
     uint64_t start = csilk_io_hrtime();
     CSILK_LOG_D("Parameterized database exec initiated (prepared): %s", sql);
 
-    csilk_mutex_lock(&pool->mutex);
+    db_slot_guard_t guard;
+    if (_db_slot_enter(pool, &guard, false) != 0) {
+        _csilk_db_record_error(pool, false);
+        return -1;
+    }
+
     csilk_stmt_t* stmt = NULL;
     int           rc = pool->driver->stmt_prepare(pool, sql, &stmt);
     if (rc != 0 || !stmt) {
-        csilk_mutex_unlock(&pool->mutex);
+        csilk_db_err_t err = _csilk_db_classify_error(pool, true);
+        _db_slot_leave_with_err(&guard, true, err);
         CSILK_LOG_E("Parameterized exec failed to prepare statement: %s", sql);
         return -1;
     }
@@ -1472,8 +1794,9 @@ _csilk_db_run_param_stmt_exec(csilk_db_pool_t* pool, const char* sql, const char
     if (bind_ok) {
         exec_rc = pool->driver->stmt_execute(stmt, &aff);
     }
+    csilk_db_err_t err = (exec_rc == 0) ? CSILK_DB_OK : _csilk_db_classify_error(pool, true);
     pool->driver->stmt_close(stmt);
-    csilk_mutex_unlock(&pool->mutex);
+    _db_slot_leave_with_err(&guard, true, err);
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
     atomic_fetch_add(&db_duration_us_total, duration);
@@ -1503,11 +1826,17 @@ _csilk_db_run_param_stmt_exec_typed(csilk_db_pool_t*        pool,
     uint64_t start = csilk_io_hrtime();
     CSILK_LOG_D("Parameterized database exec initiated (typed prepared): %s", sql);
 
-    csilk_mutex_lock(&pool->mutex);
+    db_slot_guard_t guard;
+    if (_db_slot_enter(pool, &guard, false) != 0) {
+        _csilk_db_record_error(pool, false);
+        return -1;
+    }
+
     csilk_stmt_t* stmt = NULL;
     int           rc = pool->driver->stmt_prepare(pool, sql, &stmt);
     if (rc != 0 || !stmt) {
-        csilk_mutex_unlock(&pool->mutex);
+        csilk_db_err_t err = _csilk_db_classify_error(pool, true);
+        _db_slot_leave_with_err(&guard, true, err);
         CSILK_LOG_E("Typed parameterized exec failed to prepare statement: %s", sql);
         return -1;
     }
@@ -1528,8 +1857,9 @@ _csilk_db_run_param_stmt_exec_typed(csilk_db_pool_t*        pool,
     if (bind_ok) {
         exec_rc = pool->driver->stmt_execute(stmt, &aff);
     }
+    csilk_db_err_t err = (exec_rc == 0) ? CSILK_DB_OK : _csilk_db_classify_error(pool, true);
     pool->driver->stmt_close(stmt);
-    csilk_mutex_unlock(&pool->mutex);
+    _db_slot_leave_with_err(&guard, true, err);
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
     atomic_fetch_add(&db_duration_us_total, duration);
@@ -1684,24 +2014,28 @@ csilk_db_query_json_with_columns(csilk_db_pool_t*   pool,
     uint64_t start = csilk_io_hrtime();
     CSILK_LOG_D("Database query initiated (with JSON columns): %s", sql);
 
-    csilk_mutex_lock(&pool->mutex);
-    void*         conn_snapshot = pool->connection;
-    csilk_json_t* result = csilk_db_query_json_locked(pool, sql, json_columns);
-    csilk_mutex_unlock(&pool->mutex);
+    db_slot_guard_t guard;
+    bool            had_conn = (_db_slot_enter(pool, &guard, false) == 0);
+    csilk_json_t*   result = NULL;
+    if (had_conn) {
+        result = csilk_db_query_json_locked(pool, sql, json_columns);
+        csilk_db_err_t err = result ? CSILK_DB_OK : _csilk_db_classify_error(pool, true);
+        _db_slot_leave_with_err(&guard, true, err);
+    } else {
+        _csilk_db_record_error(pool, false);
+    }
 
     uint64_t duration = (csilk_io_hrtime() - start) / 1000;
     atomic_fetch_add(&db_duration_us_total, duration);
 
     if (!result) {
         atomic_fetch_add(&db_errors_total, 1);
-        _csilk_db_record_error(pool, conn_snapshot != NULL);
         CSILK_LOG_E("Database query with columns failed (duration: %.2f ms): %s",
                     (double)duration / 1000.0,
                     sql);
         return NULL;
     }
 
-    pool->last_err = CSILK_DB_OK;
     atomic_fetch_add(&db_queries_total, 1);
     CSILK_LOG_T("Database query with columns succeeded (duration: %.2f ms): %s",
                 (double)duration / 1000.0,
@@ -1745,12 +2079,6 @@ csilk_db_exec_param_typed(csilk_db_pool_t* pool, const char* sql, const csilk_db
 }
 
 /* --- Driver Registry --- */
-
-/** @brief Statically-sized registry of registered database drivers (max 16). */
-static csilk_db_driver_t* drivers[16];
-static int                driver_count = 0;
-static csilk_mutex_t      registry_mutex;
-static int                registry_initialized = 0;
 
 /** @brief Lazily initialise the driver-registry mutex (idempotent). */
 static void
@@ -1859,9 +2187,12 @@ csilk_stmt_prepare(csilk_db_pool_t* pool, const char* sql, csilk_stmt_t** out_st
     if (!pool->driver || !pool->driver->stmt_prepare) {
         return -1;
     }
-    csilk_mutex_lock(&pool->mutex);
+    db_slot_guard_t guard;
+    if (_db_slot_enter(pool, &guard, true) != 0) {
+        return -1;
+    }
     int rc = pool->driver->stmt_prepare(pool, sql, out_stmt);
-    csilk_mutex_unlock(&pool->mutex);
+    _db_slot_leave_with_err(&guard, false, CSILK_DB_OK);
     return rc;
 }
 
@@ -1907,9 +2238,12 @@ csilk_stmt_execute(csilk_stmt_t* stmt, int64_t* out_affected_rows)
     if (!stmt || !stmt->pool || !stmt->pool->driver || !stmt->pool->driver->stmt_execute) {
         return -1;
     }
-    csilk_mutex_lock(&stmt->pool->mutex);
+    db_slot_guard_t guard;
+    if (_db_slot_enter(stmt->pool, &guard, true) != 0) {
+        return -1;
+    }
     int rc = stmt->pool->driver->stmt_execute(stmt, out_affected_rows);
-    csilk_mutex_unlock(&stmt->pool->mutex);
+    _db_slot_leave_with_err(&guard, false, CSILK_DB_OK);
     return rc;
 }
 
@@ -1919,9 +2253,12 @@ csilk_stmt_query_json(csilk_stmt_t* stmt)
     if (!stmt || !stmt->pool || !stmt->pool->driver || !stmt->pool->driver->stmt_query_json) {
         return NULL;
     }
-    csilk_mutex_lock(&stmt->pool->mutex);
+    db_slot_guard_t guard;
+    if (_db_slot_enter(stmt->pool, &guard, true) != 0) {
+        return NULL;
+    }
     csilk_json_t* res = stmt->pool->driver->stmt_query_json(stmt);
-    csilk_mutex_unlock(&stmt->pool->mutex);
+    _db_slot_leave_with_err(&guard, false, CSILK_DB_OK);
     return res;
 }
 
@@ -1933,9 +2270,13 @@ csilk_stmt_close(csilk_stmt_t* stmt)
     }
     csilk_db_pool_t* pool = stmt->pool;
     if (pool && pool->driver && pool->driver->stmt_close) {
-        csilk_mutex_lock(&pool->mutex);
-        pool->driver->stmt_close(stmt);
-        csilk_mutex_unlock(&pool->mutex);
+        db_slot_guard_t guard;
+        if (_db_slot_enter(pool, &guard, true) == 0) {
+            pool->driver->stmt_close(stmt);
+            _db_slot_leave_with_err(&guard, false, CSILK_DB_OK);
+        } else {
+            pool->driver->stmt_close(stmt);
+        }
     } else {
         free(stmt);
     }
