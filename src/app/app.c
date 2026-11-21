@@ -23,6 +23,7 @@
 
 #include "csilk/app/app.h"
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,61 @@
 
 /** @brief Default HTTP listen port. */
 enum { CSILK_DFL_PORT = 8080 };
+
+static csilk_app_t* ctx_app(csilk_ctx_t* c);
+
+#define CSILK_MW_THUNK_DECL(N) static void _csilk_mw_thunk_shim_##N(csilk_ctx_t* c);
+CSILK_MW_THUNK_DECL(0)
+CSILK_MW_THUNK_DECL(1)
+CSILK_MW_THUNK_DECL(2)
+CSILK_MW_THUNK_DECL(3)
+CSILK_MW_THUNK_DECL(4)
+CSILK_MW_THUNK_DECL(5)
+CSILK_MW_THUNK_DECL(6)
+CSILK_MW_THUNK_DECL(7)
+CSILK_MW_THUNK_DECL(8)
+CSILK_MW_THUNK_DECL(9)
+CSILK_MW_THUNK_DECL(10)
+CSILK_MW_THUNK_DECL(11)
+CSILK_MW_THUNK_DECL(12)
+CSILK_MW_THUNK_DECL(13)
+CSILK_MW_THUNK_DECL(14)
+CSILK_MW_THUNK_DECL(15)
+CSILK_MW_THUNK_DECL(16)
+CSILK_MW_THUNK_DECL(17)
+CSILK_MW_THUNK_DECL(18)
+CSILK_MW_THUNK_DECL(19)
+CSILK_MW_THUNK_DECL(20)
+CSILK_MW_THUNK_DECL(21)
+CSILK_MW_THUNK_DECL(22)
+CSILK_MW_THUNK_DECL(23)
+CSILK_MW_THUNK_DECL(24)
+CSILK_MW_THUNK_DECL(25)
+CSILK_MW_THUNK_DECL(26)
+CSILK_MW_THUNK_DECL(27)
+CSILK_MW_THUNK_DECL(28)
+CSILK_MW_THUNK_DECL(29)
+CSILK_MW_THUNK_DECL(30)
+CSILK_MW_THUNK_DECL(31)
+#undef CSILK_MW_THUNK_DECL
+
+/** @brief Internal: table of the generated trampolines, indexed by thunk slot. */
+static const csilk_handler_t s_mw_thunk_shims[CSILK_MAX_MW_THUNKS] = {
+    _csilk_mw_thunk_shim_0,  _csilk_mw_thunk_shim_1,  _csilk_mw_thunk_shim_2,
+    _csilk_mw_thunk_shim_3,  _csilk_mw_thunk_shim_4,  _csilk_mw_thunk_shim_5,
+    _csilk_mw_thunk_shim_6,  _csilk_mw_thunk_shim_7,  _csilk_mw_thunk_shim_8,
+    _csilk_mw_thunk_shim_9,  _csilk_mw_thunk_shim_10, _csilk_mw_thunk_shim_11,
+    _csilk_mw_thunk_shim_12, _csilk_mw_thunk_shim_13, _csilk_mw_thunk_shim_14,
+    _csilk_mw_thunk_shim_15, _csilk_mw_thunk_shim_16, _csilk_mw_thunk_shim_17,
+    _csilk_mw_thunk_shim_18, _csilk_mw_thunk_shim_19, _csilk_mw_thunk_shim_20,
+    _csilk_mw_thunk_shim_21, _csilk_mw_thunk_shim_22, _csilk_mw_thunk_shim_23,
+    _csilk_mw_thunk_shim_24, _csilk_mw_thunk_shim_25, _csilk_mw_thunk_shim_26,
+    _csilk_mw_thunk_shim_27, _csilk_mw_thunk_shim_28, _csilk_mw_thunk_shim_29,
+    _csilk_mw_thunk_shim_30, _csilk_mw_thunk_shim_31,
+};
+
+static_assert(sizeof(s_mw_thunk_shims) / sizeof(s_mw_thunk_shims[0]) == CSILK_MAX_MW_THUNKS,
+              "s_mw_thunk_shims must match CSILK_MAX_MW_THUNKS");
 
 /** @brief Router reference for the built-in OpenAPI handler.
  * Now per-app: each app instance owns its own static-route table and
@@ -63,12 +119,12 @@ ctx_app(csilk_ctx_t* c)
     return (csilk_app_t*)s->app;
 }
 
-/** @brief Internal: safely retrieve the app's router under a per-app lock.
+/** @brief Internal: safely retrieve the app's router if OpenAPI is enabled.
  * Returns the app's router if the OpenAPI endpoint is enabled, else NULL. */
 static csilk_router_t*
 app_openapi_router(csilk_app_t* app)
 {
-    if (!app || !app->openapi_enabled) {
+    if (!app || !atomic_load_explicit(&app->openapi_enabled, memory_order_acquire)) {
         return NULL;
     }
     return app->router;
@@ -212,7 +268,8 @@ csilk_app_new(const char* config_path)
     }
 
     csilk_mutex_init(&app->app_mutex);
-    app->openapi_enabled = 1;
+    atomic_init(&app->openapi_enabled, 1);
+    atomic_init(&app->mw_thunk_used, 0);
     memset(&app->config, 0, sizeof(app->config));
 
     if (config_path && csilk_load_config(config_path, &app->config) == 0) {
@@ -282,11 +339,15 @@ csilk_app_new(const char* config_path)
     return app;
 
 fail:
+    csilk_server_free(app->server);
+    if (app->root_group) {
+        csilk_group_free(app->root_group);
+    }
     if (app->router) {
         csilk_router_free(app->router);
     }
-    csilk_server_free(app->server);
     csilk_config_free(&app->config);
+    csilk_mutex_destroy(&app->app_mutex);
     free(app);
     return NULL;
 }
@@ -388,12 +449,10 @@ csilk_app_log_json(csilk_app_t* app, int enable)
  * is emitted by a macro so each slot has its own function identity.
  * =================================================================== */
 
-/** @brief Internal: static thunk pool — one slot per registered dual-parameter
- * middleware, process-wide (shared across apps, bounded).  Zero-initialized.
- * A trampoline table of 8 generated shims is emitted below; slots are
- * allocated in order.  Note the process-wide pool is not reclaimed when an
- * app is freed (thunks are trivial {fn, data} pairs); apps are expected to
- * call csilk_app_use_mw at startup. */
+/** @brief Internal: per-app thunk pool — one slot per registered dual-parameter
+ * middleware, bounded by CSILK_MAX_MW_THUNKS.
+ * A trampoline table of CSILK_MAX_MW_THUNKS (32) generated shims is declared at
+ * the top of this file; slots are allocated in order per app instance. */
 
 /** @brief Internal: emit a distinct trampoline that dispatches to thunk slot
  * @p N.  The slot is resolved through the owning csilk_app_t (recovered from
@@ -402,8 +461,8 @@ csilk_app_log_json(csilk_app_t* app, int enable)
     static void _csilk_mw_thunk_shim_##N(csilk_ctx_t* c)                                           \
     {                                                                                              \
         csilk_app_t* app = ctx_app(c);                                                             \
-        if (app && app->mw_thunk_used > N) {                                                       \
-            app->mw_thunk_pool[N].fn(c, app->mw_thunk_pool[N].user_data);                          \
+        if (app && atomic_load_explicit(&app->mw_thunk_used, memory_order_acquire) > (N)) {        \
+            app->mw_thunk_pool[(N)].fn(c, app->mw_thunk_pool[(N)].user_data);                      \
         }                                                                                          \
     }
 
@@ -415,16 +474,31 @@ CSILK_MW_THUNK_SHIM(4)
 CSILK_MW_THUNK_SHIM(5)
 CSILK_MW_THUNK_SHIM(6)
 CSILK_MW_THUNK_SHIM(7)
-
-/** @brief Internal: table of the generated trampolines, indexed by thunk slot. */
-static const csilk_handler_t s_mw_thunk_shims[8] = {_csilk_mw_thunk_shim_0,
-                                                    _csilk_mw_thunk_shim_1,
-                                                    _csilk_mw_thunk_shim_2,
-                                                    _csilk_mw_thunk_shim_3,
-                                                    _csilk_mw_thunk_shim_4,
-                                                    _csilk_mw_thunk_shim_5,
-                                                    _csilk_mw_thunk_shim_6,
-                                                    _csilk_mw_thunk_shim_7};
+CSILK_MW_THUNK_SHIM(8)
+CSILK_MW_THUNK_SHIM(9)
+CSILK_MW_THUNK_SHIM(10)
+CSILK_MW_THUNK_SHIM(11)
+CSILK_MW_THUNK_SHIM(12)
+CSILK_MW_THUNK_SHIM(13)
+CSILK_MW_THUNK_SHIM(14)
+CSILK_MW_THUNK_SHIM(15)
+CSILK_MW_THUNK_SHIM(16)
+CSILK_MW_THUNK_SHIM(17)
+CSILK_MW_THUNK_SHIM(18)
+CSILK_MW_THUNK_SHIM(19)
+CSILK_MW_THUNK_SHIM(20)
+CSILK_MW_THUNK_SHIM(21)
+CSILK_MW_THUNK_SHIM(22)
+CSILK_MW_THUNK_SHIM(23)
+CSILK_MW_THUNK_SHIM(24)
+CSILK_MW_THUNK_SHIM(25)
+CSILK_MW_THUNK_SHIM(26)
+CSILK_MW_THUNK_SHIM(27)
+CSILK_MW_THUNK_SHIM(28)
+CSILK_MW_THUNK_SHIM(29)
+CSILK_MW_THUNK_SHIM(30)
+CSILK_MW_THUNK_SHIM(31)
+#undef CSILK_MW_THUNK_SHIM
 
 /**
  * @brief Register a dual-parameter middleware with a config pointer (csilk#9c).
@@ -438,8 +512,10 @@ csilk_app_use_mw(csilk_app_t* app, csilk_middleware_t mw, void* user_data)
     if (!app || !app->server || !mw) {
         return;
     }
-    int slot = app->mw_thunk_used;
+    csilk_mutex_lock(&app->app_mutex);
+    int slot = atomic_load_explicit(&app->mw_thunk_used, memory_order_relaxed);
     if (slot >= CSILK_MAX_MW_THUNKS) {
+        csilk_mutex_unlock(&app->app_mutex);
         CSILK_LOG_E("App: dual-parameter middleware shim limit (%d) reached. Dropped: %p",
                     CSILK_MAX_MW_THUNKS,
                     (void*)mw);
@@ -447,14 +523,16 @@ csilk_app_use_mw(csilk_app_t* app, csilk_middleware_t mw, void* user_data)
     }
     app->mw_thunk_pool[slot].fn = mw;
     app->mw_thunk_pool[slot].user_data = user_data;
-    app->mw_thunk_used = slot + 1;
+    atomic_store_explicit(&app->mw_thunk_used, slot + 1, memory_order_release);
 
     csilk_handler_t shim = s_mw_thunk_shims[slot];
     if (csilk_server_use(app->server, shim) != 0) {
-        app->mw_thunk_used = slot; /* roll back slot on failure */
+        atomic_store_explicit(&app->mw_thunk_used, slot, memory_order_release); /* roll back slot */
+        csilk_mutex_unlock(&app->app_mutex);
         CSILK_LOG_E("App: failed to register dual-parameter middleware %p", (void*)mw);
         return;
     }
+    csilk_mutex_unlock(&app->app_mutex);
     CSILK_LOG_I(
         "Registered dual-parameter middleware: %p data=%p slot=%d", (void*)mw, user_data, slot);
 }
@@ -482,7 +560,7 @@ csilk_app_enable_openapi(csilk_app_t* app, int enable)
     if (!app) {
         return;
     }
-    app->openapi_enabled = enable;
+    atomic_store_explicit(&app->openapi_enabled, enable, memory_order_release);
     CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
 }
 
