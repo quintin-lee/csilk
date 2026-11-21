@@ -7,7 +7,9 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>
 #include <stdatomic.h>
+#include <sys/stat.h>
 
 #include "csilk/app/app.h"
 #include "csilk/csilk.h"
@@ -19,8 +21,10 @@ static _Atomic int     server_ready = 0;
 static csilk_server_t* g_server = nullptr;
 static csilk_app_t*    g_app = nullptr;
 
-static int g_tests_passed = 0;
-static int g_tests_failed = 0;
+static int  g_tests_passed = 0;
+static int  g_tests_failed = 0;
+static char g_static_dir1[] = "/tmp/csilk_static_app_XXXXXX";
+static char g_static_dir2[] = "/tmp/csilk_static_app2_XXXXXX";
 
 static void
 test_result(const char* name, int ok)
@@ -131,6 +135,8 @@ run_app(void* arg)
     g_app = csilk_app_new(nullptr);
     csilk_app_log_json(g_app, 1);
     csilk_app_get(g_app, "/hello", hello_handler);
+    csilk_app_static(g_app, "/app", g_static_dir1);
+    csilk_app_static(g_app, "/app2", g_static_dir2);
     g_server = csilk_app_server(g_app);
     atomic_thread_fence(memory_order_seq_cst);
     server_ready = 1;
@@ -305,11 +311,58 @@ test_not_found(void)
     test_result("GET /nonexistent (status 404)", expect_status(buf, 404));
 }
 
+static void
+test_static_prefix_boundary(void)
+{
+    int sock = connect_server();
+    if (sock < 0) {
+        test_result("GET /app2/hello.txt (connect)", 0);
+        return;
+    }
+    const char* req =
+        "GET /app2/hello.txt HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+    send_request(sock, req);
+    char buf[BUFSIZE] = {0};
+    int  n = read_response(sock, buf, sizeof(buf));
+    close(sock);
+    test_result("GET /app2/hello.txt (response received)", n > 0);
+    test_result("GET /app2/hello.txt (status 200)", expect_status(buf, 200));
+    test_result("GET /app2/hello.txt (body FROM_APP2)", expect_body(buf, "FROM_APP2"));
+}
+
+static void
+write_static_fixture(const char* dir, const char* content)
+{
+    char path[256];
+    snprintf(path, sizeof(path), "%s/hello.txt", dir);
+    FILE* f = fopen(path, "w");
+    if (f) {
+        fputs(content, f);
+        fclose(f);
+    }
+}
+
+static void
+remove_static_fixture(const char* dir)
+{
+    char path[256];
+    snprintf(path, sizeof(path), "%s/hello.txt", dir);
+    unlink(path);
+    rmdir(dir);
+}
+
 int
 main(void)
 {
     signal(SIGPIPE, SIG_IGN);
     printf("=== App Integration Tests ===\n\n");
+
+    if (mkdtemp(g_static_dir1) != nullptr) {
+        write_static_fixture(g_static_dir1, "FROM_APP");
+    }
+    if (mkdtemp(g_static_dir2) != nullptr) {
+        write_static_fixture(g_static_dir2, "FROM_APP2");
+    }
 
     pthread_t thread;
     pthread_create(&thread, nullptr, run_app, nullptr);
@@ -332,9 +385,14 @@ main(void)
     usleep(10000);
     test_not_found();
     usleep(10000);
+    test_static_prefix_boundary();
+    usleep(10000);
 
     csilk_server_stop(g_server);
     pthread_join(thread, nullptr);
+
+    remove_static_fixture(g_static_dir1);
+    remove_static_fixture(g_static_dir2);
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_tests_passed, g_tests_failed);
     return g_tests_failed > 0 ? 1 : 0;

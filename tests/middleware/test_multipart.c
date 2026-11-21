@@ -6,6 +6,8 @@
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 
+static void test_multipart_non_nul_heap_body(void);
+
 static int    part_count = 0;
 static char   last_name[128];
 static char   last_filename[256];
@@ -127,6 +129,36 @@ main()
     test_multipart_file();
     test_multipart_missing_content_type();
     test_multipart_null_body();
+    test_multipart_non_nul_heap_body();
     printf("test_multipart: ALL PASSED\n");
     return 0;
+}
+
+static void
+test_multipart_non_nul_heap_body(void)
+{
+    printf("Testing multipart parse with exact non-NUL heap buffer...\n");
+    const char* raw = "--b1\r\n"
+                      "Content-Disposition: form-data; name=\"f\"\r\n"
+                      "\r\n"
+                      "val\r\n"
+                      "--b1--\r\n";
+    size_t      len = strlen(raw);
+    char*       buf = malloc(len);
+    assert(buf != nullptr);
+    memcpy(buf, raw, len);
+
+    csilk_ctx_t* ctx = csilk_test_ctx_new();
+    csilk_test_ctx_set_body(ctx, buf, len);
+    csilk_set_request_header(ctx, "Content-Type", "multipart/form-data; boundary=b1");
+
+    reset_counters();
+    csilk_multipart_parse(ctx, collect_part);
+    assert(part_count == 1);
+    assert(strcmp(last_name, "f") == 0);
+    assert(last_data_len == 3);
+
+    csilk_test_ctx_free(ctx);
+    free(buf);
+    printf("Multipart non-NUL heap buffer test passed!\n");
 }

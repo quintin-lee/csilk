@@ -152,13 +152,19 @@ _redis_get(csilk_session_store_t* store, const char* session_id, char** out_data
     }
 
     if (reply->type == REDIS_REPLY_STRING && reply->str) {
-        *out_data = strdup(reply->str);
-        if (!*out_data) {
-            freeReplyObject(reply);
-            return -1;
+        size_t rlen = reply->len;
+        if (out_data) {
+            char* copy = malloc(rlen + 1);
+            if (!copy) {
+                freeReplyObject(reply);
+                return -1;
+            }
+            memcpy(copy, reply->str, rlen);
+            copy[rlen] = '\0';
+            *out_data = copy;
         }
         if (out_len) {
-            *out_len = strlen(*out_data);
+            *out_len = rlen;
         }
     } else {
         freeReplyObject(reply);
@@ -442,7 +448,17 @@ _mq_get(csilk_session_store_t* store, const char* session_id, char** out_data, s
             return -1;
         }
         if (out_data) {
-            *out_data = strdup(slot->data ? slot->data : "");
+            size_t slen = slot->len;
+            char*  copy = malloc(slen + 1);
+            if (!copy) {
+                csilk_mutex_unlock(&table->lock);
+                return -1;
+            }
+            if (slen > 0 && slot->data) {
+                memcpy(copy, slot->data, slen);
+            }
+            copy[slen] = '\0';
+            *out_data = copy;
         }
         if (out_len) {
             *out_len = slot->len;

@@ -66,8 +66,15 @@ _csilk_memmem(const void* haystack, size_t haystack_len, const void* needle, siz
 void
 csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 {
-    if (!c || !csilk_get_body(c, NULL) || !handler) {
-        CSILK_LOG_W("Multipart: parser skipped - context, body, or handler is missing");
+    if (!c || !handler) {
+        CSILK_LOG_W("Multipart: parser skipped - context or handler is missing");
+        return;
+    }
+
+    size_t      data_len = 0;
+    const char* data = csilk_get_body(c, &data_len);
+    if (!data || data_len == 0) {
+        CSILK_LOG_W("Multipart: parser skipped - body is missing or empty");
         return;
     }
 
@@ -98,53 +105,57 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
 
     size_t end_delim_len = delim_len + 2; // --boundary--
 
-    const char* data = csilk_get_body(c, NULL);
-    size_t      data_len = csilk_get_body_len(c);
-
-    CSILK_LOG_D(
-        "Multipart: parsed boundary delimiter '%s', payload length: %zu bytes", boundary, data_len);
+    if (!data || data_len == 0) {
+        return;
+    }
 
     const char* pos = data;
+    const char* end = data + data_len;
 
     /* Expect the first boundary marker at the very start of the body.
-     RFC 2046 §5.1.1: the body must begin with "--boundary\r\n". */
-    if (strncmp(pos, delimiter, delim_len) != 0) {
+     * RFC 2046 §5.1.1: the body must begin with "--boundary\r\n". */
+    if ((size_t)(end - pos) < delim_len || memcmp(pos, delimiter, delim_len) != 0) {
         CSILK_LOG_E("Multipart: invalid payload structure - first boundary marker not "
                     "found at start of body");
         return;
     }
     pos += delim_len;
-    if (*pos == '\r') {
+    if (pos < end && *pos == '\r') {
         pos++;
     }
-    if (*pos == '\n') {
+    if (pos < end && *pos == '\n') {
         pos++;
     }
 
     /* Iterate over each part in the multipart body.
-     Each part consists of headers (terminated by \r\n\r\n) followed by
-     the part body, then the next boundary delimiter. */
-    while (pos < data + data_len) {
+     * Each part consists of headers (terminated by \r\n) followed by
+     * the part body, then the next boundary delimiter. */
+    while (pos < end) {
         csilk_multipart_part_t part;
         memset(&part, 0, sizeof(part));
 
         CSILK_LOG_T("Multipart: parsing part at byte offset %td", pos - data);
 
-        /* Parse part headers: Content-Disposition (name + optional filename),
-       Content-Type, and any additional headers up to the blank line. */
-        while (pos < data + data_len && *pos != '\r') {
-            if (strncmp(pos, "Content-Disposition:", 20) == 0) {
-                pos += 20;
-                while (pos < data + data_len && *pos == ' ') {
-                    pos++;
+        /* Parse part headers strictly within [pos, end). */
+        while (pos < end && *pos != '\r' && *pos != '\n') {
+            const char* line_end = (const char*)_csilk_memmem(pos, (size_t)(end - pos), "\r\n", 2);
+            const char* hdr_end = line_end ? line_end : end;
+            size_t      line_len = (size_t)(hdr_end - pos);
+
+            if (line_len >= 20 && memcmp(pos, "Content-Disposition:", 20) == 0) {
+                const char* cur = pos + 20;
+                while (cur < hdr_end && *cur == ' ') {
+                    cur++;
                 }
 
-                const char* name_start = strstr(pos, "name=\"");
+                const char* name_start =
+                    (const char*)_csilk_memmem(cur, (size_t)(hdr_end - cur), "name=\"", 6);
                 if (name_start) {
                     name_start += 6;
-                    const char* name_end = strchr(name_start, '"');
+                    const char* name_end =
+                        (const char*)memchr(name_start, '"', (size_t)(hdr_end - name_start));
                     if (name_end) {
-                        size_t nlen = name_end - name_start;
+                        size_t nlen = (size_t)(name_end - name_start);
                         if (nlen < CSILK_MAX_PART_NAME) {
                             memcpy(part.name, name_start, nlen);
                             part.name[nlen] = '\0';
@@ -156,12 +167,14 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
                     }
                 }
 
-                const char* filename_start = strstr(pos, "filename=\"");
+                const char* filename_start =
+                    (const char*)_csilk_memmem(cur, (size_t)(hdr_end - cur), "filename=\"", 10);
                 if (filename_start) {
                     filename_start += 10;
-                    const char* filename_end = strchr(filename_start, '"');
+                    const char* filename_end = (const char*)memchr(
+                        filename_start, '"', (size_t)(hdr_end - filename_start));
                     if (filename_end) {
-                        size_t flen = filename_end - filename_start;
+                        size_t flen = (size_t)(filename_end - filename_start);
                         if (flen < CSILK_MAX_PART_FILENAME) {
                             memcpy(part.filename, filename_start, flen);
                             part.filename[flen] = '\0';
@@ -172,52 +185,43 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
                         }
                     }
                 }
-            } else if (strncmp(pos, "Content-Type:", 13) == 0) {
-                pos += 13;
-                while (pos < data + data_len && *pos == ' ') {
-                    pos++;
+            } else if (line_len >= 13 && memcmp(pos, "Content-Type:", 13) == 0) {
+                const char* cur = pos + 13;
+                while (cur < hdr_end && *cur == ' ') {
+                    cur++;
                 }
-                const char* ct_end = strstr(pos, "\r\n");
-                size_t      ct_len = ct_end ? (size_t)(ct_end - pos) : strlen(pos);
-                if (ct_len < sizeof(part.content_type) - 1) {
-                    memcpy(part.content_type, pos, ct_len);
+                size_t ct_len = (size_t)(hdr_end - cur);
+                if (ct_len < sizeof(part.content_type)) {
+                    memcpy(part.content_type, cur, ct_len);
                     part.content_type[ct_len] = '\0';
                 }
-                if (ct_end) {
-                    pos = ct_end + 2;
-                } else {
-                    pos += ct_len;
-                }
-                continue;
             }
 
-            const char* line_end = strstr(pos, "\r\n");
             if (line_end) {
                 pos = line_end + 2;
             } else {
+                pos = end;
                 break;
             }
         }
 
         /* Blank line marks the end of headers (RFC 5322 §2.1). */
-        if (pos < data + data_len && strncmp(pos, "\r\n", 2) == 0) {
+        if ((size_t)(end - pos) >= 2 && pos[0] == '\r' && pos[1] == '\n') {
             pos += 2;
+        } else if (pos < end && *pos == '\n') {
+            pos += 1;
         }
 
-        /* Locate the part body: scan forward for the next boundary delimiter.
-       The boundary is preceded by "\n" (and optionally "\r") which must be
-       excluded from the part data. If no boundary is found, the rest of the
-       body is treated as the final part. */
+        /* Locate the part body: scan forward for the next boundary delimiter. */
         const char* body_start = pos;
-
         const char* body_end = NULL;
         const char* search = pos;
-        while (search < data + data_len) {
-            size_t      remaining = (size_t)((data + data_len) - search);
+        while (search < end) {
+            size_t      remaining = (size_t)(end - search);
             const char* next_boundary =
                 (const char*)_csilk_memmem(search, remaining, delimiter, delim_len);
             if (!next_boundary) {
-                body_end = data + data_len;
+                body_end = end;
                 break;
             }
             if (next_boundary > pos && *(next_boundary - 1) == '\n') {
@@ -230,12 +234,12 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
             search = next_boundary + delim_len;
         }
         if (!body_end) {
-            body_end = data + data_len;
+            body_end = end;
         }
 
         if (body_end > body_start) {
-            part.data = (uint8_t*)(body_start);
-            part.data_len = body_end - body_start;
+            part.data = (uint8_t*)body_start;
+            part.data_len = (size_t)(body_end - body_start);
         }
 
         CSILK_LOG_D("Multipart: parsed part - name: '%s', filename: '%s', content-type: "
@@ -261,29 +265,29 @@ csilk_multipart_parse(csilk_ctx_t* c, csilk_multipart_handler_t handler)
         handler(&part);
 
         pos = body_end;
-        if (pos < data + data_len - 2 && strncmp(pos, "\r\n", 2) == 0) {
+        if ((size_t)(end - pos) >= 2 && pos[0] == '\r' && pos[1] == '\n') {
             pos += 2;
+        } else if (pos < end && *pos == '\n') {
+            pos += 1;
         }
-        if (pos + delim_len > data + data_len) {
+        if ((size_t)(end - pos) < delim_len) {
             CSILK_LOG_D("Multipart: reached end of payload or remaining data too short "
                         "for boundary");
             break;
         }
-        if (strncmp(pos, delimiter, delim_len) != 0) {
-            CSILK_LOG_W("Multipart: parsing break - expected boundary delimiter, got '%c%c...'",
-                        pos[0],
-                        pos[1]);
+        if (memcmp(pos, delimiter, delim_len) != 0) {
+            CSILK_LOG_W("Multipart: parsing break - expected boundary delimiter");
             break;
         }
-        if (pos + end_delim_len <= data + data_len && strncmp(pos + delim_len, "--", 2) == 0) {
+        if ((size_t)(end - pos) >= end_delim_len && memcmp(pos + delim_len, "--", 2) == 0) {
             CSILK_LOG_D("Multipart: reached final boundary marker '--%s--'", boundary);
             break;
         }
         pos += delim_len;
-        if (*pos == '\r') {
+        if (pos < end && *pos == '\r') {
             pos++;
         }
-        if (*pos == '\n') {
+        if (pos < end && *pos == '\n') {
             pos++;
         }
     }

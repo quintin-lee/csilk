@@ -19,6 +19,7 @@
 
 #include "csilk/drivers/cipher.h"
 
+#include <limits.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -70,7 +71,7 @@ default_symmetric_encrypt(const uint8_t* key,
     if (!key || !plaintext || !iv || !ciphertext || !ciphertext_len || !tag) {
         return -1;
     }
-    if (key_len != 32 || iv_len != 12 || tag_len != 16) {
+    if (key_len != 32 || iv_len != 12 || tag_len != 16 || plaintext_len > INT_MAX) {
         return -1;
     }
 
@@ -85,7 +86,7 @@ default_symmetric_encrypt(const uint8_t* key,
     if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, key, iv) != 1) {
         goto out;
     }
-    if (EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len) != 1) {
+    if (EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, (int)plaintext_len) != 1) {
         goto out;
     }
     *ciphertext_len = (size_t)len;
@@ -145,7 +146,7 @@ default_symmetric_decrypt(const uint8_t* key,
     if (!key || !ciphertext || !iv || !tag || !plaintext || !plaintext_len) {
         return -1;
     }
-    if (key_len != 32 || iv_len != 12 || tag_len != 16) {
+    if (key_len != 32 || iv_len != 12 || tag_len != 16 || ciphertext_len > INT_MAX) {
         return -1;
     }
 
@@ -160,7 +161,7 @@ default_symmetric_decrypt(const uint8_t* key,
     if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, key, iv) != 1) {
         goto out;
     }
-    if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len) != 1) {
+    if (EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, (int)ciphertext_len) != 1) {
         goto out;
     }
     *plaintext_len = (size_t)len;
@@ -177,6 +178,10 @@ default_symmetric_decrypt(const uint8_t* key,
     ret = 0;
 
 out:
+    if (ret != 0) {
+        OPENSSL_cleanse(plaintext, ciphertext_len);
+        *plaintext_len = 0;
+    }
     EVP_CIPHER_CTX_free(ctx);
     return ret;
 }

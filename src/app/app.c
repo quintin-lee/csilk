@@ -233,17 +233,27 @@ static_serve(csilk_ctx_t* c)
     }
 
     csilk_mutex_lock(&app->app_mutex);
-    int n = app->static_n;
+    int         n = app->static_n;
+    const char* best_prefix = NULL;
+    const char* best_root = NULL;
+    size_t      best_len = 0;
     for (int i = 0; i < n; i++) {
-        size_t plen = strlen(app->static_routes[i].url_prefix);
-        if (!strncmp(path, app->static_routes[i].url_prefix, plen)) {
-            const char* prefix = app->static_routes[i].url_prefix;
-            const char* root = app->static_routes[i].root_dir;
-            csilk_mutex_unlock(&app->app_mutex);
-            csilk_set(c, "static_prefix", (void*)prefix);
-            csilk_static(c, root);
-            return;
+        const char* pfx = app->static_routes[i].url_prefix;
+        size_t      plen = strlen(pfx);
+        if (strncmp(path, pfx, plen) == 0 &&
+            (plen == 0 || pfx[plen - 1] == '/' || path[plen] == '\0' || path[plen] == '/')) {
+            if (!best_prefix || plen > best_len) {
+                best_len = plen;
+                best_prefix = pfx;
+                best_root = app->static_routes[i].root_dir;
+            }
         }
+    }
+    if (best_prefix && best_root) {
+        csilk_mutex_unlock(&app->app_mutex);
+        csilk_set(c, "static_prefix", (void*)best_prefix);
+        csilk_static(c, best_root);
+        return;
     }
     csilk_mutex_unlock(&app->app_mutex);
     csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");

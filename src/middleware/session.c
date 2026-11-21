@@ -54,8 +54,11 @@ typedef struct csilk_session_s {
     char                    id[CSILK_UUID_BUF_SIZE];
     csilk_session_data_t*   data;
     time_t                  expires_at;
-    time_t                  last_access; /* LRU tracking */
+    _Atomic time_t          last_access; /* LRU tracking */
     struct csilk_session_s* next;        /* next in same bucket */
+    _Atomic int             ref_count;
+    atomic_bool             removed;
+    csilk_mutex_t           lock;
 } csilk_session_t;
 
 /**
@@ -158,31 +161,12 @@ generate_session_id(csilk_ctx_t* c, char id[CSILK_UUID_BUF_SIZE])
  * @param id  The session ID string to search for.
  * @return Pointer to the csilk_session_t if found, NULL otherwise.
  */
-static csilk_session_t*
-find_session_locked(const char* id)
-{
-    size_t idx = session_hash(id);
-    session_bucket_lock(idx);
-    csilk_session_t* s = session_buckets[idx].head;
-    while (s) {
-        if (strcmp(s->id, id) == 0) {
-            s->last_access = time(NULL);
-            session_bucket_unlock(idx);
-            return s;
-        }
-        s = s->next;
-    }
-    session_bucket_unlock(idx);
-    return NULL;
-}
-
-/**
- * @brief Free a session's data list and the session struct itself.
- * @param session  The session to free (not currently in the store).
- */
 static void
 free_session(csilk_session_t* session)
 {
+    if (!session) {
+        return;
+    }
     csilk_session_data_t* d = session->data;
     while (d) {
         csilk_session_data_t* next = d->next;
@@ -193,74 +177,139 @@ free_session(csilk_session_t* session)
         free(d);
         d = next;
     }
+    csilk_mutex_destroy(&session->lock);
     free(session);
 }
 
-/**
- * @brief Add a session to the sharded store.
- *
- * Prepends the session to the head of the appropriate bucket. Increments
- * the global session count; if the max limit is exceeded the least-recently
- * accessed session is evicted from all buckets.
- *
- * @param session  The session to add. Must not be NULL.
- */
+static inline void
+session_ref(csilk_session_t* s)
+{
+    if (s) {
+        atomic_fetch_add_explicit(&s->ref_count, 1, memory_order_relaxed);
+    }
+}
+
+static inline void
+session_unref(csilk_session_t* s)
+{
+    if (!s) {
+        return;
+    }
+    if (atomic_fetch_sub_explicit(&s->ref_count, 1, memory_order_acq_rel) == 1) {
+        free_session(s);
+    }
+}
+
+static void
+_session_ctx_release(void* ptr)
+{
+    session_unref((csilk_session_t*)ptr);
+}
+
+static csilk_session_t*
+find_session_locked(const char* id)
+{
+    csilk_once(&session_init_once, init_session_buckets);
+    size_t idx = session_hash(id);
+    time_t now = time(NULL);
+    session_bucket_lock(idx);
+    csilk_session_t** prev = &session_buckets[idx].head;
+    csilk_session_t*  s = session_buckets[idx].head;
+    while (s) {
+        if (strcmp(s->id, id) == 0) {
+            if (s->expires_at <= now) {
+                *prev = s->next;
+                s->next = NULL;
+                bool was_removed =
+                    atomic_exchange_explicit(&s->removed, true, memory_order_acq_rel);
+                session_bucket_unlock(idx);
+                if (!was_removed) {
+                    atomic_fetch_sub_explicit(&session_count, 1, memory_order_relaxed);
+                    session_unref(s);
+                }
+                return NULL;
+            }
+            atomic_store_explicit(&s->last_access, now, memory_order_relaxed);
+            s->expires_at = now + SESSION_TTL;
+            session_ref(s);
+            session_bucket_unlock(idx);
+            return s;
+        }
+        prev = &s->next;
+        s = s->next;
+    }
+    session_bucket_unlock(idx);
+    return NULL;
+}
+
 static void
 add_session_locked(csilk_session_t* session)
 {
-    session->last_access = time(NULL);
+    time_t now = time(NULL);
+    atomic_store_explicit(&session->last_access, now, memory_order_relaxed);
     size_t idx = session_hash(session->id);
     session_bucket_lock(idx);
+    session_ref(session); /* Store membership reference */
     session->next = session_buckets[idx].head;
     session_buckets[idx].head = session;
     session_bucket_unlock(idx);
     atomic_fetch_add_explicit(&session_count, 1, memory_order_relaxed);
 
     /* LRU eviction: if over limit, find and evict the least-recently-accessed session */
-    if (atomic_load_explicit(&session_count, memory_order_relaxed) >
-        atomic_load_explicit(&session_max, memory_order_relaxed)) {
-        /* Find the session with the oldest last_access across all buckets */
+    size_t max_lim = atomic_load_explicit(&session_max, memory_order_relaxed);
+    if (max_lim > 0 && atomic_load_explicit(&session_count, memory_order_relaxed) > max_lim) {
         csilk_session_t* victim = NULL;
         time_t           victim_ts = 0;
         for (size_t b = 0; b < SESSION_BUCKET_COUNT; b++) {
             session_bucket_lock(b);
             for (csilk_session_t* s = session_buckets[b].head; s; s = s->next) {
-                if (s->last_access < victim_ts || victim == NULL) {
-                    victim_ts = s->last_access;
+                if (s == session) {
+                    continue;
+                }
+                time_t ts = atomic_load_explicit(&s->last_access, memory_order_relaxed);
+                if (victim == NULL || ts < victim_ts) {
+                    if (victim) {
+                        session_unref(victim);
+                    }
+                    victim_ts = ts;
                     victim = s;
+                    session_ref(victim);
                 }
             }
             session_bucket_unlock(b);
         }
         if (victim) {
-            /* Unlink victim from its bucket */
-            size_t vidx = session_hash(victim->id);
+            char victim_id[CSILK_UUID_BUF_SIZE];
+            strncpy(victim_id, victim->id, sizeof(victim_id) - 1);
+            victim_id[sizeof(victim_id) - 1] = '\0';
+
+            size_t vidx = session_hash(victim_id);
             session_bucket_lock(vidx);
             csilk_session_t** prev = &session_buckets[vidx].head;
             csilk_session_t*  s = session_buckets[vidx].head;
+            bool              unlinked = false;
             while (s) {
                 if (s == victim) {
                     *prev = s->next;
+                    s->next = NULL;
+                    unlinked =
+                        !atomic_exchange_explicit(&victim->removed, true, memory_order_acq_rel);
                     break;
                 }
                 prev = &s->next;
                 s = s->next;
             }
             session_bucket_unlock(vidx);
-            atomic_fetch_sub_explicit(&session_count, 1, memory_order_relaxed);
-            free_session(victim);
-            CSILK_LOG_D("Session: LRU-evicted session '%s'", victim->id);
+            if (unlinked) {
+                atomic_fetch_sub_explicit(&session_count, 1, memory_order_relaxed);
+                session_unref(victim); /* Drop store ref */
+                CSILK_LOG_D("Session: LRU-evicted session '%s'", victim_id);
+            }
+            session_unref(victim);     /* Drop scan ref */
         }
     }
 }
 
-/**
- * @brief Remove a session from the sharded store.
- *
- * Unlinks the session from its bucket. Does NOT free the session or its data.
- *
- * @param session  The session to remove. Must be a valid pointer currently in the store.
- */
 static void
 remove_session_locked(csilk_session_t* session)
 {
@@ -268,49 +317,57 @@ remove_session_locked(csilk_session_t* session)
     session_bucket_lock(idx);
     csilk_session_t** prev = &session_buckets[idx].head;
     csilk_session_t*  s = session_buckets[idx].head;
+    bool              unlinked = false;
     while (s) {
         if (s == session) {
             *prev = s->next;
+            s->next = NULL;
+            unlinked = !atomic_exchange_explicit(&session->removed, true, memory_order_acq_rel);
             break;
         }
         prev = &s->next;
         s = s->next;
     }
     session_bucket_unlock(idx);
-    atomic_fetch_sub_explicit(&session_count, 1, memory_order_relaxed);
+    if (unlinked) {
+        atomic_fetch_sub_explicit(&session_count, 1, memory_order_relaxed);
+        session_unref(session); /* Drop store membership ref */
+    }
 }
 
-/**
- * @brief Remove expired sessions from all buckets.
- *
- * Iterates every bucket; removes (frees) every session whose expires_at is
- * in the past. Each bucket is locked individually so the sweep does not
- * block other buckets.
- */
 static void
 cleanup_expired(void)
 {
     time_t now = time(NULL);
     for (size_t b = 0; b < SESSION_BUCKET_COUNT; b++) {
+        csilk_session_t* expired_list = NULL;
+
         session_bucket_lock(b);
         csilk_session_t** prev = &session_buckets[b].head;
         csilk_session_t*  s = session_buckets[b].head;
         while (s) {
             if (s->expires_at <= now) {
-                CSILK_LOG_D("Session: Cleaning up expired session '%s'", s->id);
                 *prev = s->next;
-                session_bucket_unlock(b);
-                free_session(s);
-                atomic_fetch_sub_explicit(&session_count, 1, memory_order_relaxed);
-                s = session_buckets[b].head; /* re-read head after unlock */
-                session_bucket_lock(b);
-                /* s may have advanced; continue from current head */
+                if (!atomic_exchange_explicit(&s->removed, true, memory_order_acq_rel)) {
+                    atomic_fetch_sub_explicit(&session_count, 1, memory_order_relaxed);
+                    s->next = expired_list;
+                    expired_list = s;
+                }
+                s = *prev;
             } else {
                 prev = &s->next;
                 s = s->next;
             }
         }
         session_bucket_unlock(b);
+
+        while (expired_list) {
+            csilk_session_t* cur = expired_list;
+            expired_list = cur->next;
+            cur->next = NULL;
+            CSILK_LOG_D("Session: Cleaning up expired session '%s'", cur->id);
+            session_unref(cur);
+        }
     }
 }
 
@@ -378,16 +435,18 @@ csilk_session_start(csilk_ctx_t* c)
         session = find_session_locked(sid);
     }
 
+    csilk_once(&session_init_once, init_session_buckets);
+
     if (!session) {
-        /* No session found — allocate a new one, generate an ID, and insert
-        into the global store. The session cookie (HTTP-only, no JS access)
-        is set with a 24-hour lifetime. */
         session = calloc(1, sizeof(csilk_session_t));
         if (!session) {
             CSILK_LOG_E("Session: Memory allocation failed for new session");
             return;
         }
 
+        csilk_mutex_init(&session->lock);
+        atomic_init(&session->ref_count, 1); /* Request context ref */
+        atomic_init(&session->removed, false);
         generate_session_id(c, session->id);
         session->expires_at = time(NULL) + SESSION_TTL;
 
@@ -396,14 +455,10 @@ csilk_session_start(csilk_ctx_t* c)
         CSILK_LOG_D("Session: Created new session '%s' for request %p", session->id, (void*)c);
         csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", NULL, 1, 1);
     } else {
-        /* Existing session: extend the expiry window. */
-        session->expires_at = time(NULL) + SESSION_TTL;
         CSILK_LOG_D("Session: Resumed existing session '%s' for request %p", session->id, (void*)c);
     }
 
-    /* Store session pointer in context for downstream handlers to access
-      via csilk_session_get() / csilk_session_set(). */
-    csilk_set(c, "_session", session);
+    csilk_set_ex(c, "_session", session, _session_ctx_release);
 }
 
 /**
@@ -426,41 +481,7 @@ csilk_session_start(csilk_ctx_t* c)
 void
 csilk_session_set(csilk_ctx_t* c, const char* key, void* value)
 {
-    if (!c || !key) {
-        return;
-    }
-
-    csilk_session_t* session = csilk_get(c, "_session");
-    if (!session) {
-        return;
-    }
-
-    CSILK_LOG_T("Session: Storing key '%s' in session '%s'", key, session->id);
-
-    csilk_session_data_t* d = session->data;
-    while (d) {
-        if (strcmp(d->key, key) == 0) {
-            d->value = value;
-            return;
-        }
-        d = d->next;
-    }
-
-    csilk_session_data_t* new_d = calloc(1, sizeof(csilk_session_data_t));
-    if (!new_d) {
-        CSILK_LOG_E("Session: Memory allocation failed for session key '%s'", key);
-        return;
-    }
-
-    new_d->key = strdup(key);
-    if (!new_d->key) {
-        CSILK_LOG_E("Session: failed to duplicate key '%s'", key);
-        free(new_d);
-        return;
-    }
-    new_d->value = value;
-    new_d->next = session->data;
-    session->data = new_d;
+    csilk_session_set_len(c, key, value, 0, NULL);
 }
 
 /**
@@ -508,6 +529,7 @@ csilk_session_set_len(csilk_ctx_t*                   c,
                 len,
                 cleanup ? "yes" : "no");
 
+    csilk_mutex_lock(&session->lock);
     csilk_session_data_t* d = session->data;
     while (d) {
         if (strcmp(d->key, key) == 0) {
@@ -517,6 +539,7 @@ csilk_session_set_len(csilk_ctx_t*                   c,
             d->value = value;
             d->value_len = len;
             d->cleanup = cleanup;
+            csilk_mutex_unlock(&session->lock);
             return;
         }
         d = d->next;
@@ -524,12 +547,14 @@ csilk_session_set_len(csilk_ctx_t*                   c,
 
     csilk_session_data_t* new_d = calloc(1, sizeof(csilk_session_data_t));
     if (!new_d) {
+        csilk_mutex_unlock(&session->lock);
         CSILK_LOG_E("Session: Memory allocation failed for session key '%s'", key);
         return;
     }
 
     new_d->key = strdup(key);
     if (!new_d->key) {
+        csilk_mutex_unlock(&session->lock);
         CSILK_LOG_E("Session: failed to duplicate key '%s'", key);
         free(new_d);
         return;
@@ -539,6 +564,7 @@ csilk_session_set_len(csilk_ctx_t*                   c,
     new_d->cleanup = cleanup;
     new_d->next = session->data;
     session->data = new_d;
+    csilk_mutex_unlock(&session->lock);
 }
 
 /**
@@ -567,13 +593,17 @@ csilk_session_get(csilk_ctx_t* c, const char* key)
 
     CSILK_LOG_T("Session: Retrieving key '%s' from session '%s'", key, session->id);
 
+    csilk_mutex_lock(&session->lock);
     csilk_session_data_t* d = session->data;
     while (d) {
         if (strcmp(d->key, key) == 0) {
-            return d->value;
+            void* v = d->value;
+            csilk_mutex_unlock(&session->lock);
+            return v;
         }
         d = d->next;
     }
+    csilk_mutex_unlock(&session->lock);
 
     char s_key[128];
     snprintf(s_key, sizeof(s_key), "session:%s:%s", session->id, key);
@@ -625,16 +655,20 @@ csilk_session_get_ex(csilk_ctx_t* c, const char* key, size_t* out_len)
 
     CSILK_LOG_T("Session: Retrieving key '%s' from session '%s'", key, session->id);
 
+    csilk_mutex_lock(&session->lock);
     csilk_session_data_t* d = session->data;
     while (d) {
         if (strcmp(d->key, key) == 0) {
+            void* v = d->value;
             if (out_len) {
                 *out_len = d->value_len;
             }
-            return d->value;
+            csilk_mutex_unlock(&session->lock);
+            return v;
         }
         d = d->next;
     }
+    csilk_mutex_unlock(&session->lock);
 
     /* Fallback to context storage, same as csilk_session_get */
     char s_key[128];
@@ -687,20 +721,8 @@ csilk_session_destroy(csilk_ctx_t* c)
     CSILK_LOG_I("Session: Destroying session '%s' for request %p", session->id, (void*)c);
 
     remove_session_locked(session);
-
-    csilk_session_data_t* d = session->data;
-    while (d) {
-        csilk_session_data_t* next = d->next;
-        if (d->cleanup) {
-            d->cleanup(d->value);
-        }
-        free(d->key);
-        free(d);
-        d = next;
-    }
-    free(session);
-
-    csilk_set(c, "_session", NULL);
+    /* Clears "_session" and invokes _session_ctx_release() to drop context ref. */
+    csilk_set_ex(c, "_session", NULL, NULL);
     csilk_set_cookie(c, SESSION_COOKIE, "", -1, "/", NULL, 0, 1);
 }
 

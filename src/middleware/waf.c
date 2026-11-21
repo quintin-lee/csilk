@@ -129,14 +129,15 @@ _csilk_rabin_karp_scan(const char*          haystack,
         return 0;
     }
 
-    /* Rolling-hash path: build per-pattern hash sets, then slide a window. */
-    const uint32_t BK = 256U;         /* alphabet for upper-cased chars */
-    const uint32_t MOD = 1000000007U; /* large prime */
+    /* Rolling-hash path: use 64-bit arithmetic so (val * 256 + byte) % MOD
+     * never overflows uint32_t on large payloads (>256 bytes). */
+    const uint64_t BK = 256ULL;         /* alphabet for upper-cased chars */
+    const uint64_t MOD = 1000000007ULL; /* large prime */
 
     /* Pre-compute pattern hashes (upper-cased). */
-    uint32_t* pat_hashes = (uint32_t*)calloc((size_t)rule_count, sizeof(uint32_t));
-    uint32_t* pat_pows = (uint32_t*)calloc((size_t)rule_count, sizeof(uint32_t));
-    uint32_t  max_plen = 0;
+    uint64_t* pat_hashes = (uint64_t*)calloc((size_t)rule_count, sizeof(uint64_t));
+    uint64_t* pat_pows = (uint64_t*)calloc((size_t)rule_count, sizeof(uint64_t));
+    size_t    max_plen = 0;
     if (!pat_hashes || !pat_pows) {
         free(pat_hashes);
         free(pat_pows);
@@ -151,13 +152,13 @@ _csilk_rabin_karp_scan(const char*          haystack,
             max_plen = pl;
         }
         /* Compute hash of upper-cased pattern */
-        uint32_t h = 0;
+        uint64_t h = 0;
         for (size_t j = 0; j < pl; j++) {
-            h = (h * BK + (uint32_t)toupper((unsigned char)rules[r].pattern[j])) % MOD;
+            h = (h * BK + (uint64_t)(uint8_t)toupper((unsigned char)rules[r].pattern[j])) % MOD;
         }
         pat_hashes[r] = h;
         /* precompute BK^(pl-1) mod MOD */
-        uint32_t p = 1;
+        uint64_t p = 1;
         for (size_t j = 0; j < pl - 1; j++) {
             p = (p * BK) % MOD;
         }
@@ -194,14 +195,14 @@ _csilk_rabin_karp_scan(const char*          haystack,
             continue;
         }
 
-        uint32_t bk_pow = 1;
+        uint64_t bk_pow = 1;
         for (size_t j = 0; j < wlen - 1; j++) {
             bk_pow = (bk_pow * BK) % MOD;
         }
 
-        uint32_t win_hash = 0;
+        uint64_t win_hash = 0;
         for (size_t j = 0; j < wlen; j++) {
-            win_hash = (win_hash * BK + (uint32_t)upper[j]) % MOD;
+            win_hash = (win_hash * BK + (uint64_t)upper[j]) % MOD;
         }
 
         /* Check if win_hash matches any pattern of this length. */
@@ -236,8 +237,9 @@ _csilk_rabin_karp_scan(const char*          haystack,
         }
 
         for (size_t i = wlen; i < haystack_len && !found; i++) {
-            win_hash = (win_hash - (uint32_t)upper[i - wlen] * bk_pow % MOD + MOD) % MOD;
-            win_hash = (win_hash * BK + (uint32_t)upper[i]) % MOD;
+            uint64_t drop = ((uint64_t)upper[i - wlen] * bk_pow) % MOD;
+            win_hash = (win_hash + MOD - drop) % MOD;
+            win_hash = (win_hash * BK + (uint64_t)upper[i]) % MOD;
 
             candidate = 0;
             for (int r = 0; r < rule_count; r++) {
@@ -253,7 +255,7 @@ _csilk_rabin_karp_scan(const char*          haystack,
                     }
                     int match = 1;
                     for (size_t j = 0; j < wlen; j++) {
-                        if (upper[i - wlen + j] != (uint8_t)rules[r].pattern[j]) {
+                        if (upper[i - wlen + 1 + j] != (uint8_t)rules[r].pattern[j]) {
                             match = 0;
                             break;
                         }
@@ -439,59 +441,37 @@ csilk_waf_middleware(csilk_ctx_t* c)
         if (body && body_len > 0) {
             size_t scan_len =
                 body_len < CSILK_WAF_MAX_BODY_SCAN ? body_len : CSILK_WAF_MAX_BODY_SCAN;
-            /* NUL-terminate a copy if the body is not already NUL-terminated
-             * within the scan window, so Rabin-Karp can use strlen-free scan. */
-            char* scan_buf;
-            int   owned = 0;
-            if (scan_len < body_len || body[scan_len] != '\0') {
-                scan_buf = (char*)malloc(scan_len + 1);
-                if (scan_buf) {
-                    memcpy(scan_buf, body, scan_len);
-                    scan_buf[scan_len] = '\0';
-                    owned = 1;
-                } else {
-                    scan_buf = NULL;
-                }
-            } else {
-                scan_buf = (char*)body;
+            wctx.blocked = 0;
+            /* Inline Rabin-Karp scan over all three rule sets (strictly length-bounded). */
+            int sql_total = 0, xss_total = 0, trav_total = 0;
+            for (int i = 0; sql_rules[i].pattern; i++) {
+                sql_total++;
             }
-            if (scan_buf) {
-                wctx.blocked = 0;
-                /* Inline Rabin-Karp scan over all three rule sets */
-                int sql_total = 0, xss_total = 0, trav_total = 0;
-                for (int i = 0; sql_rules[i].pattern; i++) {
-                    sql_total++;
-                }
-                for (int i = 0; xss_rules[i].pattern; i++) {
-                    xss_total++;
-                }
-                for (int i = 0; traversal_rules[i].pattern; i++) {
-                    trav_total++;
-                }
+            for (int i = 0; xss_rules[i].pattern; i++) {
+                xss_total++;
+            }
+            for (int i = 0; traversal_rules[i].pattern; i++) {
+                trav_total++;
+            }
 
-                if (_csilk_rabin_karp_scan(scan_buf, scan_len, sql_rules, sql_total)) {
-                    wctx.blocked = 1;
-                    wctx.attack_type = "SQL Injection";
-                } else if (_csilk_rabin_karp_scan(scan_buf, scan_len, xss_rules, xss_total)) {
-                    wctx.blocked = 1;
-                    wctx.attack_type = "XSS";
-                } else if (_csilk_rabin_karp_scan(
-                               scan_buf, scan_len, traversal_rules, trav_total)) {
-                    wctx.blocked = 1;
-                    wctx.attack_type = "Directory Traversal";
-                }
-                if (wctx.blocked) {
-                    CSILK_LOG_W("WAF: Blocked request %p: %s attack detected in body "
-                                "(scanned %zu of %zu bytes)",
-                                (void*)c,
-                                wctx.attack_type,
-                                scan_len,
-                                body_len);
-                    blocked = 1;
-                }
-                if (owned) {
-                    free(scan_buf);
-                }
+            if (_csilk_rabin_karp_scan(body, scan_len, sql_rules, sql_total)) {
+                wctx.blocked = 1;
+                wctx.attack_type = "SQL Injection";
+            } else if (_csilk_rabin_karp_scan(body, scan_len, xss_rules, xss_total)) {
+                wctx.blocked = 1;
+                wctx.attack_type = "XSS";
+            } else if (_csilk_rabin_karp_scan(body, scan_len, traversal_rules, trav_total)) {
+                wctx.blocked = 1;
+                wctx.attack_type = "Directory Traversal";
+            }
+            if (wctx.blocked) {
+                CSILK_LOG_W("WAF: Blocked request %p: %s attack detected in body "
+                            "(scanned %zu of %zu bytes)",
+                            (void*)c,
+                            wctx.attack_type,
+                            scan_len,
+                            body_len);
+                blocked = 1;
             }
         }
     }

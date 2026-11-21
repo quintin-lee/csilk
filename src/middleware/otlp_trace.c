@@ -4,6 +4,7 @@
  * @copyright MIT License
  */
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -34,9 +35,27 @@ static csilk_otlp_buffer_t g_otlp_buffer = {
     .head = 0,
     .count = 0,
 };
-static int         g_otlp_init = 0;
-static _Atomic int g_otlp_sample_rate = OTLP_SAMPLE_RATE_DEFAULT;
-static uint64_t    g_otlp_total_spans = 0; /* total spans received (for sampling decision) */
+static csilk_once_t     g_otlp_init_once = CSILK_ONCE_INIT;
+static atomic_int       g_otlp_init = 0;
+static _Atomic int      g_otlp_sample_rate = OTLP_SAMPLE_RATE_DEFAULT;
+static _Atomic uint64_t g_otlp_total_spans = 0; /* total spans received (for sampling decision) */
+
+static void
+_otlp_init_once_cb(void)
+{
+    csilk_mutex_init(&g_otlp_buffer.mutex);
+    if (!g_otlp_buffer.spans) {
+        size_t cap = g_otlp_buffer.cap > 0 ? g_otlp_buffer.cap : OTLP_SPAN_BUF_CAP;
+        g_otlp_buffer.cap = cap;
+        g_otlp_buffer.spans = calloc(cap, sizeof(csilk_otlp_span_t));
+    }
+    csilk_tracer_hooks_t hooks = {
+        .start_span = (void* (*)(const char*, const char*))csilk_otlp_tracer_start_span,
+        .end_span = (void (*)(void*, int))csilk_otlp_tracer_end_span,
+    };
+    csilk_tracer_set_hooks(&hooks);
+    atomic_store_explicit(&g_otlp_init, 1, memory_order_release);
+}
 
 typedef struct {
     char trace_id[33];
@@ -158,18 +177,7 @@ csilk_trace_middleware(csilk_ctx_t* c)
         return;
     }
 
-    if (!g_otlp_init) {
-        csilk_mutex_init(&g_otlp_buffer.mutex);
-        if (!g_otlp_buffer.spans) {
-            g_otlp_buffer.spans = calloc(OTLP_SPAN_BUF_CAP, sizeof(csilk_otlp_span_t));
-        }
-        csilk_tracer_hooks_t hooks = {
-            .start_span = (void* (*)(const char*, const char*))csilk_otlp_tracer_start_span,
-            .end_span = (void (*)(void*, int))csilk_otlp_tracer_end_span,
-        };
-        csilk_tracer_set_hooks(&hooks);
-        g_otlp_init = 1;
-    }
+    csilk_once(&g_otlp_init_once, _otlp_init_once_cb);
 
     const char* tp = csilk_get_header(c, "traceparent");
     char        trace_id_buf[33] = {0};
@@ -286,18 +294,7 @@ csilk_ctx_get_span_id(csilk_ctx_t* c)
 csilk_otlp_span_t*
 csilk_otlp_tracer_start_span(const char* name, const char* parent_span_id)
 {
-    if (!g_otlp_init) {
-        csilk_mutex_init(&g_otlp_buffer.mutex);
-        if (!g_otlp_buffer.spans) {
-            g_otlp_buffer.spans = calloc(OTLP_SPAN_BUF_CAP, sizeof(csilk_otlp_span_t));
-        }
-        csilk_tracer_hooks_t hooks = {
-            .start_span = (void* (*)(const char*, const char*))csilk_otlp_tracer_start_span,
-            .end_span = (void (*)(void*, int))csilk_otlp_tracer_end_span,
-        };
-        csilk_tracer_set_hooks(&hooks);
-        g_otlp_init = 1;
-    }
+    csilk_once(&g_otlp_init_once, _otlp_init_once_cb);
 
     csilk_otlp_span_t* span = calloc(1, sizeof(csilk_otlp_span_t));
     if (!span) {
@@ -382,17 +379,19 @@ csilk_otlp_tracer_end_span(csilk_otlp_span_t* span, int status_code)
         tls_trace_depth--;
     }
 
-    uint64_t total = __atomic_add_fetch(&g_otlp_total_spans, 1, __ATOMIC_RELAXED);
+    uint64_t total = atomic_fetch_add_explicit(&g_otlp_total_spans, 1, memory_order_relaxed) + 1;
 
     /* If buffer is at capacity, apply sampling: record only every g_otlp_sample_rate-th span */
+    csilk_once(&g_otlp_init_once, _otlp_init_once_cb);
     csilk_mutex_lock(&g_otlp_buffer.mutex);
-    if (g_otlp_buffer.count < g_otlp_buffer.cap) {
+    if (g_otlp_buffer.spans && g_otlp_buffer.count < g_otlp_buffer.cap) {
         g_otlp_buffer.spans[g_otlp_buffer.head] = *span;
         g_otlp_buffer.head = (g_otlp_buffer.head + 1) % g_otlp_buffer.cap;
         g_otlp_buffer.count++;
-    } else {
+    } else if (g_otlp_buffer.spans && g_otlp_buffer.cap > 0) {
         /* Sampling path: only record if (total % sample_rate == 0) to keep stats representative */
-        if (g_otlp_sample_rate > 0 && (total % (uint64_t)g_otlp_sample_rate) == 0) {
+        int sr = atomic_load_explicit(&g_otlp_sample_rate, memory_order_relaxed);
+        if (sr > 0 && (total % (uint64_t)sr) == 0) {
             /* Overwrite the oldest span (ring buffer) */
             size_t idx = g_otlp_buffer.head;
             g_otlp_buffer.spans[idx] = *span;
@@ -411,6 +410,7 @@ csilk_otlp_apm_spans_handler(csilk_ctx_t* c)
         return;
     }
 
+    csilk_once(&g_otlp_init_once, _otlp_init_once_cb);
     csilk_mutex_lock(&g_otlp_buffer.mutex);
     csilk_json_t* arr = csilk_json_array();
     size_t        count = g_otlp_buffer.count;
@@ -501,22 +501,14 @@ csilk_otlp_apm_ui_handler(csilk_ctx_t* c)
 void
 csilk_otlp_tracer_set_sample_rate(int rate)
 {
-    g_otlp_sample_rate = rate;
+    atomic_store_explicit(&g_otlp_sample_rate, rate, memory_order_relaxed);
     CSILK_LOG_D("OTLP: sample rate set to %d", rate);
 }
 
-/**
- * @brief Set the span ring buffer capacity.
- *
- * Must be called before the first span is recorded (i.e., before the
- * buffer is lazily initialized). Subsequent calls have no effect.
- *
- * @param cap  New capacity (must be > 0). Default is 2048.
- */
 void
 csilk_otlp_tracer_set_buffer_size(size_t cap)
 {
-    if (cap > 0 && !g_otlp_init) {
+    if (cap > 0 && !atomic_load_explicit(&g_otlp_init, memory_order_acquire)) {
         g_otlp_buffer.cap = cap;
         CSILK_LOG_D("OTLP: span buffer capacity set to %zu", cap);
     }

@@ -118,6 +118,9 @@ csilk_base64url_encode(const uint8_t* src, size_t len, char* out)
 int
 csilk_base64url_decode(const char* src, uint8_t* out, size_t out_cap)
 {
+    if (!src || !out || out_cap == 0) {
+        return -1;
+    }
     /* Decoding proceeds in three steps:
      *   1. Convert URL-safe characters back to standard Base64.
      *   2. Restore padding so the length is a multiple of 4.

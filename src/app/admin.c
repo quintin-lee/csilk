@@ -473,18 +473,19 @@ admin_ws_handler(csilk_ctx_t* c)
 {
     csilk_ws_handshake(c);
     if (csilk_is_websocket(c)) {
-        csilk_mq_t* mq = csilk_server_get_mq(csilk_ctx_get_server(c));
+        csilk_mq_t*              mq = csilk_server_get_mq(csilk_ctx_get_server(c));
+        admin_monitor_cleanup_t* cl = malloc(sizeof(admin_monitor_cleanup_t));
+        if (!cl) {
+            CSILK_LOG_E("Admin Dashboard: failed to allocate WebSocket cleanup context");
+            return;
+        }
+        cl->mq = mq;
+        cl->c = c;
+        csilk_ctx_defer(c, admin_monitor_on_close, cl);
         csilk_mq_register_monitor(mq, c);
 
         // Also monitor AI engine
         csilk_ai_register_monitor(c);
-
-        admin_monitor_cleanup_t* cl = malloc(sizeof(admin_monitor_cleanup_t));
-        if (cl) {
-            cl->mq = mq;
-            cl->c = c;
-            csilk_ctx_defer(c, admin_monitor_on_close, cl);
-        }
 
         CSILK_LOG_I("Admin Dashboard connected via WebSocket");
     }

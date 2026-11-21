@@ -14,6 +14,8 @@
 #include "csilk/test/test.h"
 #include "csilk/core/internal.h"
 
+void test_jwt_short_signature(void);
+
 void
 test_jwt_core()
 {
@@ -334,6 +336,25 @@ main()
     test_jwt_rs256();
     test_jwt_es256();
     test_jwt_middleware_null_key();
+    test_jwt_short_signature();
     printf("All JWT tests passed!\n");
     return 0;
+}
+
+void
+test_jwt_short_signature(void)
+{
+    printf("Testing JWT short HS256 signature safety...\n");
+    const char* short_tok = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyIjoiYSJ9.x";
+    size_t      tok_sz = strlen(short_tok) + 1;
+    char*       heap_tok = malloc(tok_sz);
+    assert(heap_tok != nullptr);
+    memcpy(heap_tok, short_tok, tok_sz);
+
+    csilk_ctx_t*  c = csilk_test_ctx_new();
+    csilk_json_t* verified = csilk_jwt_verify(c, heap_tok, "supersecret-key-1234");
+    assert(verified == nullptr);
+
+    csilk_test_ctx_free(c);
+    free(heap_tok);
 }

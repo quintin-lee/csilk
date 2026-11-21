@@ -1,8 +1,12 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "csilk/core/internal.h"
+
+static void test_bcrypt_openbsd_vectors(void);
+static void test_bcrypt_cost_scaling(void);
 
 static void
 test_bcrypt_hash_format(void)
@@ -168,7 +172,61 @@ main(void)
     test_bcrypt_password_truncation();
     test_bcrypt_verify_edge_cases();
     test_bcrypt_known_vector();
+    test_bcrypt_openbsd_vectors();
+    test_bcrypt_cost_scaling();
 
     printf("test_bcrypt: ALL PASSED\n");
     return 0;
+}
+
+static void
+test_bcrypt_openbsd_vectors(void)
+{
+    printf("Testing bcrypt OpenBSD $2a$/$2b$ vectors...\n");
+
+    struct {
+        const char* password;
+        const char* hash;
+    } cases[] = {
+        {"Hello!", "$2a$06$DCq7YPn5Rq63x1ZoAMiMi.VZybw9jdkrPQcC2BWa0UNZnv.MR.sQC"},
+        {"a",      "$2b$05$abcdefghijklmnopqrstuu8.veTXNDPV2eEsdpKNczMw2otgh5LnK"},
+        {"aa",     "$2b$05$abcdefghijklmnopqrstuuw5YJs8Npny5Vkq9r8JF0OglHT93sbs2"},
+        {"abc",    "$2b$04$abcdefghijklmnopqrstuuCi15uRb1eH7NAlJ/TgeJertyknQpYn2"},
+        {"abcabc", "$2b$04$abcdefghijklmnopqrstuuMr1iqMnqBcx.IPHMnu.khXBFsI6LKm2"},
+    };
+
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+        assert(csilk_bcrypt_verify(cases[i].password, strlen(cases[i].password), cases[i].hash) ==
+               0);
+        assert(csilk_bcrypt_verify("wrong", 5, cases[i].hash) == -1);
+    }
+
+    printf("  passed\n");
+}
+
+static void
+test_bcrypt_cost_scaling(void)
+{
+    printf("Testing bcrypt cost scaling (2^cost work factor)...\n");
+
+    char            hash[CSILK_BCRYPT_HASH_LEN];
+    struct timespec t0, t1, t2;
+
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    csilk_bcrypt_hash("cost-scale", 10, 4, hash);
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    double low_ms =
+        (double)(t1.tv_sec - t0.tv_sec) * 1000.0 + (double)(t1.tv_nsec - t0.tv_nsec) / 1e6;
+
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    csilk_bcrypt_hash("cost-scale", 10, 8, hash);
+    clock_gettime(CLOCK_MONOTONIC, &t2);
+    double high_ms =
+        (double)(t2.tv_sec - t1.tv_sec) * 1000.0 + (double)(t2.tv_nsec - t1.tv_nsec) / 1e6;
+
+    assert(high_ms > low_ms * 4.0);
+    assert(csilk_bcrypt_verify("cost-scale", 10, hash) == 0);
+
+    printf("  cost 4: %.2f ms, cost 8: %.2f ms\n", low_ms, high_ms);
+    printf("  passed\n");
 }
