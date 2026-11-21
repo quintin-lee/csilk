@@ -533,6 +533,31 @@ csilk_server_wait_grace_period(csilk_server_t* server)
     _csilk_reload_try_reclaim(server);
 }
 
+static bool
+rcu_wait_slot_idle(csilk_rcu_slot_t* slot)
+{
+    for (int i = 0; i < 1000; i++) {
+        if (atomic_load_explicit(&slot->active_epoch, memory_order_acquire) == 0) {
+            return true;
+        }
+        sched_yield();
+    }
+    for (int i = 0; i < 5000; i++) {
+        if (atomic_load_explicit(&slot->active_epoch, memory_order_acquire) == 0) {
+            return true;
+        }
+        usleep(1000); /* 1 ms; bounded ~5 s wait under heavy load / TSAN */
+    }
+    uint64_t stuck_epoch = atomic_load_explicit(&slot->active_epoch, memory_order_acquire);
+    if (stuck_epoch == 0) {
+        return true;
+    }
+    CSILK_LOG_E("RCU: teardown timed out waiting for active reader (epoch=%llu) — "
+                "possible missing csilk_server_router_release()",
+                (unsigned long long)stuck_epoch);
+    return false;
+}
+
 CSILK_INTERNAL void
 _csilk_reload_mgr_free(csilk_server_t* server)
 {
@@ -559,21 +584,16 @@ _csilk_reload_mgr_free(csilk_server_t* server)
         g_tls_rcu.server_gen = 0;
     }
 
-    /* Wait for all static readers to exit */
+    /* Wait for all static readers to exit (bounded to avoid hang on leaked token) */
     for (size_t i = 0; i < CSILK_RELOAD_MAX_READERS; i++) {
-        while (atomic_load_explicit(&mgr->reader_slots[i].active_epoch, memory_order_acquire) !=
-               0) {
-            sched_yield();
-        }
+        rcu_wait_slot_idle(&mgr->reader_slots[i]);
         atomic_store_explicit(&mgr->reader_slots[i].owner_tid, 0, memory_order_relaxed);
     }
 
     /* Wait for all overflow dynamic readers to exit */
     csilk_rcu_slot_t* ov = atomic_load_explicit(&mgr->overflow_head, memory_order_acquire);
     while (ov) {
-        while (atomic_load_explicit(&ov->active_epoch, memory_order_acquire) != 0) {
-            sched_yield();
-        }
+        rcu_wait_slot_idle(ov);
         atomic_store_explicit(&ov->owner_tid, 0, memory_order_relaxed);
         ov = atomic_load_explicit(&ov->next_overflow, memory_order_acquire);
     }

@@ -213,12 +213,19 @@ csilk_thread_setaffinity(csilk_thread_t* tid, char* cpuset, char* oldmask, int m
     (void)oldmask;
     cpu_set_t set;
     CPU_ZERO(&set);
-    for (int i = 0; i < maxcpu; i++) {
+    int limit = maxcpu < CPU_SETSIZE ? maxcpu : CPU_SETSIZE;
+    for (int i = 0; i < limit; i++) {
         if (cpuset[i]) {
             CPU_SET(i, &set);
         }
     }
     return pthread_setaffinity_np(*tid, sizeof(set), &set);
+}
+
+static inline int
+csilk_thread_cpumask_size(void)
+{
+    return CPU_SETSIZE;
 }
 #else
 static inline int
@@ -228,6 +235,12 @@ csilk_thread_setaffinity(csilk_thread_t* tid, char* cpuset, char* oldmask, int m
     (void)cpuset;
     (void)oldmask;
     (void)maxcpu;
+    return 0;
+}
+
+static inline int
+csilk_thread_cpumask_size(void)
+{
     return 0;
 }
 #endif
@@ -473,6 +486,16 @@ csilk_thread_setaffinity(csilk_thread_t* tid, char* cpuset, char* oldmask, int m
     (void)cpuset;
     (void)oldmask;
     (void)maxcpu;
+    return 0;
+#endif
+}
+
+static inline int
+csilk_thread_cpumask_size(void)
+{
+#if defined(UV_VERSION_HEX) && (UV_VERSION_HEX >= 0x012d00)
+    return uv_cpumask_size();
+#else
     return 0;
 #endif
 }

@@ -232,13 +232,23 @@ pin_thread_to_core(int core_id)
     if (num_cores <= 0) {
         return;
     }
-    int  target_core = (int)(core_id % num_cores);
-    char cpuset[128] = {0};
-    if (target_core < 128) {
+    int mask_sz = csilk_thread_cpumask_size();
+    if (mask_sz <= 0) {
+        return;
+    }
+    int target_core = (int)(core_id % num_cores);
+    if (target_core >= 0 && target_core < mask_sz) {
+        char* cpuset = calloc((size_t)mask_sz, 1);
+        if (!cpuset) {
+            return;
+        }
         cpuset[target_core] = 1;
         csilk_thread_t tid = csilk_thread_self();
-        csilk_thread_setaffinity(&tid, cpuset, NULL, 128);
-        CSILK_LOG_I("Server: Pinned worker thread %d to CPU core %d", core_id, target_core);
+        int            rc = csilk_thread_setaffinity(&tid, cpuset, NULL, mask_sz);
+        free(cpuset);
+        if (rc == 0) {
+            CSILK_LOG_I("Server: Pinned worker thread %d to CPU core %d", core_id, target_core);
+        }
     }
 #else
     (void)core_id;
