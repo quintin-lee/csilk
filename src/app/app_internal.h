@@ -11,6 +11,10 @@
 #define CSILK_APP_INTERNAL_H
 
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
+
+/** @brief Maximum number of static file routes per app. */
+enum { CSILK_MAX_STATIC = 32 };
 
 /** @brief Maximum number of route groups per app. */
 enum { CSILK_MAX_GROUPS = 32 };
@@ -46,6 +50,13 @@ typedef struct {
     void*              user_data;
 } mw_thunk_t;
 
+/** @brief Internal: descriptor for a static file serving route mapping URL
+ * prefix to filesystem directory. */
+typedef struct {
+    char url_prefix[128];
+    char root_dir[256];
+} static_route_t;
+
 /** @brief Internal: cached route group lookup entry for fast prefix-to-group
  * mapping. */
 typedef struct {
@@ -57,7 +68,9 @@ typedef struct {
  * groups.
  *
  * Lifecycle: created in csilk_app_new(), destroyed in csilk_app_free().
- * Ownership: owns everything except the OpenAPI router pointer (global). */
+ * Ownership: owns everything.  The static-route table, middleware thunk
+ * pool, and OpenAPI enable-flag are per-app so multiple app instances in
+ * the same process do not share global state. */
 struct csilk_app_s {
     csilk_config_t  config;
     csilk_router_t* router;
@@ -65,6 +78,20 @@ struct csilk_app_s {
     csilk_group_t*  root_group;
     cached_group_t  groups[CSILK_MAX_GROUPS];
     int             group_count;
+
+    /* ---- Per-app static-file route table (was a process-global array). ---- */
+    static_route_t static_routes[CSILK_MAX_STATIC];
+    int            static_n;
+
+    /* ---- Per-app dual-parameter middleware thunk pool (was process-global). ---- */
+    mw_thunk_t mw_thunk_pool[CSILK_MAX_MW_THUNKS];
+    int        mw_thunk_used;
+
+    /* ---- Per-app OpenAPI endpoint enable flag. ---- */
+    int openapi_enabled;
+
+    /* ---- Per-app mutex protecting the static-route table. ---- */
+    csilk_mutex_t app_mutex;
 };
 
 csilk_group_t* find_or_create_group(csilk_app_t* app, const char* prefix);

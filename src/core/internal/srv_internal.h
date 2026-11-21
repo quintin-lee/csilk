@@ -259,6 +259,7 @@ struct csilk_server_s {
     csilk_mutex_t                config_mutex; /**< Protects runtime config updates. */
     void* quic_transport;                      /**< Optional QUIC transport callbacks for HTTP/3. */
     void* h3_transport; /**< Active csilk_h3_transport_t instance (if HTTP/3 enabled). */
+    void* app;          /**< Back-reference to owning csilk_app_t (NULL for bare servers). */
 };
 
 #define CSILK_H2_INLINE_BUCKETS 16
