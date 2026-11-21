@@ -504,6 +504,21 @@ main()
     test_ws_close_no_reason();
     test_ws_close_null();
     test_ws_close_handshake();
+
+    /* Regression: reject oversized receive chunk without integer overflow / OOM. */
+    {
+        csilk_ctx_t* ctx = csilk_test_ctx_new();
+        messages_received = 0;
+        csilk_set_on_ws_message(ctx, on_message);
+        uint8_t dummy[16] = {0x81, 0x05, 'h', 'e', 'l', 'l', 'o'};
+        csilk_ws_parse_frame(ctx, dummy, SIZE_MAX);
+        assert(messages_received == 0);
+        csilk_ws_parse_frame(ctx, dummy, 7);
+        assert(messages_received == 1);
+        messages_received = 0;
+        csilk_test_ctx_free(ctx);
+    }
+
     printf("test_ws: ALL PASSED\n");
     return 0;
 }

@@ -185,7 +185,8 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
     }
 
     size_t frame_len = header_len + len;
-    if (c->max_write_buffer_size > 0 && q + frame_len > c->max_write_buffer_size) {
+    if (c->max_write_buffer_size > 0 &&
+        (frame_len > c->max_write_buffer_size || q > c->max_write_buffer_size - frame_len)) {
         CSILK_LOG_E("WebSocket: max write buffer exceeded (%zu + %zu > %zu)",
                     q,
                     frame_len,
@@ -239,8 +240,11 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 void
 csilk_ws_close(csilk_ctx_t* c, uint16_t status_code, const char* reason)
 {
+    if (!c) {
+        return;
+    }
     void* internal_client = _csilk_get_internal_client(c);
-    if (!c || !internal_client) {
+    if (!internal_client) {
         return;
     }
 
@@ -298,9 +302,23 @@ csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
     }
 
     if (buf && nread > 0) {
-        if (c->ws_buf_len + nread > c->ws_buf_cap) {
-            size_t new_cap = c->ws_buf_cap ? c->ws_buf_cap * 2 : 4096;
-            while (new_cap < c->ws_buf_len + nread) {
+        enum { CSILK_WS_MAX_BUF = (64 * 1024 * 1024) + 16 };
+        if (nread > CSILK_WS_MAX_BUF || c->ws_buf_len > CSILK_WS_MAX_BUF - nread) {
+            CSILK_LOG_W("WebSocket: receive buffer overflow (%zu + %zu > %zu)",
+                        c->ws_buf_len,
+                        nread,
+                        (size_t)CSILK_WS_MAX_BUF);
+            c->ws_buf_len = 0;
+            return;
+        }
+        size_t needed = c->ws_buf_len + nread;
+        if (needed > c->ws_buf_cap) {
+            size_t new_cap = c->ws_buf_cap ? c->ws_buf_cap : 4096;
+            while (new_cap < needed) {
+                if (new_cap > (size_t)CSILK_WS_MAX_BUF / 2) {
+                    new_cap = CSILK_WS_MAX_BUF;
+                    break;
+                }
                 new_cap *= 2;
             }
             uint8_t* new_buf = realloc(c->ws_buf, new_cap);
@@ -391,7 +409,7 @@ csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
                 csilk_client_t*    cl = (csilk_client_t*)close_client;
                 csilk_io_stream_t* stream = (csilk_io_stream_t*)&cl->handle;
                 if (!csilk_io_is_closing((csilk_io_handle_t*)stream)) {
-                    csilk_io_close((csilk_io_handle_t*)stream, NULL);
+                    csilk_io_close((csilk_io_handle_t*)stream, on_close);
                 }
             }
             free(payload);

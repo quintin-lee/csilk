@@ -72,6 +72,29 @@ test_ws_room_broadcast()
 
     csilk_test_ctx_free(c1);
     csilk_test_ctx_free(c2);
+
+    /* Regression: free a joined context WITHOUT calling csilk_ws_leave_room;
+     * automatic lifecycle cleanup must detach it cleanly so subsequent room
+     * broadcasts do not dereference freed context memory. */
+    csilk_ctx_t* c3 = csilk_test_ctx_new();
+    csilk_ctx_t* c4 = csilk_test_ctx_new();
+    c3->server = (struct csilk_server_s*)server;
+    c4->server = (struct csilk_server_s*)server;
+    csilk_set_on_ws_send(c3, on_ws_send);
+    csilk_set_on_ws_send(c4, on_ws_send);
+    csilk_ws_join_room(c3, "lobby_auto_detach");
+    csilk_ws_join_room(c4, "lobby_auto_detach");
+    csilk_test_ctx_free(c3);
+
+    messages_received = 0;
+    csilk_ws_broadcast_room(c4, "lobby_auto_detach", "after-free");
+    for (int i = 0; i < 100 && messages_received < 1; i++) {
+        csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
+    }
+    assert(messages_received == 1);
+    assert(strcmp(last_message, "after-free") == 0);
+    csilk_test_ctx_free(c4);
+
     csilk_server_free(server);
     csilk_router_free(router);
 

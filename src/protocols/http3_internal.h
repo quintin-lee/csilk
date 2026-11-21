@@ -72,6 +72,8 @@ struct csilk_h3_conn_s {
      * to derive packet-protection keys. Only meaningful under ngtcp2. */
     uint8_t dcid_data[NGTCP2_MAX_CIDLEN];
     size_t  dcid_len;
+    uint8_t scid_data[NGTCP2_MAX_CIDLEN];
+    size_t  scid_len;
 #endif
     struct csilk_h3_stream_s     streams[CSILK_H3_MAX_STREAMS];
     int                          stream_count;

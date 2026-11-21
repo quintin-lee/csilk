@@ -104,6 +104,28 @@ test_pool_disabled(void)
     unsetenv("CSILK_MCP_STDIO_MAX_PROCS");
 }
 
+static void
+test_pool_argv_differentiation(void)
+{
+    csilk_mcp_stdio_pool_shutdown();
+
+    char*               argv_a[] = {"npx", "-y", "server-a", NULL};
+    char*               argv_b[] = {"npx", "-y", "server-b", NULL};
+    csilk_mcp_client_t* ca = csilk_mcp_stdio_pool_acquire("npx", argv_a);
+    csilk_mcp_client_t* cb = csilk_mcp_stdio_pool_acquire("npx", argv_b);
+    assert(ca != NULL && cb != NULL);
+    assert(ca != cb);
+    assert(csilk_mcp_stdio_pool_get_count() == 2);
+
+    csilk_mcp_stdio_pool_release(ca);
+    csilk_mcp_stdio_pool_release(cb);
+
+    csilk_mcp_client_t* ca2 = csilk_mcp_stdio_pool_acquire("npx", argv_a);
+    assert(ca2 == ca);
+    csilk_mcp_stdio_pool_release(ca2);
+    csilk_mcp_stdio_pool_shutdown();
+}
+
 int
 main(void)
 {
@@ -111,6 +133,7 @@ main(void)
     test_pool_keyed_acquire();
     test_pool_ttl_eviction();
     test_pool_disabled();
+    test_pool_argv_differentiation();
     printf("All test_mcp_stdio_pool tests passed!\n");
     return 0;
 }

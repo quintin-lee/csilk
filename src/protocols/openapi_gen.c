@@ -337,6 +337,13 @@ csilk_generate_openapi_json(csilk_router_t* router,
         csilk_json_add_object(doc, "info", info);
     }
 
+    // Collect all routes
+    csilk_json_t* routes = csilk_router_collect_routes(router);
+    if (!routes) {
+        csilk_json_free(doc);
+        return NULL;
+    }
+
     // Paths section
     csilk_json_t* paths = csilk_json_object();
 
@@ -345,13 +352,6 @@ csilk_generate_openapi_json(csilk_router_t* router,
     csilk_json_t* schemas = NULL;
     if (components) {
         schemas = csilk_json_object();
-    }
-
-    // Collect all routes
-    csilk_json_t* routes = csilk_router_collect_routes(router);
-    if (!routes) {
-        csilk_json_free(doc);
-        return NULL;
     }
 
     /*

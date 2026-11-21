@@ -13,8 +13,11 @@
 
 #include "csilk/protocols/grpc.h"
 
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+
+enum { CSILK_GRPC_MAX_FRAME_LEN = 64 * 1024 * 1024 };
 
 /**
  * Parse a gRPC frame from a buffer.
@@ -41,8 +44,8 @@ csilk_grpc_frame_parse(const uint8_t*  data,
     uint32_t payload_len = ((uint32_t)data[1] << 24) | ((uint32_t)data[2] << 16) |
                            ((uint32_t)data[3] << 8) | (uint32_t)data[4];
 
-    if (5 + payload_len > len) {
-        return -1; /* incomplete frame */
+    if (payload_len > CSILK_GRPC_MAX_FRAME_LEN || (size_t)payload_len > len - 5) {
+        return -1; /* incomplete or oversized frame */
     }
 
     *out_payload = data + 5;
@@ -71,7 +74,8 @@ csilk_grpc_frame_encode_ex(const uint8_t* payload,
                            uint8_t*       out_buf,
                            size_t         out_buf_cap)
 {
-    if (!out_buf || out_buf_cap < payload_len + 5) {
+    if (!out_buf || payload_len > CSILK_GRPC_MAX_FRAME_LEN || payload_len > (size_t)INT_MAX - 5 ||
+        out_buf_cap < payload_len + 5) {
         return -1;
     }
 
@@ -113,7 +117,9 @@ csilk_grpc_trailer_parse(const csilk_kv_t* headers,
         return -1;
     }
 
-    *out_status = 0; /* default OK */
+    if (out_status) {
+        *out_status = 0; /* default OK */
+    }
     if (out_message) {
         *out_message = NULL;
     }
@@ -122,10 +128,11 @@ csilk_grpc_trailer_parse(const csilk_kv_t* headers,
         const char* key = headers[i].key ? headers[i].key : "";
         const char* val = headers[i].val ? headers[i].val : "";
 
-        if (strcasecmp(key, "grpc-status") == 0) {
+        if (strcasecmp(key, "grpc-status") == 0 && out_status) {
             *out_status = atoi(val);
         } else if (strcasecmp(key, "grpc-message") == 0 && out_message) {
-            *out_message = strdup(val ? val : "");
+            free(*out_message);
+            *out_message = strdup(val);
         }
     }
 
@@ -166,39 +173,47 @@ csilk_grpc_metadata_parse(const csilk_kv_t* headers,
         const char* val = headers[i].val ? headers[i].val : "";
 
         if (strcasecmp(key, "content-type") == 0 && out_content_type) {
-            *out_content_type = strdup(val ? val : "application/grpc");
+            free(*out_content_type);
+            *out_content_type = strdup(val[0] ? val : "application/grpc");
         } else if (strcasecmp(key, "grpc-timeout") == 0 && out_timeout_ms) {
             /* gRPC timeout format: "<value><unit>" where unit is
              * m (milliseconds), M (3.6e8 ms), s, S, h, or H */
             char   buf[32];
             size_t vlen = strlen(val);
-            if (vlen < sizeof(buf)) {
+            if (vlen >= 2 && vlen < sizeof(buf)) {
                 memcpy(buf, val, vlen);
                 buf[vlen] = '\0';
-            }
-
-            int64_t value = atoll(buf);
-            char    unit = buf[vlen - 1];
-            switch (unit) {
-            case 'm':
-                *out_timeout_ms = value;
-                break;
-            case 'M':
-                *out_timeout_ms = value * 360000000000LL; /* 3.6e8 ms */
-                break;
-            case 's':
-                *out_timeout_ms = value * 1000;
-                break;
-            case 'S':
-                *out_timeout_ms = value * 360000000000LL;
-                break;
-            case 'h':
-            case 'H':
-                *out_timeout_ms = value * 3600000;
-                break;
-            default:
-                *out_timeout_ms = value;
-                break;
+                char unit = buf[vlen - 1];
+                buf[vlen - 1] = '\0';
+                char*     endptr = NULL;
+                long long value = strtoll(buf, &endptr, 10);
+                if (endptr != buf && *endptr == '\0' && value >= 0) {
+                    int64_t v64 = (int64_t)value;
+                    switch (unit) {
+                    case 'm':
+                        *out_timeout_ms = v64;
+                        break;
+                    case 'M':
+                        *out_timeout_ms =
+                            (v64 > INT64_MAX / 360000000000LL) ? INT64_MAX : v64 * 360000000000LL;
+                        break;
+                    case 's':
+                        *out_timeout_ms = (v64 > INT64_MAX / 1000LL) ? INT64_MAX : v64 * 1000LL;
+                        break;
+                    case 'S':
+                        *out_timeout_ms =
+                            (v64 > INT64_MAX / 360000000000LL) ? INT64_MAX : v64 * 360000000000LL;
+                        break;
+                    case 'h':
+                    case 'H':
+                        *out_timeout_ms =
+                            (v64 > INT64_MAX / 3600000LL) ? INT64_MAX : v64 * 3600000LL;
+                        break;
+                    default:
+                        *out_timeout_ms = v64;
+                        break;
+                    }
+                }
             }
         }
     }
@@ -307,13 +322,32 @@ csilk_grpc_stream_feed(csilk_grpc_stream_t* stream, const uint8_t* data, size_t 
                 stream->expected_len = ((uint32_t)stream->rbuf[1] << 24) |
                                        ((uint32_t)stream->rbuf[2] << 16) |
                                        ((uint32_t)stream->rbuf[3] << 8) | (uint32_t)stream->rbuf[4];
-                stream->in_header = 0;
-                stream->header_pos = 0;
+                if (stream->expected_len > CSILK_GRPC_MAX_FRAME_LEN) {
+                    stream->in_header = 1;
+                    stream->header_pos = 0;
+                    stream->expected_len = 0;
+                    stream->rbuf_len = 0;
+                    return -1;
+                }
+                if (stream->expected_len == 0) {
+                    if (stream->on_msg) {
+                        stream->on_msg(stream, stream->rbuf + 5, 0, stream->user_data);
+                    }
+                    stream->in_header = 1;
+                    stream->header_pos = 0;
+                    stream->rbuf_len = 0;
+                } else {
+                    stream->in_header = 0;
+                    stream->header_pos = 0;
+                }
             }
             continue;
         }
 
         if (stream->rbuf_len + 1 > stream->rbuf_cap) {
+            if (stream->rbuf_cap > (size_t)CSILK_GRPC_MAX_FRAME_LEN + 5) {
+                return -1;
+            }
             size_t   new_cap = stream->rbuf_cap * 2;
             uint8_t* tmp = realloc(stream->rbuf, new_cap);
             if (!tmp) {
@@ -325,7 +359,7 @@ csilk_grpc_stream_feed(csilk_grpc_stream_t* stream, const uint8_t* data, size_t 
         stream->rbuf[stream->rbuf_len++] = byte;
 
         size_t payload_start = 5;
-        if (stream->rbuf_len >= payload_start + stream->expected_len) {
+        if (stream->rbuf_len - payload_start >= stream->expected_len) {
             if (stream->on_msg) {
                 stream->on_msg(
                     stream, stream->rbuf + payload_start, stream->expected_len, stream->user_data);
