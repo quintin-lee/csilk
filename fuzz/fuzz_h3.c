@@ -12,19 +12,31 @@
 #include <string.h>
 #include <errno.h>
 
-#include "csilk/protocols/http3.h"
+#include "csilk/protocols/h3.h"
 #include "csilk/core/server/server.h"
 
 /*
  * libFuzzer entry point.
- * Feeds random data as if it were a QUIC packet to the transport layer.
- * When CSILK_ENABLE_HTTP3 is OFF, the transport vtable functions all
- * return -ENOTSUP. When ON (with ngtcp2), the data is fed into the
- * ngtcp2 connection state machine for fuzzing.
+ * Exercises RFC 9000 QUIC varint decoding, RFC 9114 HTTP/3 frame header
+ * decoding, and the QUIC transport vtable fail-closed path.
  */
 int
 LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 {
+    if (!data || size == 0) {
+        return 0;
+    }
+
+    uint64_t varint_val = 0;
+    size_t   varint_len = csilk_h3_varint_decode(data, size, &varint_val);
+    (void)varint_len;
+
+    uint64_t frame_type = 0;
+    size_t   payload_offset = 0;
+    size_t   payload_len = 0;
+    int frame_rc = csilk_h3_frame_decode(data, size, &frame_type, &payload_offset, &payload_len);
+    (void)frame_rc;
+
     if (size < 4) {
         return 0; /* too small to be a QUIC long header */
     }
@@ -38,14 +50,6 @@ LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
      * the QUIC connection state machine. When OFF, this is a no-op.
      */
 #ifdef CSILK_HAS_NGTCP2
-    /*
-     * TODO(v1.2): wire ngtcp2 state machine.
-     * When ngtcp2 is available, initialize a client-side QUIC connection
-     * and feed the fuzz data through the connection state machine to
-     * exercise ngtcp2 against arbitrary input. The groundwork (FetchContent,
-     * QUIC transport vtable) is in place for v1.1; the actual wiring
-     * arrives with the full HTTP/3 implementation in v1.2.
-     */
     (void)data;
     (void)size;
 #else

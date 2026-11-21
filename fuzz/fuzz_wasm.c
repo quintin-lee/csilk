@@ -14,6 +14,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/plugin/wasm_plugin.h"
+#include "csilk/core/plugin/wasm.h"
 
 int
 LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
