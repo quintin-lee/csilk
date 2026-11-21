@@ -34,6 +34,10 @@ test_test_overrides(void)
     assert(val != NULL);
     assert(strcmp(val, "super-secret-jwt-key") == 0);
 
+    /* Remove single override and clear remaining */
+    csilk_secret_set_test_override("JWT_SECRET", NULL);
+    assert(csilk_secret_get("JWT_SECRET", buf, sizeof(buf)) == NULL);
+
     /* Clear overrides */
     csilk_secret_clear_test_overrides();
     csilk_secret_set_prefix(NULL);
@@ -129,9 +133,13 @@ test_safety_circuit_breaker(void)
     csilk_secret_set_test_mode(false);
     assert(csilk_secret_is_test_mode() == false);
 
-    char        buf[128];
+    char buf[128];
+    memset(buf, 'X', sizeof(buf));
     const char* val = csilk_secret_get("DANGEROUS_SECRET", buf, sizeof(buf));
     assert(val == NULL);
+    for (size_t i = 0; i < sizeof(buf); i++) {
+        assert(buf[i] == '\0');
+    }
     assert(csilk_secret_is_valid("DANGEROUS_SECRET") == false);
 
     /* In test mode, allowed */
