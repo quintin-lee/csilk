@@ -247,9 +247,9 @@ _csilk_send_response(csilk_ctx_t* c)
     int         status = client->ctx.response.status ? client->ctx.response.status : 200;
     const char* status_text = get_status_text(status);
 
-    int is_file = (c->file_fd >= 0 && !client->ssl);
-    int use_chunked = (client->ctx.response.body_len == 0 && client->ctx.is_async && !is_file);
-    const char* transfer_encoding = use_chunked ? "Transfer-Encoding: chunked\r\n" : "";
+    int         is_file = (c->file_fd >= 0 && !client->ssl);
+    int         use_chunked = 0; /* Streaming chunked responses use csilk_response_write()/end(). */
+    const char* transfer_encoding = "";
 
     size_t custom_headers_len = 0;
     for (int i = 0; i < CSILK_HEADER_BUCKETS; i++) {

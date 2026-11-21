@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "csilk/csilk.h"
 #include "csilk/core/ctx/async.h"
@@ -230,6 +231,41 @@ test_async_op_is_alive_checks(void)
     printf("✓ test_async_op_is_alive_checks passed\n");
 }
 
+static void
+test_async_op_timeout_then_late_complete(void)
+{
+    csilk_ctx_t* c = csilk_test_ctx_new();
+    assert(c != NULL);
+
+    g_async_timeout = 0;
+    g_async_completed = 0;
+    csilk_async_op_t* op = csilk_async_op_begin(c, 5, _test_complete_cb, _test_timeout_cb, NULL);
+    assert(op != NULL);
+    assert(op->timer_armed == 1);
+    assert(op->ref_count == 2);
+
+    /* Wait briefly for timer to fire and run event loop */
+    usleep(20000);
+    for (int i = 0; i < 10 && g_async_timeout == 0; i++) {
+        csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
+        if (g_async_timeout == 0) {
+            usleep(5000);
+        }
+    }
+    for (int i = 0; i < 5; i++) {
+        csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
+    }
+    assert(g_async_timeout == 1);
+    /* Caller's ref keeps op alive so late complete safely returns -1 without UAF */
+    assert(csilk_async_op_is_alive(op) == 0);
+    int result = 42;
+    assert(csilk_async_op_complete(op, &result) == -1);
+    assert(g_async_completed == 0);
+
+    csilk_test_ctx_free(c);
+    printf("✓ test_async_op_timeout_then_late_complete passed\n");
+}
+
 int
 main(void)
 {
@@ -240,6 +276,7 @@ main(void)
     test_async_op_h2_stream_lifecycle();
     test_async_op_h2_stream_close_before_complete();
     test_async_op_timeout_cancellation_active_timer();
+    test_async_op_timeout_then_late_complete();
     test_async_op_h2_aba_protection();
     test_async_op_is_alive_checks();
     printf("All csilk_async_op_t tests passed successfully!\n");

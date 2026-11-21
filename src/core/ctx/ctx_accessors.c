@@ -19,6 +19,7 @@
 #include "../primitives/query.h"
 #include "csilk/core/internal.h"
 #include "../internal/srv_internal.h"
+#include "../internal/srv_impl.h"
 
 /**
  * @brief Look up a path/route parameter value by key.
@@ -449,8 +450,14 @@ csilk_ctx_release_async(const csilk_async_token_t* token)
     if (!token || !token->ctx) {
         return;
     }
-    _csilk_ctx_async_ref_decr(token->ctx);
-    _csilk_stream_unref(token->ctx);
+    csilk_ctx_t*    c = token->ctx;
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    /* Unref H2 stream first while connection ref keeps stream map alive;
+     * never touch c after _csilk_stream_unref since it may free c. */
+    _csilk_stream_unref(c);
+    if (client) {
+        csilk_client_unref(client);
+    }
 }
 
 /**

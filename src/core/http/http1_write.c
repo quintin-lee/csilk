@@ -87,6 +87,7 @@ on_write(csilk_io_write_t* req, int status)
     }
 
     if (client && client->ctx.file_fd >= 0) {
+        int              sendfile_err = 0;
         csilk_io_os_fd_t sock_fd;
         if (csilk_io_fileno((const csilk_io_handle_t*)&client->handle, &sock_fd) == 0) {
             csilk_io_fs_t* fs_req = malloc(sizeof(csilk_io_fs_t));
@@ -117,6 +118,7 @@ on_write(csilk_io_write_t* req, int status)
                     free(fs_req);
                     close(fd);
                     client->ctx.file_fd = -1;
+                    sendfile_err = 1;
                 } else {
                     if (client && req == &client->primary_write_req) {
                         client->primary_write_in_flight = 0;
@@ -127,6 +129,21 @@ on_write(csilk_io_write_t* req, int status)
                     csilk_client_unref(client);
                     return;
                 }
+            } else {
+                close(client->ctx.file_fd);
+                client->ctx.file_fd = -1;
+                sendfile_err = 1;
+            }
+        } else {
+            close(client->ctx.file_fd);
+            client->ctx.file_fd = -1;
+            sendfile_err = 1;
+        }
+
+        if (sendfile_err) {
+            extern void on_close(csilk_io_handle_t * handle);
+            if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+                csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
             }
         }
     }

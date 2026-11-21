@@ -90,7 +90,8 @@ _csilk_async_timer_cb(csilk_io_timer_t* handle)
 
     int expected = 0;
     if (!atomic_compare_exchange_strong_explicit(
-            &op->completed, &expected, 1, memory_order_acq_rel, memory_order_relaxed)) {
+            &op->completed, &expected, 0x1, memory_order_acq_rel, memory_order_relaxed)) {
+        _csilk_async_op_disarm_timer(op);
         return; /* Already completed or cancelled */
     }
 
@@ -108,9 +109,9 @@ _csilk_async_timer_cb(csilk_io_timer_t* handle)
         }
     }
 
+    /* Release only the timer's reference; caller retains its handle ref until
+     * csilk_async_op_complete() or csilk_async_op_cancel(). */
     _csilk_async_op_disarm_timer(op);
-    /* Drop caller's initial reference */
-    _csilk_async_op_unref(op);
 }
 
 csilk_async_op_t*
@@ -212,10 +213,14 @@ csilk_async_op_complete(csilk_async_op_t* op, void* result)
         return -1;
     }
 
-    int expected = 0;
-    if (!atomic_compare_exchange_strong_explicit(
-            &op->completed, &expected, 1, memory_order_acq_rel, memory_order_relaxed)) {
-        return -1; /* Already completed or timed out */
+    int prev = atomic_fetch_or_explicit(&op->completed, 0x3, memory_order_acq_rel);
+    if ((prev & 0x2) != 0) {
+        return -1; /* Caller handle already released */
+    }
+    if ((prev & 0x1) != 0) {
+        /* Timeout already fired; consume caller's handle reference cleanly. */
+        _csilk_async_op_unref(op);
+        return -1;
     }
 
     csilk_ctx_t*    c = op->ctx;
@@ -236,7 +241,7 @@ csilk_async_op_complete(csilk_async_op_t* op, void* result)
     csilk_async_dispatch_payload_t* payload =
         (csilk_async_dispatch_payload_t*)malloc(sizeof(csilk_async_dispatch_payload_t));
     if (!payload) {
-        _csilk_async_op_disarm_timer(op);
+        /* Never disarm/close loop timer from a non-owner thread. */
         _csilk_async_op_unref(op);
         return -1;
     }
@@ -245,7 +250,7 @@ csilk_async_op_complete(csilk_async_op_t* op, void* result)
 
     if (_csilk_dispatch_try(op->ctx, _csilk_async_complete_dispatch_cb, payload) < 0) {
         free(payload);
-        _csilk_async_op_disarm_timer(op);
+        /* Never disarm/close loop timer from a non-owner thread. */
         _csilk_async_op_unref(op);
         return -1;
     }
@@ -261,9 +266,12 @@ csilk_async_op_cancel(csilk_async_op_t* op)
         return -1;
     }
 
-    int expected = 0;
-    if (!atomic_compare_exchange_strong_explicit(
-            &op->completed, &expected, 1, memory_order_acq_rel, memory_order_relaxed)) {
+    int prev = atomic_fetch_or_explicit(&op->completed, 0x3, memory_order_acq_rel);
+    if ((prev & 0x2) != 0) {
+        return -1;
+    }
+    if ((prev & 0x1) != 0) {
+        _csilk_async_op_unref(op);
         return -1;
     }
 
@@ -279,7 +287,7 @@ csilk_async_op_cancel(csilk_async_op_t* op)
 
     /* Cross-thread: transfer caller's reference to dispatched timer disarm task */
     if (_csilk_dispatch_try(op->ctx, _csilk_async_cancel_dispatch_cb, op) < 0) {
-        _csilk_async_op_disarm_timer(op);
+        /* Never disarm/close loop timer from a non-owner thread. */
         _csilk_async_op_unref(op);
     }
     return 0;

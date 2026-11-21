@@ -150,16 +150,38 @@ csilk_client_unref(csilk_client_t* client)
     if (__builtin_expect(!client, 0)) {
         return 0;
     }
-    int prev = atomic_fetch_sub_explicit(&client->ref_count, 1, memory_order_acq_rel);
-    if (__builtin_expect(prev <= 0, 0)) {
-        atomic_store_explicit(&client->ref_count, 0, memory_order_relaxed);
-        return 0;
+
+    worker_pool_t* wp = client->owner_pool;
+    int            cur = atomic_load_explicit(&client->ref_count, memory_order_acquire);
+    while (cur > 0) {
+        /* If the last ref is dropping off-owner-thread on a live loop, delegate
+         * the 1->0 decrement via dispatch task while still holding our ref so
+         * the owner worker cannot destroy/reuse client mid-handoff. */
+        if (cur == 1 && wp && wp->loop_ptr && !_csilk_is_owner_worker_thread(wp)) {
+            csilk_dispatch_task_t* task = _csilk_dispatch_task_alloc();
+            if (task) {
+                task->cb = NULL;
+                task->arg = NULL;
+                task->client = client;
+                csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
+                csilk_io_async_send(&wp->dispatch_async);
+                return 0;
+            }
+        }
+        if (atomic_compare_exchange_weak_explicit(
+                &client->ref_count, &cur, cur - 1, memory_order_acq_rel, memory_order_acquire)) {
+            int curr = cur - 1;
+            if (__builtin_expect(curr == 0, 0)) {
+                if (!wp || _csilk_is_owner_worker_thread(wp)) {
+                    _csilk_client_check_recycle(client);
+                }
+            }
+            return curr;
+        }
     }
-    int curr = prev - 1;
-    if (__builtin_expect(curr == 0, 0)) {
-        _csilk_client_check_recycle(client);
-    }
-    return curr;
+
+    atomic_store_explicit(&client->ref_count, 0, memory_order_relaxed);
+    return 0;
 }
 
 /**
@@ -187,13 +209,35 @@ _csilk_client_pending_io_dec(csilk_client_t* client)
     if (__builtin_expect(!client, 0)) {
         return 0;
     }
+    worker_pool_t* wp = client->owner_pool;
+    int            off_owner = (wp && wp->loop_ptr && !_csilk_is_owner_worker_thread(wp));
+    if (off_owner) {
+        /* Keep client alive while pending_io hits 0, then transfer temporary ref to owner. */
+        csilk_client_ref(client);
+    }
     int prev = atomic_fetch_sub_explicit(&client->pending_io, 1, memory_order_acq_rel);
     if (__builtin_expect(prev <= 0, 0)) {
         atomic_store_explicit(&client->pending_io, 0, memory_order_relaxed);
+        if (off_owner) {
+            csilk_client_unref(client);
+        }
         return 0;
     }
     int curr = prev - 1;
-    if (__builtin_expect(curr == 0, 0)) {
+    if (off_owner) {
+        if (__builtin_expect(curr == 0, 0)) {
+            csilk_dispatch_task_t* task = _csilk_dispatch_task_alloc();
+            if (task) {
+                task->cb = NULL;
+                task->arg = NULL;
+                task->client = client;
+                csilk_lfq_enqueue(&wp->dispatch_queue, &task->lfq_node);
+                csilk_io_async_send(&wp->dispatch_async);
+                return curr;
+            }
+        }
+        csilk_client_unref(client);
+    } else if (__builtin_expect(curr == 0, 0)) {
         _csilk_client_check_recycle(client);
     }
     return curr;

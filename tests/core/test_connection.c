@@ -1131,6 +1131,44 @@ test_lifetime_concurrent_multithread_stress(void)
     PASS();
 }
 
+static void
+test_server_default_max_url_limit(void)
+{
+    csilk_server_t* s = csilk_server_new(NULL);
+    if (!s || s->config.max_url_size != CSILK_DEFAULT_MAX_URL_SIZE ||
+        _csilk_server_get_max_url_size(s) != CSILK_DEFAULT_MAX_URL_SIZE) {
+        FAIL("csilk_server_new should set default max_url_size");
+        if (s) {
+            csilk_server_free(s);
+        }
+        return;
+    }
+    csilk_server_free(s);
+    PASS();
+}
+
+static void
+test_async_empty_response_uses_content_length_not_chunked(void)
+{
+    csilk_ctx_t* c = csilk_test_ctx_new();
+    if (!c) {
+        FAIL("alloc ctx");
+        return;
+    }
+    csilk_ctx_set_async(c, 1);
+    csilk_status(c, 204);
+    char   buf[512] = {0};
+    size_t n = _csilk_serialize_http1_response(c, buf, sizeof(buf));
+    if (n == 0 || strstr(buf, "Content-Length: 0\r\n") == NULL ||
+        strstr(buf, "Transfer-Encoding: chunked") != NULL) {
+        FAIL("empty async response should serialize Content-Length: 0");
+        csilk_test_ctx_free(c);
+        return;
+    }
+    csilk_test_ctx_free(c);
+    PASS();
+}
+
 /* ------------------------------------------------------------------ */
 
 int
@@ -1173,6 +1211,8 @@ main(void)
     test_lifetime_pending_io_prevents_uaf_and_early_recycle();
     test_lifetime_aba_protection_generation_cycle();
     test_lifetime_concurrent_multithread_stress();
+    test_server_default_max_url_limit();
+    test_async_empty_response_uses_content_length_not_chunked();
 
     printf("\n=== Results: %d passed, %d failed ===\n", tests_passed, tests_run - tests_passed);
     return (tests_passed == tests_run) ? EXIT_SUCCESS : EXIT_FAILURE;
