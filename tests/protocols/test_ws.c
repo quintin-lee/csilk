@@ -60,6 +60,50 @@ test_handshake_missing_key()
 }
 
 static void
+test_handshake_invalid_key_lengths(void)
+{
+    printf("Testing WebSocket Handshake invalid key lengths...\n");
+
+    /* 1. Empty key */
+    {
+        csilk_ctx_t* ctx = csilk_test_ctx_new();
+        csilk_set_request_header(ctx, "Sec-WebSocket-Key", "");
+        csilk_ws_handshake(ctx);
+        assert(csilk_get_status(ctx) == CSILK_STATUS_BAD_REQUEST);
+        assert(csilk_is_websocket(ctx) == 0);
+        csilk_test_ctx_free(ctx);
+    }
+
+    /* 2. 129-byte key (just above WS_MAX_KEY_LEN=128) */
+    {
+        char key[130];
+        memset(key, 'A', 129);
+        key[129] = '\0';
+        csilk_ctx_t* ctx = csilk_test_ctx_new();
+        csilk_set_request_header(ctx, "Sec-WebSocket-Key", key);
+        csilk_ws_handshake(ctx);
+        assert(csilk_get_status(ctx) == CSILK_STATUS_BAD_REQUEST);
+        assert(csilk_is_websocket(ctx) == 0);
+        csilk_test_ctx_free(ctx);
+    }
+
+    /* 3. 230-byte key (previously bypassed WS_MAX_KEY_LEN=255 and truncated WS_GUID) */
+    {
+        char key[231];
+        memset(key, 'B', 230);
+        key[230] = '\0';
+        csilk_ctx_t* ctx = csilk_test_ctx_new();
+        csilk_set_request_header(ctx, "Sec-WebSocket-Key", key);
+        csilk_ws_handshake(ctx);
+        assert(csilk_get_status(ctx) == CSILK_STATUS_BAD_REQUEST);
+        assert(csilk_is_websocket(ctx) == 0);
+        csilk_test_ctx_free(ctx);
+    }
+
+    printf("Handshake invalid key lengths test passed!\n");
+}
+
+static void
 test_parse_frame_basic()
 {
     printf("Testing WebSocket frame parse basic...\n");
@@ -440,6 +484,7 @@ main()
     test_handshake_large_headers();
     test_parse_coalesced_and_tcp_fragmented();
     test_handshake_missing_key();
+    test_handshake_invalid_key_lengths();
     test_parse_frame_basic();
     test_parse_frame_unmasked();
     test_parse_frame_fragmented();

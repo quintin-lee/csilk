@@ -39,11 +39,11 @@
 
 /** @brief Maximum accepted Sec-WebSocket-Key length.
  *
- * RFC 6455 §4.1 mandates the key be exactly 16 base64 characters (128 bits).
- * Values longer than this are rejected to prevent the SHA-1 input buffer from
- * being truncated, which would silently produce an incorrect accept key.
+ * RFC 6455 §4.1 mandates a 16-byte nonce base64-encoded to 24 characters.
+ * Rejecting oversized keys prevents SHA-1 input buffer truncation, which
+ * would silently compute an incorrect accept key.
  */
-#define WS_MAX_KEY_LEN 255
+#define WS_MAX_KEY_LEN 128
 
 /** @brief Perform the WebSocket upgrade handshake per RFC 6455.
  *
@@ -69,23 +69,28 @@ csilk_ws_handshake(csilk_ctx_t* c)
         return;
     }
 
-    /* Reject oversized keys to prevent SHA-1 input truncation (CWE-20).
-     * RFC 6455 mandates exactly 16 base64 chars; anything over 255 is
-     * clearly malformed and would corrupt the accept key computation. */
-    if (strlen(key) > WS_MAX_KEY_LEN) {
-        CSILK_LOG_W("WebSocket: Sec-WebSocket-Key too long (%zu bytes); rejecting handshake",
-                    strlen(key));
-        csilk_json_error(c, CSILK_STATUS_BAD_REQUEST, "Bad Handshake: key too long");
+    /* Reject empty or oversized keys to prevent SHA-1 input truncation (CWE-20).
+     * RFC 6455 §4.1 mandates a 16-byte nonce base64-encoded to 24 chars; anything
+     * over WS_MAX_KEY_LEN is malformed and would risk truncating WS_GUID. */
+    size_t key_len = strlen(key);
+    if (key_len == 0 || key_len > WS_MAX_KEY_LEN) {
+        CSILK_LOG_W("WebSocket: invalid Sec-WebSocket-Key length (%zu bytes); rejecting handshake",
+                    key_len);
+        csilk_json_error(c, CSILK_STATUS_BAD_REQUEST, "Bad Handshake: invalid key length");
         return;
     }
 
-    char combined[256];
-    snprintf(combined, sizeof(combined), "%s%s", key, WS_GUID);
+    char combined[WS_MAX_KEY_LEN + sizeof(WS_GUID)];
+    int  combined_len = snprintf(combined, sizeof(combined), "%s%s", key, WS_GUID);
+    if (combined_len < 0 || (size_t)combined_len >= sizeof(combined)) {
+        csilk_json_error(c, CSILK_STATUS_BAD_REQUEST, "Bad Handshake: key formatting error");
+        return;
+    }
 
     csilk_sha1_ctx sha_ctx;
     uint8_t        digest[20];
     csilk_sha1_init(&sha_ctx);
-    csilk_sha1_update(&sha_ctx, (uint8_t*)combined, (uint32_t)strlen(combined));
+    csilk_sha1_update(&sha_ctx, (uint8_t*)combined, (uint32_t)combined_len);
     csilk_sha1_final(&sha_ctx, digest);
 
     char accept_key[32];
