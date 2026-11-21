@@ -15,6 +15,7 @@
  * @copyright MIT License
  */
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,10 +54,17 @@ typedef struct {
 } fg_stack_t;
 
 typedef struct {
-    int        count; /**< Number of times this stack was sampled. */
-    int        next;  /**< Index of next entry in the same hash bucket (-1 = end). */
+    int        count;     /**< Number of times this stack was sampled. */
+    int        next;      /**< Index of next entry in the same hash bucket (-1 = end). */
+    char*      collapsed; /**< Full semicolon-delimited stack key for exact lookup. */
     fg_stack_t frames;
 } fg_stack_entry_t;
+
+typedef struct {
+    char*  data;
+    size_t len;
+    size_t cap;
+} fg_sb_t;
 
 typedef struct {
     atomic_int               running;        /**< Non-zero while sampler is active. */
@@ -100,9 +108,96 @@ fg_destroy_profiler(fg_profiler_t* p)
         return;
     }
     csilk_mutex_destroy(&p->mutex);
-    free(p->entries);
+    if (p->entries) {
+        for (int i = 0; i < p->entry_count; i++) {
+            free(p->entries[i].collapsed);
+        }
+        free(p->entries);
+    }
     free(p->hash_table);
     free(p);
+}
+
+static int
+fg_sb_appendf(fg_sb_t* sb, const char* fmt, ...)
+{
+    if (!sb || !fmt) {
+        return -1;
+    }
+    va_list ap;
+    va_start(ap, fmt);
+    int needed = vsnprintf(NULL, 0, fmt, ap);
+    va_end(ap);
+    if (needed < 0) {
+        return -1;
+    }
+    size_t add = (size_t)needed;
+    if (sb->len > SIZE_MAX - add - 1) {
+        return -1;
+    }
+    size_t req = sb->len + add + 1;
+    if (req > sb->cap) {
+        size_t new_cap = sb->cap ? sb->cap : 4096;
+        while (new_cap < req) {
+            if (new_cap > SIZE_MAX / 2) {
+                new_cap = req;
+                break;
+            }
+            new_cap *= 2;
+        }
+        char* next = realloc(sb->data, new_cap);
+        if (!next) {
+            return -1;
+        }
+        sb->data = next;
+        sb->cap = new_cap;
+    }
+    va_start(ap, fmt);
+    vsnprintf(sb->data + sb->len, sb->cap - sb->len, fmt, ap);
+    va_end(ap);
+    sb->len += add;
+    return 0;
+}
+
+static void
+fg_escape_xml(const char* src, char* dst, size_t dst_cap)
+{
+    if (!dst || dst_cap == 0) {
+        return;
+    }
+    if (!src) {
+        dst[0] = '\0';
+        return;
+    }
+    size_t pos = 0;
+    for (const char* p = src; *p && pos + 6 < dst_cap; p++) {
+        switch (*p) {
+        case '&':
+            memcpy(dst + pos, "&amp;", 5);
+            pos += 5;
+            break;
+        case '<':
+            memcpy(dst + pos, "&lt;", 4);
+            pos += 4;
+            break;
+        case '>':
+            memcpy(dst + pos, "&gt;", 4);
+            pos += 4;
+            break;
+        case '\'':
+            memcpy(dst + pos, "&#39;", 5);
+            pos += 5;
+            break;
+        case '"':
+            memcpy(dst + pos, "&quot;", 6);
+            pos += 6;
+            break;
+        default:
+            dst[pos++] = *p;
+            break;
+        }
+    }
+    dst[pos] = '\0';
 }
 
 /** @brief djb2 hash function for collapsed stack strings.
@@ -134,10 +229,13 @@ fg_hash(const char* str)
 static int
 fg_entry_insert(fg_profiler_t* p, const char* collapsed, int depth)
 {
+    if (!p || !collapsed) {
+        return -1;
+    }
     unsigned int h = fg_hash(collapsed) % FG_MAX_STACKS;
     int          idx = p->hash_table[h];
     while (idx >= 0) {
-        if (strcmp((const char*)p->entries[idx].frames.stack[0], collapsed) == 0) {
+        if (p->entries[idx].collapsed && strcmp(p->entries[idx].collapsed, collapsed) == 0) {
             p->entries[idx].count++;
             return idx;
         }
@@ -147,10 +245,34 @@ fg_entry_insert(fg_profiler_t* p, const char* collapsed, int depth)
     if (p->entry_count >= FG_MAX_STACKS) {
         return -1;
     }
+    char* key_dup = strdup(collapsed);
+    if (!key_dup) {
+        return -1;
+    }
     idx = p->entry_count++;
     p->entries[idx].count = 1;
     p->entries[idx].next = p->hash_table[h];
-    p->entries[idx].frames.depth = depth;
+    p->entries[idx].collapsed = key_dup;
+
+    /* Parse semicolon-delimited collapsed string into individual frame names. */
+    int         parsed_depth = 0;
+    const char* cur = collapsed;
+    while (*cur && parsed_depth < FG_MAX_DEPTH) {
+        const char* sep = strchr(cur, ';');
+        size_t      flen = sep ? (size_t)(sep - cur) : strlen(cur);
+        if (flen >= FG_MAX_NAME) {
+            flen = FG_MAX_NAME - 1;
+        }
+        memcpy(p->entries[idx].frames.stack[parsed_depth], cur, flen);
+        p->entries[idx].frames.stack[parsed_depth][flen] = '\0';
+        parsed_depth++;
+        if (!sep) {
+            break;
+        }
+        cur = sep + 1;
+    }
+    p->entries[idx].frames.depth =
+        parsed_depth > 0 ? parsed_depth : (depth > FG_MAX_DEPTH ? FG_MAX_DEPTH : depth);
     p->hash_table[h] = idx;
     return idx;
 }
@@ -298,52 +420,26 @@ fg_generate_svg(fg_profiler_t* p, char** out_svg, size_t* out_len)
         return;
     }
 
-    size_t buf_cap = (size_t)FG_MAX_STACKS * 512;
-    char*  buf = malloc(buf_cap);
-    if (!buf) {
-        if (out_svg) {
-            *out_svg = NULL;
-        }
-        if (out_len) {
-            *out_len = 0;
-        }
-        return;
-    }
-
-    size_t pos = 0;
-    int    max_count = 0;
-
-    for (int i = 0; i < p->entry_count; i++) {
-        if (p->entries[i].count > max_count) {
-            max_count = p->entries[i].count;
-        }
-    }
-    if (max_count == 0) {
-        max_count = 1;
-    }
+    fg_sb_t svg = {0};
+    fg_sb_t frames = {0};
 
     double total_width = 1200.0;
     double width_per_sample = total_width / (double)total_samples;
 
-    pos += (size_t)snprintf(buf + pos,
-                            buf_cap - pos,
-                            "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='auto' "
-                            "font-family='monospace' font-size='%d'>\n"
-                            "  <rect width='100%%' height='100%%' fill='#1e293b'/>\n"
-                            "  <text x='10' y='%d' fill='#e2e8f0' font-weight='bold'>Flame Graph — "
-                            "%d samples, %d unique stacks</text>\n",
-                            FG_FONT_SIZE,
-                            FG_TITLE_HEIGHT - 8,
-                            total_samples,
-                            p->entry_count);
+    if (fg_sb_appendf(&svg,
+                      "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='auto' "
+                      "font-family='monospace' font-size='%d'>\n"
+                      "  <rect width='100%%' height='100%%' fill='#1e293b'/>\n"
+                      "  <text x='10' y='%d' fill='#e2e8f0' font-weight='bold'>Flame Graph — "
+                      "%d samples, %d unique stacks</text>\n",
+                      FG_FONT_SIZE,
+                      FG_TITLE_HEIGHT - 8,
+                      total_samples,
+                      p->entry_count) != 0) {
+        goto fail;
+    }
 
     double y_offset = FG_TITLE_HEIGHT + 4;
-    char*  frame_buf = malloc(FG_MAX_STACKS * 2048);
-    size_t frame_pos = 0;
-
-    if (!frame_buf) {
-        goto done;
-    }
 
     for (int i = 0; i < p->entry_count; i++) {
         double width = (double)p->entries[i].count * width_per_sample;
@@ -369,46 +465,60 @@ fg_generate_svg(fg_profiler_t* p, char** out_svg, size_t* out_len)
 
         double      x = 0;
         fg_stack_t* s = &p->entries[i].frames;
-        for (int j = 0; j < s->depth; j++) {
-            double frame_y = y_offset + (s->depth - 1 - j) * FG_FRAME_HEIGHT;
-            frame_pos += (size_t)snprintf(
-                frame_buf + frame_pos,
-                2048,
-                "  <g><rect x='%.1f' y='%.1f' width='%.1f' height='%d' "
-                "fill='%s' rx='2'><title>%s (%d samples)</title></rect>"
-                "<text x='%.1f' y='%.1f' fill='white' font-size='%d' clip-path='none'>"
-                "%s</text></g>\n",
-                x,
-                frame_y,
-                width,
-                FG_FRAME_HEIGHT - 1,
-                colors[rainbow_index],
-                s->stack[j],
-                p->entries[i].count,
-                x + 3,
-                frame_y + 14,
-                FG_FONT_SIZE - 1,
-                s->stack[j]);
+        int         fdepth = s->depth < FG_MAX_DEPTH ? s->depth : FG_MAX_DEPTH;
+        for (int j = 0; j < fdepth; j++) {
+            double frame_y = y_offset + (fdepth - 1 - j) * FG_FRAME_HEIGHT;
+            char   esc[FG_MAX_NAME * 6];
+            fg_escape_xml(s->stack[j], esc, sizeof(esc));
+            if (fg_sb_appendf(
+                    &frames,
+                    "  <g><rect x='%.1f' y='%.1f' width='%.1f' height='%d' "
+                    "fill='%s' rx='2'><title>%s (%d samples)</title></rect>"
+                    "<text x='%.1f' y='%.1f' fill='white' font-size='%d' clip-path='none'>"
+                    "%s</text></g>\n",
+                    x,
+                    frame_y,
+                    width,
+                    FG_FRAME_HEIGHT - 1,
+                    colors[rainbow_index],
+                    esc,
+                    p->entries[i].count,
+                    x + 3,
+                    frame_y + 14,
+                    FG_FONT_SIZE - 1,
+                    esc) != 0) {
+                goto fail;
+            }
         }
     }
 
     double total_height = y_offset + FG_MAX_DEPTH * FG_FRAME_HEIGHT + 10;
-    pos +=
-        (size_t)snprintf(buf + pos, buf_cap - pos, "<svg viewBox='0 0 1200 %.0f'>\n", total_height);
-    memcpy(buf + pos, frame_buf, frame_pos);
-    pos += frame_pos;
-    free(frame_buf);
+    if (fg_sb_appendf(&svg, "<svg viewBox='0 0 1200 %.0f'>\n", total_height) != 0 ||
+        (frames.len > 0 && fg_sb_appendf(&svg, "%s", frames.data) != 0) ||
+        fg_sb_appendf(&svg, "</svg></svg>\n") != 0) {
+        goto fail;
+    }
 
-done:
-    pos += (size_t)snprintf(buf + pos, buf_cap - pos, "</svg></svg>\n");
-
+    free(frames.data);
     if (out_svg) {
-        *out_svg = strdup(buf);
+        *out_svg = svg.data;
+    } else {
+        free(svg.data);
     }
     if (out_len) {
-        *out_len = pos;
+        *out_len = svg.len;
     }
-    free(buf);
+    return;
+
+fail:
+    free(frames.data);
+    free(svg.data);
+    if (out_svg) {
+        *out_svg = NULL;
+    }
+    if (out_len) {
+        *out_len = 0;
+    }
 }
 
 static int

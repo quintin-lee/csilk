@@ -433,13 +433,14 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
         if (__builtin_expect(size > SIZE_MAX - 7, 0)) {
             return NULL;
         }
-        size_t    aligned_size = (size + 7) & ~7ULL;
-        uintptr_t cur = (uintptr_t)arena->ptr;
-        uintptr_t next = cur + aligned_size;
+        size_t aligned_size = (size + 7) & ~7ULL;
+        size_t space =
+            (arena->ptr && arena->end >= arena->ptr) ? (size_t)(arena->end - arena->ptr) : 0;
 
-        if (__builtin_expect(next <= (uintptr_t)arena->end && cur != 0, 1)) {
-            arena->ptr = (uint8_t*)next;
-            return (void*)cur;
+        if (__builtin_expect(aligned_size <= space, 1)) {
+            void* cur = arena->ptr;
+            arena->ptr += aligned_size;
+            return cur;
         }
         return arena_alloc_slow(arena, size, 8);
     }
@@ -450,12 +451,14 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
     }
     size_t    aligned_size = (size + 63) & ~63ULL;
     uintptr_t cur = (uintptr_t)arena->ptr;
-    uintptr_t aligned_cur = (cur + 63) & ~63ULL;
-    uint8_t*  next = (uint8_t*)aligned_cur + aligned_size;
+    size_t    misalign = (size_t)((64ULL - (cur & 63ULL)) & 63ULL);
+    size_t space = (arena->ptr && arena->end >= arena->ptr) ? (size_t)(arena->end - arena->ptr) : 0;
 
-    if (__builtin_expect(next <= arena->end && arena->ptr != NULL, 1)) {
-        arena->ptr = next;
-        return (void*)aligned_cur;
+    if (__builtin_expect(aligned_size <= SIZE_MAX - misalign && misalign + aligned_size <= space,
+                         1)) {
+        uint8_t* aligned_ptr = arena->ptr + misalign;
+        arena->ptr = aligned_ptr + aligned_size;
+        return aligned_ptr;
     }
     return arena_alloc_slow(arena, size, 64);
 #endif

@@ -85,6 +85,26 @@ test_redirect_null_safety()
     printf("test_redirect_null_safety passed\n");
 }
 
+static void
+test_redirect_control_char_bypass_blocked(void)
+{
+    const char* bypasses[] = {
+        "ht\ttp://evil.com",
+        "\x01//evil.com",
+        "j\navascript:alert(1)",
+        "  \\//evil.com",
+        "da\x07ta:text/html,hi",
+    };
+    for (size_t i = 0; i < sizeof(bypasses) / sizeof(bypasses[0]); i++) {
+        csilk_ctx_t* c = csilk_test_ctx_new();
+        csilk_redirect(c, CSILK_STATUS_FOUND, bypasses[i]);
+        assert(csilk_get_status(c) == 400);
+        assert(csilk_get_response_header(c, "Location") == nullptr);
+        csilk_test_ctx_free(c);
+    }
+    printf("test_redirect_control_char_bypass_blocked passed\n");
+}
+
 int
 main()
 {
@@ -92,6 +112,7 @@ main()
     test_redirect_simple();
     test_redirect_status_codes();
     test_redirect_null_safety();
+    test_redirect_control_char_bypass_blocked();
     printf("test_redirect: ALL PASSED\n");
     return 0;
 }

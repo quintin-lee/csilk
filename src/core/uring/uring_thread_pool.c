@@ -32,7 +32,7 @@ typedef struct {
 /** @brief Thread pool state. */
 struct uring_thread_pool_s {
     int             thread_count; /**< Number of worker threads. */
-    volatile bool   running;      /**< Set to false during shutdown. */
+    atomic_bool     running;      /**< Set to false during shutdown. */
     csilk_thread_t* threads;      /**< Worker thread IDs. */
 
     /* Work queue — single producer (event loop) → multiple consumers (threads). */
@@ -79,12 +79,13 @@ worker_routine(void* arg)
 {
     uring_thread_pool_t* tp = (uring_thread_pool_t*)arg;
 
-    while (tp->running) {
+    while (atomic_load_explicit(&tp->running, memory_order_acquire)) {
         csilk_mutex_lock(&tp->queue_mutex);
-        while (atomic_load(&tp->queue_head) == tp->queue_tail && tp->running) {
+        while (atomic_load(&tp->queue_head) == tp->queue_tail &&
+               atomic_load_explicit(&tp->running, memory_order_acquire)) {
             csilk_cond_wait(&tp->queue_cond, &tp->queue_mutex);
         }
-        if (!tp->running) {
+        if (!atomic_load_explicit(&tp->running, memory_order_acquire)) {
             csilk_mutex_unlock(&tp->queue_mutex);
             break;
         }
@@ -208,7 +209,7 @@ uring_tp_destroy(uring_thread_pool_t* tp)
         return;
     }
 
-    tp->running = false;
+    atomic_store_explicit(&tp->running, false, memory_order_release);
 
     /* Wake all workers so they exit the cond_wait loop. */
     csilk_mutex_lock(&tp->queue_mutex);

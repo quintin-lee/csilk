@@ -29,6 +29,19 @@ test_csv_escape(void)
     csilk_csv_escape(buf, sizeof(buf), NULL);
     assert(strcmp(buf, "") == 0);
 
+    /* Tight buffer boundaries (out_sz == 1, 2, 4) must not underflow */
+    char tiny1[1] = {'X'};
+    assert(csilk_csv_escape(tiny1, 1, "a,b") == 0);
+    assert(tiny1[0] == '\0');
+
+    char tiny2[2] = {'X', 'Y'};
+    csilk_csv_escape(tiny2, 2, "a,b");
+    assert(tiny2[1] == '\0');
+
+    char tiny4[4] = {0};
+    csilk_csv_escape(tiny4, 4, "a\"b");
+    assert(tiny4[3] == '\0');
+
     printf("test_csv_escape passed\n");
 }
 

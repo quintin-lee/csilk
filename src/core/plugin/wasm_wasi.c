@@ -83,7 +83,7 @@ csilk_host_get_input(csilk_wasm_plugin_t* plugin,
                      uint32_t             max_len,
                      const char*          json_input)
 {
-    if (!plugin || !json_input) {
+    if (!plugin || !json_input || max_len == 0) {
         return 0;
     }
 

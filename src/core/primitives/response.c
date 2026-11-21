@@ -124,33 +124,43 @@ csilk_redirect(csilk_ctx_t* c, int status, const char* location)
         status = CSILK_STATUS_FOUND; /* 302 */
     }
 
-    /* Sanitize Location header to prevent open redirect and header injection */
+    /* Filter out control characters first to prevent header injection and
+     * bypasses like "ht\ttp://evil.com" or "\x01//evil.com". */
     char   sanitized[1024];
     size_t i = 0;
     size_t j = 0;
-
-    /* Reject absolute and unsafe URLs (http://, https://, //, javascript:, etc.) to prevent open redirect (CWE-601) */
-    if ((location[0] == '/' && (location[1] == '/' || location[1] == '\\')) ||
-        (location[0] == '\\' && (location[1] == '\\' || location[1] == '/')) ||
-        strncasecmp(location, "http:", 5) == 0 || strncasecmp(location, "https:", 6) == 0 ||
-        strncasecmp(location, "javascript:", 11) == 0 || strncasecmp(location, "data:", 5) == 0 ||
-        strncasecmp(location, "vbscript:", 9) == 0 || strstr(location, "://") != NULL) {
-        CSILK_LOG_W("Redirect blocked: absolute or unsafe URL not allowed: %.30s...", location);
+    while (location[i] != '\0' && j < sizeof(sanitized) - 1) {
+        unsigned char ch = (unsigned char)location[i];
+        /* Allow printable ASCII except CR, LF */
+        if (ch >= 0x20 && ch <= 0x7E && ch != '\r' && ch != '\n') {
+            sanitized[j++] = (char)ch;
+        }
+        i++;
+    }
+    sanitized[j] = '\0';
+    if (location[i] != '\0') {
+        CSILK_LOG_W("Redirect blocked: URL too long");
         csilk_status(c, 400);
         csilk_string(c, 400, "Invalid redirect URL");
         return;
     }
 
-    /* Filter out control characters to prevent header injection */
-    while (location[i] != '\0' && j < sizeof(sanitized) - 1) {
-        unsigned char c = (unsigned char)location[i];
-        /* Allow printable ASCII except CR, LF */
-        if (c >= 0x20 && c <= 0x7E && c != '\r' && c != '\n') {
-            sanitized[j++] = (char)c;
-        }
-        i++;
+    const char* chk = sanitized;
+    while (*chk == ' ') {
+        chk++;
     }
-    sanitized[j] = '\0';
+
+    /* Reject absolute and unsafe URLs (http://, https://, //, javascript:, etc.) to prevent open redirect (CWE-601) */
+    if ((chk[0] == '/' && (chk[1] == '/' || chk[1] == '\\')) ||
+        (chk[0] == '\\' && (chk[1] == '\\' || chk[1] == '/')) ||
+        strncasecmp(chk, "http:", 5) == 0 || strncasecmp(chk, "https:", 6) == 0 ||
+        strncasecmp(chk, "javascript:", 11) == 0 || strncasecmp(chk, "data:", 5) == 0 ||
+        strncasecmp(chk, "vbscript:", 9) == 0 || strstr(chk, "://") != NULL) {
+        CSILK_LOG_W("Redirect blocked: absolute or unsafe URL not allowed: %.30s...", sanitized);
+        csilk_status(c, 400);
+        csilk_string(c, 400, "Invalid redirect URL");
+        return;
+    }
 
     csilk_set_header(c, "Location", sanitized);
     csilk_status(c, status);

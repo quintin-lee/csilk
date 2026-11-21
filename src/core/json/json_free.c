@@ -15,10 +15,12 @@ csilk_json_free(csilk_json_t* v)
     if (v->flags & CSILK_JSON_F_OWNER) {
         if (v->flags & CSILK_JSON_F_MUTABLE) {
             if (v->doc.mdoc) {
+                json_release_doc_views(v->doc.mdoc);
                 yyjson_mut_doc_free((yyjson_mut_doc*)v->doc.mdoc);
             }
         } else {
             if (v->doc.idoc) {
+                json_release_doc_views(v->doc.idoc);
                 yyjson_doc_free((yyjson_doc*)v->doc.idoc);
             }
         }

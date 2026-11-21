@@ -103,6 +103,7 @@ parse_yaml_config_stream(yaml_parser_t* parser, csilk_config_t* config)
     int error = 0;
     while (!done && !error) {
         if (!yaml_parser_parse(parser, &event)) {
+            error = 1;
             break;
         }
 

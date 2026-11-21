@@ -489,6 +489,9 @@ map_set_view(csilk_ctx_t*            c,
     new_h->key_len = key_len;
     new_h->value = csilk_arena_strndup(c->arena, value->data, value->len);
     new_h->value_len = value->len;
+    if (!new_h->key || !new_h->value) {
+        return;
+    }
     new_h->hash = hash;
     new_h->id = id;
     new_h->next = map->buckets[bucket];

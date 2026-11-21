@@ -62,14 +62,16 @@ csilk_io_loop_setup_udp_buf_ring(csilk_io_loop_t* loop)
         return -1;
     }
 
+    int mask = io_uring_buf_ring_mask(CSILK_UDP_NBUFS);
     for (int i = 0; i < CSILK_UDP_NBUFS; i++) {
         io_uring_buf_ring_add(br,
                               storage + (size_t)i * CSILK_UDP_BUFSZ,
                               (unsigned)CSILK_UDP_BUFSZ,
                               (unsigned short)i,
-                              0,
-                              0);
+                              mask,
+                              i);
     }
+    io_uring_buf_ring_advance(br, CSILK_UDP_NBUFS);
 
     loop->udp_storage = storage;
     loop->udp_buf_ring = br;

@@ -55,7 +55,17 @@ csilk_dpdk_engine_new(const csilk_dpdk_config_t* config)
         engine->config.mbuf_size = 2048;
     }
 
-    engine->pool_bytes = engine->config.pool_size * engine->config.mbuf_size;
+    if (engine->config.pool_size > SIZE_MAX / engine->config.mbuf_size) {
+        free(engine);
+        return NULL;
+    }
+    size_t raw_bytes = (size_t)engine->config.pool_size * (size_t)engine->config.mbuf_size;
+    if (raw_bytes == 0 || raw_bytes > SIZE_MAX - 63) {
+        free(engine);
+        return NULL;
+    }
+    /* C23 aligned_alloc requires size to be an integral multiple of alignment (64). */
+    engine->pool_bytes = (raw_bytes + 63) & ~(size_t)63;
     engine->mbuf_pool = aligned_alloc(64, engine->pool_bytes);
     if (!engine->mbuf_pool) {
         free(engine);

@@ -161,6 +161,17 @@ test_env_get_fallback(void)
     assert(strcmp(val, "default-val-8080") == 0);
 }
 
+static void
+test_zero_out_size_safety(void)
+{
+    char sentinel[4] = {'A', 'B', 'C', 'D'};
+    assert(csilk_secret_get("ANY_KEY", sentinel, 0) == NULL);
+    assert(sentinel[0] == 'A');
+    const char* fb = csilk_env_get("NON_EXISTENT_ZERO", sentinel, 0, "fallback");
+    assert(fb != NULL && strcmp(fb, "fallback") == 0);
+    assert(sentinel[0] == 'A');
+}
+
 int
 main(void)
 {
@@ -170,5 +181,6 @@ main(void)
     test_external_manager_cached();
     test_safety_circuit_breaker();
     test_env_get_fallback();
+    test_zero_out_size_safety();
     return 0;
 }

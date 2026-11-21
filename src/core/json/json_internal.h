@@ -90,5 +90,8 @@ csilk_json_t* json_view_immutable(yyjson_doc* idoc, yyjson_val* val);
 /** @brief Wrap a mutable yyjson value as a non-owning view pointer. */
 csilk_json_t* json_view_mutable(yyjson_mut_doc* mdoc, yyjson_mut_val* mval);
 
+/** @brief Release all non-owning view handles associated with a yyjson doc. */
+void json_release_doc_views(void* doc_ptr);
+
 /** @brief Shared helper: add item to object, handling cross-doc copy. */
 bool json_add_to_obj(csilk_json_t* obj, const char* key, csilk_json_t* item);
