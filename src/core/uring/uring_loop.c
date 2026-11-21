@@ -8,11 +8,75 @@
 #ifdef CSILK_USE_URING
 
 #include <string.h>
+#include <stdlib.h>
 #include "uring_internal.h"
 
-/* ====================================================================
- * Thread-local default loop state
- * ==================================================================== */
+/** @brief Number of slots in the shared UDP provided-buffer ring.
+ * 8 slots are sufficient for the burst pattern of QUIC/UDP traffic; the
+ * ring auto-recycles each slot as the kernel consumes it via
+ * IORING_CQE_F_BUFFER, and a handle that finds no free slot simply
+ * defers to the next CQE.
+ */
+#define CSILK_UDP_NBUFS 8
+
+/* Each slot holds a full datagram payload (65536) plus the
+ * io_uring_recvmsg_out header (16 bytes) and max sender address
+ * (sizeof(sockaddr_storage) = 128 bytes).  256 bytes of extra headroom
+ * covers the CMSG ancillary data that recvmsg may append. */
+#define CSILK_UDP_BUFSZ (65536 + 256)
+
+/** @brief Set up the shared UDP provided-buffer ring for the loop.
+ *
+ * Called lazily on the first csilk_io_udp_recv_start() that needs it.
+ * All UDP handles on the loop share buf_group 0.  On success the
+ * ring is fully registered and all CSILK_UDP_NBUFS slots are queued.
+ * Returns 0 on success, or a negative errno on failure.
+ *
+ * Note: CSILK_UDP_BUFSZ must be at least 65536 (datagram max)
+ * + sizeof(io_uring_recvmsg_out) + sizeof(sockaddr_storage).
+ * We compute it as 65792 = 65536 + 256 for a comfortable margin. */
+int
+csilk_io_loop_setup_udp_buf_ring(csilk_io_loop_t* loop)
+{
+    if (!loop || loop->udp_buf_ring) {
+        return 0; /* already set up */
+    }
+
+    int                       err = 0;
+    struct io_uring_buf_ring* br =
+        io_uring_setup_buf_ring(&loop->ring, CSILK_UDP_NBUFS, 0, 0, &err);
+    if (!br) {
+        return err < 0 ? err : -1;
+    }
+
+    /*
+     * Allocate backing storage for all ring slots.  The kernel writes the
+     * io_uring_recvmsg_out header + sender address + payload into each
+     * registered slot, so the storage must be at least CSILK_UDP_BUFSZ
+     * bytes per slot.  We keep it in a single contiguous allocation and
+     * store it in loop->udp_storage for csilk_io_loop_close to free.
+     */
+    char* storage = calloc((size_t)CSILK_UDP_NBUFS * (size_t)CSILK_UDP_BUFSZ, 1);
+    if (!storage) {
+        io_uring_free_buf_ring(&loop->ring, br, CSILK_UDP_NBUFS, 0);
+        return -1;
+    }
+
+    for (int i = 0; i < CSILK_UDP_NBUFS; i++) {
+        io_uring_buf_ring_add(br,
+                              storage + (size_t)i * CSILK_UDP_BUFSZ,
+                              (unsigned)CSILK_UDP_BUFSZ,
+                              (unsigned short)i,
+                              0,
+                              0);
+    }
+
+    loop->udp_storage = storage;
+    loop->udp_buf_ring = br;
+    loop->udp_nbufs = CSILK_UDP_NBUFS;
+    loop->udp_bufsz = CSILK_UDP_BUFSZ;
+    return 0;
+}
 
 _Thread_local csilk_io_loop_t  g_default_loop;
 _Thread_local int              g_default_pending = 0;
@@ -72,6 +136,15 @@ csilk_io_loop_close(csilk_io_loop_t* loop)
         }
         io_uring_cqe_seen(&loop->ring, cqe);
         cqe = NULL;
+    }
+    /* Release the shared UDP provided-buffer ring before exiting the ring. */
+    if (loop->udp_buf_ring) {
+        io_uring_free_buf_ring(&loop->ring, loop->udp_buf_ring, loop->udp_nbufs, 0);
+        loop->udp_buf_ring = NULL;
+        if (loop->udp_storage) {
+            free(loop->udp_storage);
+            loop->udp_storage = NULL;
+        }
     }
     io_uring_queue_exit(&loop->ring);
     if (loop->op_pool) {

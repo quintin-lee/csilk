@@ -225,6 +225,9 @@ uring_decode_data(__u64 val, uring_op_type_t* op, void** ptr, uint64_t* gen)
     }
 }
 
+/* --- UDP shared buffer-ring setup (defined in uring_loop.c) --- */
+int csilk_io_loop_setup_udp_buf_ring(csilk_io_loop_t* loop);
+
 void csilk_uv_on_write_done(void* arg, ssize_t res, uint64_t gen);
 
 /* Thread-local default loop state (defined in uring_loop.c) */

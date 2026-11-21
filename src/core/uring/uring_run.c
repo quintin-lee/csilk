@@ -21,6 +21,7 @@
 
 #include <errno.h>
 #include <poll.h>
+#include <string.h>
 #include <sys/signalfd.h>
 
 #include "../internal/srv_internal.h"
@@ -420,44 +421,136 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                 }
                 /* else: genuine error (e.g. kernel reject) — drop silently. */
             } else if (op == URING_OP_UDP_RECV) {
-                /* IORING_OP_RECVMSG multishot completion: the kernel delivers
-                 * one CQE per datagram.  The SQE remains armed by the kernel
-                 * (multishot semantics) — no re-submission needed on success.
-                 * The payload was written into handle->recv_buf and the sender
-                 * address into handle->remote_storage. */
+                /*
+                 * IORING_OP_RECVMSG multishot completion.
+                 *
+                 * The kernel delivers one CQE per datagram, writing:
+                 *   – the io_uring_recvmsg_out header + sender address +
+                 *     payload directly into the registered buffer-ring slot
+                 *   – cqe->res = payload bytes (or -errno on error)
+                 *   – cqe->flags = IORING_CQE_F_MORE  while the multishot
+                 *     stream is still active; the final CQE (stream ended,
+                 *     cancelled, or an error that stopped it) has MORE cleared.
+                 *
+                 * We read the datagram from the ring slot, copy the payload
+                 * into handle->recv_buf (user-facing buffer), recycle the
+                 * slot, and call the user callback.
+                 *
+                 * Re-arm policy: when the kernel stops the stream
+                 * (!IORING_CQE_F_MORE) we must submit a fresh multishot SQE
+                 * so subsequent datagrams keep flowing.  This mirrors the
+                 * pattern in liburing's io_uring-udp example.
+                 */
                 csilk_io_udp_t* udp = (csilk_io_udp_t*)ptr;
                 if (is_stale_poll((csilk_io_handle_t*)udp, gen)) {
                     continue;
                 }
-                if (res > 0 && udp->cb) {
-                    csilk_io_buf_t csbuf;
-                    csbuf.base = udp->recv_buf;
-                    csbuf.len = (size_t)res;
-                    const struct sockaddr* sender = (const struct sockaddr*)&udp->remote_storage;
-                    udp->cb(udp, (size_t)res, &csbuf, sender);
+
+                /*
+                 * Successful datagram delivery.
+                 * cqe->res > 0 and IORING_CQE_F_BUFFER set → the payload
+                 * lives in the selected ring slot.
+                 */
+                if (res > 0 && (cqe->flags & IORING_CQE_F_BUFFER)) {
+                    unsigned bid = cqe->flags >> 16;
+                    /*
+                     * The ring slot was allocated by csilk_io_loop_setup_udp_buf_ring
+                     * as a single contiguous block.  Each slot is loop->udp_bufsz
+                     * bytes; slot bid sits at udp_storage + bid * udp_bufsz.
+                     */
+                    void* slot_base =
+                        (char*)loop->udp_storage + (size_t)bid * (size_t)loop->udp_bufsz;
+
+                    struct io_uring_recvmsg_out* o =
+                        io_uring_recvmsg_validate(slot_base, res, &udp->msg);
+                    if (o) {
+                        /*
+                         * Layout inside the slot:
+                         *   io_uring_recvmsg_out  (16 B)
+                         *   sender address          (o->namelen bytes)
+                         *   control messages        (o->controllen bytes, usually 0)
+                         *   payload                 (o->payloadlen bytes)
+                         */
+                        char*    payload = (char*)o + sizeof(*o) + o->namelen + o->controllen;
+                        unsigned payload_len = o->payloadlen;
+                        if (payload_len > sizeof(udp->recv_buf)) {
+                            payload_len = sizeof(udp->recv_buf);
+                        }
+                        memcpy(udp->recv_buf, payload, payload_len);
+
+                        /* Cache sender address for subsequent sends. */
+                        void* sender = io_uring_recvmsg_name(o);
+                        if (o->namelen > 0 && sender) {
+                            memcpy(&udp->remote_storage, sender, o->namelen);
+                            udp->remote_len = (int)o->namelen;
+                        }
+
+                        if (udp->cb) {
+                            csilk_io_buf_t csbuf;
+                            csbuf.base = udp->recv_buf;
+                            csbuf.len = payload_len;
+                            const struct sockaddr* sender_addr = (const struct sockaddr*)sender;
+                            udp->cb(udp, payload_len, &csbuf, sender_addr);
+                        }
+                    }
+
+                    /*
+                     * Recycle the ring slot so the kernel can use it for the
+                     * next datagram.  The slot address is the same as before
+                     * (ring slots are fixed); only the bid tag changes.
+                     */
+                    io_uring_buf_ring_add(
+                        loop->udp_buf_ring, slot_base, (unsigned)loop->udp_bufsz, bid, 0, 0);
+                } else if (res == -EAGAIN) {
+                    /*
+                     * Transient: the socket has no pending data at this instant.
+                     * The kernel still holds the multishot SQE armed (MORE may
+                     * or may not be set in this CQE — on some kernels an
+                     * -EAGAIN CQE also has MORE cleared, which means we need
+                     * to re-arm below; on others it has MORE set and the kernel
+                     * will keep the SQE alive).  In either case we handle the
+                     * re-arm in the !MORE branch below, so no extra work here.
+                     */
+                } else if (res < 0) {
+                    /*
+                     * Permanent error (-EINVAL, -EBADF, -EIO, …).
+                     * The multishot stream is dead; log and stop the handle
+                     * so the user can re-start it if appropriate.
+                     */
+                    CSILK_LOG_E(
+                        "uring: UDP recvmsg multishot error on fd %d: %s", udp->fd, strerror(-res));
+                    csilk_io_udp_recv_stop(udp);
                 }
-                if (res < 0 && res != -ECANCELED && udp->recv_started && udp->fd >= 0) {
+
+                /*
+                 * Re-arm the multishot SQE when the kernel has stopped the
+                 * stream.  This happens when the CQE has IORING_CQE_F_MORE
+                 * cleared, which is the final CQE in a multishot batch.
+                 * Without re-arming, no further datagrams will be delivered.
+                 *
+                 * We use udp->msg (handle-embedded, stable) not a stack
+                 * msghdr, because the kernel reads the msghdr pointer at
+                 * CQE completion time, not at SQE submission time.
+                 */
+                if (!(cqe->flags & IORING_CQE_F_MORE) && udp->recv_started && udp->fd >= 0) {
                     struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
                     if (sqe) {
-                        struct msghdr msg;
-                        memset(&msg, 0, sizeof(msg));
-                        msg.msg_name = &udp->remote_storage;
-                        msg.msg_namelen = sizeof(udp->remote_storage);
-                        struct iovec iov;
-                        iov.iov_base = udp->recv_buf;
-                        iov.iov_len = sizeof(udp->recv_buf);
-                        msg.msg_iov = &iov;
-                        msg.msg_iovlen = 1;
-                        uint8_t ctrl_buf[sizeof(struct sockaddr_storage) + 16];
-                        memset(ctrl_buf, 0, sizeof(ctrl_buf));
-                        msg.msg_control = ctrl_buf;
-                        msg.msg_controllen = sizeof(ctrl_buf);
                         uint64_t next_data =
                             uring_encode_handle_data(URING_OP_UDP_RECV, (csilk_io_handle_t*)udp);
                         if (next_data) {
-                            io_uring_prep_recvmsg_multishot(sqe, udp->fd, &msg, 0);
+                            io_uring_prep_recvmsg_multishot(sqe, udp->fd, &udp->msg, 0);
+                            sqe->buf_group = 0;
+                            sqe->flags |= IOSQE_BUFFER_SELECT;
                             io_uring_sqe_set_data64(sqe, next_data);
                             io_uring_submit(ring);
+                        } else {
+                            /*
+                             * SQE pool exhausted: the multishot stream will not
+                             * re-arm.  Log so the silent stall is diagnosable.
+                             */
+                            CSILK_LOG_W("uring: UDP recvmsg re-arm failed for fd %d "
+                                        "(SQE pool exhausted); stream stopped",
+                                        udp->fd);
                         }
                     }
                 }

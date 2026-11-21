@@ -176,44 +176,66 @@ csilk_io_udp_recv_start(csilk_io_udp_t* handle, csilk_io_udp_recv_cb cb)
     }
     handle->loop = loop;
 
-    /* Submit a multishot IORING_OP_RECVMSG: the kernel arms the SQE once
-     * and completes one CQE per datagram without re-submission.  This
-     * eliminates the 1 ms timer poll (which capped throughput at ~1 Kpps)
-     * and delivers packets as they arrive in the socket buffer.
-     *
-     * Falls back to the 1 ms timer if the ring does not support multishot
-     * (io_uring < 5.6) or if the SQE submission fails. */
-    struct msghdr msg;
-    memset(&msg, 0, sizeof(msg));
-    msg.msg_name = &handle->remote_storage;
-    msg.msg_namelen = sizeof(handle->remote_storage);
-    struct iovec iov;
-    iov.iov_base = handle->recv_buf;
-    iov.iov_len = sizeof(handle->recv_buf);
-    msg.msg_iov = &iov;
-    msg.msg_iovlen = 1;
-
-    /* Control buffer for the sender address (required for recvmsg on UDP). */
-    uint8_t ctrl_buf[sizeof(struct sockaddr_storage) + 16];
-    memset(ctrl_buf, 0, sizeof(ctrl_buf));
-    msg.msg_control = ctrl_buf;
-    msg.msg_controllen = sizeof(ctrl_buf);
-
-    uint64_t sqe_data = uring_encode_handle_data(URING_OP_UDP_RECV, (csilk_io_handle_t*)handle);
-    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
-    if (sqe && sqe_data) {
-        io_uring_prep_recvmsg_multishot(sqe, handle->fd, &msg, 0);
-        io_uring_sqe_set_data64(sqe, sqe_data);
-        io_uring_submit(&loop->ring);
-    } else {
+    /* Ensure the shared provided-buffer ring is set up on this loop.
+     * All UDP handles share buf_group 0; the kernel writes each datagram
+     * (io_uring_recvmsg_out header + sender addr + payload) directly into
+     * a ring slot, eliminating the need for a user-space buffer per recv. */
+    int ring_rc = csilk_io_loop_setup_udp_buf_ring(loop);
+    if (ring_rc != 0) {
         /* Fallback: 1 ms timer-driven recvfrom (legacy path). */
-        if (sqe_data) {
-            uring_op_free(loop, (uring_op_context_t*)sqe_data);
-        }
         int rc = csilk_io_timer_start(&handle->recv_timer, _udp_recv_timer_cb, 1, 1);
         if (rc != 0) {
             handle->cb = NULL;
             return rc;
+        }
+    } else {
+        /*
+         * Arm a multishot IORING_OP_RECVMSG SQE with IOSQE_BUFFER_SELECT.
+         *
+         * Kernel contract:
+         *  – msg (msghdr*) must remain valid for the *entire* lifetime of
+         *    the SQE.  We use handle->msg (handle-embedded) so it is
+         *    stable across multiple CQEs from the same multishot SQE.
+         *  – The kernel picks a free slot from buf_group 0 for each
+         *    datagram.  When the stream ends the kernel sends a final CQE
+         *    with IORING_CQE_F_MORE cleared, at which point the CQE
+         *    dispatcher re-arms a fresh multishot SQE (see uring_run.c).
+         *  – cqe->res on error: -EAGAIN means the socket has no data
+         *    (not a bug); -ECANCELED is a normal cancel; -EINVAL or any
+         *    other errno is a real error that stops the stream.
+         */
+        memset(&handle->msg, 0, sizeof(handle->msg));
+        /*
+         * With IOSQE_BUFFER_SELECT the kernel uses the registered ring slot
+         * as the payload target; msg.msg_iov / msg.msg_iovlen are ignored.
+         * msg.msg_name / msg.msg_namelen must still point to valid memory
+         * large enough to hold the sender address (sizeof(sockaddr_storage)).
+         * The kernel writes io_uring_recvmsg_out + name + cmsg + payload
+         * into the selected ring slot and updates msg_namelen / msg_controllen.
+         */
+        handle->msg.msg_name = &handle->remote_storage;
+        handle->msg.msg_namelen = sizeof(handle->remote_storage);
+        handle->msg.msg_control = NULL; /* no control messages */
+        handle->msg.msg_controllen = 0;
+
+        struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
+        uint64_t sqe_data = uring_encode_handle_data(URING_OP_UDP_RECV, (csilk_io_handle_t*)handle);
+        if (sqe && sqe_data) {
+            io_uring_prep_recvmsg_multishot(sqe, handle->fd, &handle->msg, 0);
+            sqe->buf_group = 0;
+            sqe->flags |= IOSQE_BUFFER_SELECT;
+            io_uring_sqe_set_data64(sqe, sqe_data);
+            io_uring_submit(&loop->ring);
+        } else {
+            /* SQE pool exhausted or ring full: fall back to timer path. */
+            if (sqe_data) {
+                uring_op_free(loop, (uring_op_context_t*)sqe_data);
+            }
+            int rc = csilk_io_timer_start(&handle->recv_timer, _udp_recv_timer_cb, 1, 1);
+            if (rc != 0) {
+                handle->cb = NULL;
+                return rc;
+            }
         }
     }
 

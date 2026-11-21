@@ -74,6 +74,15 @@ typedef struct csilk_io_loop_s {
     uint32_t*           op_free_stack;
     uint32_t            op_free_head;
     uint32_t            op_pool_capacity;
+
+    /* --- Shared provided buffer ring for multishot UDP recvmsg ---
+     * Set up lazily by the first csilk_io_udp_recv_start() call on this
+     * loop.  All UDP handles on the loop share buf_group 0.  Each slot
+     * holds one datagram (payload + io_uring_recvmsg_out header). */
+    struct io_uring_buf_ring* udp_buf_ring; /**< NULL until first use. */
+    int                       udp_nbufs;    /**< Number of slots in the ring. */
+    int                       udp_bufsz;    /**< Bytes per slot. */
+    void*                     udp_storage;  /**< calloc'd payload backing the ring. */
 } csilk_io_loop_t;
 
 typedef struct csilk_io_handle_s csilk_io_handle_t;
@@ -391,23 +400,38 @@ typedef void (*csilk_io_udp_recv_cb)(csilk_io_udp_t*        handle,
                                      const csilk_io_buf_t*  buf,
                                      const struct sockaddr* addr);
 
-/** @brief UDP datagram handle (io_uring: raw socket + eventfd signal).
+/** @brief UDP datagram handle (io_uring: raw socket + provided-buffer-ring
+ * multishot recvmsg).
  *
- * The handle owns a non-blocking datagram socket plus a repeating timer that
- * drives level-triggered `recvfrom()` polls on the loop thread. The remote
- * address of the most recently received datagram is cached in `remote`. */
+ * Each handle owns a non-blocking datagram socket.  Receive is driven by a
+ * single IORING_OP_RECVMSG multishot SQE armed once at csilk_io_udp_recv_start()
+ * and re-armed by the CQE dispatcher whenever the kernel stops the multishot
+ * stream (cqe->flags & IORING_CQE_F_MORE == 0).  Datagrams are written by the
+ * kernel directly into the loop's shared provided-buffer-ring; the user-facing
+ * payload is copied into handle->recv_buf before the receive callback fires,
+ * so the callback can safely run while the kernel is still in flight.
+ *
+ * The remote address of the most recently received datagram is cached in
+ * `remote_storage` / `remote_len` for csilk_io_udp_send() convenience. */
 struct csilk_io_udp_s {
     CSILK_IO_HANDLE_FIELDS
-    csilk_io_udp_recv_cb    cb;           /**< Receive callback (set by csilk_io_udp_recv_start). */
-    csilk_io_timer_t        recv_timer;   /**< Timer handle used to poll the socket (legacy). */
-    int                     recv_started; /**< 1 when the poll timer / multishot recv is armed. */
-    char                    recv_buf[65536]; /**< Scratch datagram buffer. */
-    struct sockaddr_storage remote_storage;  /**< Dual-stack remote address (IPv4/IPv6). */
+    csilk_io_udp_recv_cb cb;         /**< Receive callback (set by csilk_io_udp_recv_start). */
+    csilk_io_timer_t     recv_timer; /**< Timer handle used to poll the socket (legacy fallback). */
+    int                  recv_started;    /**< 1 when the poll timer / multishot recv is armed. */
+    char                 recv_buf[65536]; /**< Copy destination for user-facing datagram payload. */
+    struct sockaddr_storage remote_storage; /**< Dual-stack remote address (IPv4/IPv6). */
     union {
         struct sockaddr_in  v4;
         struct sockaddr_in6 v6;
     } remote;       /**< Remote address of last received datagram. */
     int remote_len; /**< Length of `remote` for sendto (0 when unset). */
+    /*
+     * The msghdr template must live in stable storage because the kernel
+     * reads it at CQE completion time, not at SQE submission time.
+     * We keep it here (handle-embedded) so it remains valid across the
+     * entire multishot lifetime of the handle.
+     */
+    struct msghdr msg; /**< Stable msghdr for the in-flight multishot SQE. */
 };
 
 typedef struct csilk_io_udp_s csilk_io_udp_t;
