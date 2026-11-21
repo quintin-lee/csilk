@@ -731,6 +731,8 @@ _csilk_ctx_init(csilk_ctx_t* c, struct csilk_server_s* s, void* client)
     uint64_t old_seq = c->request_seq;
     memset(c, 0, sizeof(csilk_ctx_t));
     c->request_seq = old_seq ? old_seq + 1 : 1;
+    atomic_init(&c->conn_closed, 0);
+    atomic_init(&c->stream_closed, 0);
     c->handler_index = -1;
     c->file_fd = -1;
     c->_internal_client = client;
@@ -774,8 +776,9 @@ _csilk_stream_ctx_init(csilk_ctx_t* c, csilk_client_t* client, int32_t stream_id
     c->server = client->server;
     c->stream_id = stream_id;
     c->h2_stream_owner = client;
+    atomic_init(&c->conn_closed, 0);
     atomic_init(&c->stream_ref, 1);
-    c->stream_closed = 0;
+    atomic_init(&c->stream_closed, 0);
     atomic_init(&c->stream_destroy_pending, 0);
     c->read_buffers = c->read_buffers_embedded;
     c->read_buffers_capacity = CSILK_READ_BUF_EMBEDDED;

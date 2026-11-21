@@ -60,6 +60,26 @@ _csilk_async_op_disarm_timer(csilk_async_op_t* op)
     }
 }
 
+static inline int
+_csilk_async_op_ctx_valid_owner(const csilk_async_op_t* op,
+                                const csilk_ctx_t*      c,
+                                const csilk_client_t*   client)
+{
+    if (!c) {
+        return 0;
+    }
+    if (atomic_load_explicit(&c->conn_closed, memory_order_acquire) ||
+        atomic_load_explicit(&c->stream_closed, memory_order_acquire)) {
+        return 0;
+    }
+    if (!client) {
+        return 1;
+    }
+    return client->state != CSILK_CONN_CLOSING && client->state != CSILK_CONN_CLOSED &&
+           client->generation == op->generation && c->request_seq == op->request_seq &&
+           (c->h2_stream_owner == NULL || c->stream_gen == op->stream_gen);
+}
+
 static void
 _csilk_async_timer_cb(csilk_io_timer_t* handle)
 {
@@ -77,10 +97,8 @@ _csilk_async_timer_cb(csilk_io_timer_t* handle)
     csilk_ctx_t*    c = op->ctx;
     csilk_client_t* client = c ? (csilk_client_t*)c->_internal_client : NULL;
 
-    /* Verify anti-ABA generation validity, request sequence, stream generation, and stream not closed */
-    if (!client ||
-        (client->generation == op->generation && c->request_seq == op->request_seq &&
-         (c->h2_stream_owner == NULL || c->stream_gen == op->stream_gen) && !c->stream_closed)) {
+    /* Verify anti-ABA generation validity, request sequence, stream/conn not closed */
+    if (_csilk_async_op_ctx_valid_owner(op, c, client)) {
         if (op->on_timeout) {
             op->on_timeout(c);
         } else {
@@ -176,10 +194,8 @@ _csilk_async_complete_dispatch_cb(void* arg)
 
     _csilk_async_op_disarm_timer(op);
 
-    /* Verify anti-ABA generation validity, request sequence, stream generation, and stream not closed */
-    if (!client ||
-        (client->generation == op->generation && c->request_seq == op->request_seq &&
-         (c->h2_stream_owner == NULL || c->stream_gen == op->stream_gen) && !c->stream_closed)) {
+    /* Verify anti-ABA generation validity, request sequence, stream/conn not closed */
+    if (_csilk_async_op_ctx_valid_owner(op, c, client)) {
         if (op->on_complete) {
             op->on_complete(c, result);
         }
@@ -208,9 +224,7 @@ csilk_async_op_complete(csilk_async_op_t* op, void* result)
     /* If on owner worker thread or standalone mock context without worker pool, execute inline */
     if (!client || !client->owner_pool || _csilk_is_owner_worker_thread(client->owner_pool)) {
         _csilk_async_op_disarm_timer(op);
-        if (!client || (client->generation == op->generation && c->request_seq == op->request_seq &&
-                        (c->h2_stream_owner == NULL || c->stream_gen == op->stream_gen) &&
-                        !c->stream_closed)) {
+        if (_csilk_async_op_ctx_valid_owner(op, c, client)) {
             if (op->on_complete) {
                 op->on_complete(c, result);
             }
@@ -269,4 +283,30 @@ csilk_async_op_cancel(csilk_async_op_t* op)
         _csilk_async_op_unref(op);
     }
     return 0;
+}
+
+int
+csilk_async_op_is_alive(const csilk_async_op_t* op)
+{
+    if (!op || !op->ctx) {
+        return 0;
+    }
+    if (atomic_load_explicit(&op->completed, memory_order_acquire) != 0) {
+        return 0;
+    }
+    const csilk_ctx_t* c = op->ctx;
+    if (atomic_load_explicit(&c->conn_closed, memory_order_acquire) ||
+        atomic_load_explicit(&c->stream_closed, memory_order_acquire)) {
+        return 0;
+    }
+    const csilk_client_t* client = (const csilk_client_t*)c->_internal_client;
+    if (client) {
+        if (client->generation != op->generation || c->request_seq != op->request_seq) {
+            return 0;
+        }
+        if (c->h2_stream_owner != NULL && c->stream_gen != op->stream_gen) {
+            return 0;
+        }
+    }
+    return 1;
 }

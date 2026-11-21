@@ -70,11 +70,40 @@ typedef struct {
     uint64_t                 duration_ms;    /**< Auto-stop duration (0 = manual stop only). */
     csilk_flamegraph_done_cb done_cb;        /**< Completion callback (NULL = none). */
     void*                    user_data;      /**< Opaque pointer passed to done_cb. */
-    int                      auto_stop;  /**< 1 if sampler should auto-stop after duration_ms. */
-    csilk_ctx_t*             notify_ctx; /**< Admin context for completion notification. */
+    int                      auto_stop; /**< 1 if sampler should auto-stop after duration_ms. */
+    bool                     joined_by_stop; /**< True if stop() claimed thread join + free. */
 } fg_profiler_t;
 
 static fg_profiler_t* g_profiler = NULL;
+static fg_profiler_t* g_finishing_profiler = NULL;
+static csilk_mutex_t  g_fg_mutex;
+static csilk_once_t   g_fg_once = CSILK_ONCE_INIT;
+static csilk_thread_t g_pending_join_thread;
+static int            g_has_pending_join = 0;
+
+static void
+fg_init_once(void)
+{
+    csilk_mutex_init(&g_fg_mutex);
+}
+
+static inline void
+fg_ensure_init(void)
+{
+    csilk_once(&g_fg_once, fg_init_once);
+}
+
+static void
+fg_destroy_profiler(fg_profiler_t* p)
+{
+    if (!p) {
+        return;
+    }
+    csilk_mutex_destroy(&p->mutex);
+    free(p->entries);
+    free(p->hash_table);
+    free(p);
+}
 
 /** @brief djb2 hash function for collapsed stack strings.
  *
@@ -206,31 +235,38 @@ fg_sampler_thread(void* arg)
     }
 
     /* Auto-stop path: stop + generate SVG + invoke callback, then clean up.
-     * The sampler thread owns the cleanup since it is the last thread that
-     * references the profiler instance. */
+     * Ownership of svg transfers to done_cb (caller frees). */
     if (p->auto_stop) {
         char*  svg = NULL;
         size_t svg_len = 0;
 
+        fg_ensure_init();
+        csilk_mutex_lock(&g_fg_mutex);
+        if (g_profiler == p) {
+            g_profiler = NULL;
+        }
+        g_finishing_profiler = p;
+        csilk_mutex_unlock(&g_fg_mutex);
+
         if (p->done_cb) {
             fg_generate_svg(p, &svg, &svg_len);
-        }
-
-        /* Clear global pointer before callback so is_running() returns 0
-           and concurrent start attempts can proceed. */
-        g_profiler = NULL;
-
-        if (p->done_cb) {
             p->done_cb(svg, svg_len, p->user_data);
         }
-        if (svg) {
-            free(svg);
-        }
 
-        csilk_mutex_destroy(&p->mutex);
-        free(p->entries);
-        free(p->hash_table);
-        free(p);
+        csilk_mutex_lock(&g_fg_mutex);
+        if (g_finishing_profiler == p) {
+            g_finishing_profiler = NULL;
+        }
+        bool joined = p->joined_by_stop;
+        if (!joined) {
+            g_pending_join_thread = p->sampler_thread;
+            g_has_pending_join = 1;
+        }
+        csilk_mutex_unlock(&g_fg_mutex);
+
+        if (!joined) {
+            fg_destroy_profiler(p);
+        }
     }
 }
 
@@ -241,9 +277,9 @@ fg_sampler_thread(void* arg)
  * <title> tooltip and horizontally truncated label text.  The output is
  * returned as a heap-allocated string the caller must free.
  *
- * Uses a large stack buffer for the SVG skeleton plus a heap buffer for
- * per-frame <g> elements to avoid repeated reallocation.  On allocation
- * failure the function still produces a valid (if empty) SVG snippet.
+ * Uses a heap buffer for the SVG skeleton and per-frame <g> elements to avoid
+ * overflowing smaller worker thread stacks.  Returns NULL when zero samples
+ * were collected.
  *
  * @param p       The profiler instance (must have been stopped).
  * @param out_svg [out] Receives a heap-allocated SVG string.
@@ -251,7 +287,29 @@ fg_sampler_thread(void* arg)
 static void
 fg_generate_svg(fg_profiler_t* p, char** out_svg, size_t* out_len)
 {
-    char   buf[FG_MAX_STACKS * 512];
+    int total_samples = atomic_load(&p->sample_count);
+    if (total_samples <= 0 || p->entry_count <= 0) {
+        if (out_svg) {
+            *out_svg = NULL;
+        }
+        if (out_len) {
+            *out_len = 0;
+        }
+        return;
+    }
+
+    size_t buf_cap = (size_t)FG_MAX_STACKS * 512;
+    char*  buf = malloc(buf_cap);
+    if (!buf) {
+        if (out_svg) {
+            *out_svg = NULL;
+        }
+        if (out_len) {
+            *out_len = 0;
+        }
+        return;
+    }
+
     size_t pos = 0;
     int    max_count = 0;
 
@@ -265,10 +323,10 @@ fg_generate_svg(fg_profiler_t* p, char** out_svg, size_t* out_len)
     }
 
     double total_width = 1200.0;
-    double width_per_sample = total_width / (double)atomic_load(&p->sample_count);
+    double width_per_sample = total_width / (double)total_samples;
 
     pos += (size_t)snprintf(buf + pos,
-                            sizeof(buf) - pos,
+                            buf_cap - pos,
                             "<svg xmlns='http://www.w3.org/2000/svg' width='1200' height='auto' "
                             "font-family='monospace' font-size='%d'>\n"
                             "  <rect width='100%%' height='100%%' fill='#1e293b'/>\n"
@@ -276,7 +334,7 @@ fg_generate_svg(fg_profiler_t* p, char** out_svg, size_t* out_len)
                             "%d samples, %d unique stacks</text>\n",
                             FG_FONT_SIZE,
                             FG_TITLE_HEIGHT - 8,
-                            atomic_load(&p->sample_count),
+                            total_samples,
                             p->entry_count);
 
     double y_offset = FG_TITLE_HEIGHT + 4;
@@ -335,17 +393,85 @@ fg_generate_svg(fg_profiler_t* p, char** out_svg, size_t* out_len)
     }
 
     double total_height = y_offset + FG_MAX_DEPTH * FG_FRAME_HEIGHT + 10;
-    pos += (size_t)snprintf(
-        buf + pos, sizeof(buf) - pos, "<svg viewBox='0 0 1200 %.0f'>\n", total_height);
+    pos +=
+        (size_t)snprintf(buf + pos, buf_cap - pos, "<svg viewBox='0 0 1200 %.0f'>\n", total_height);
     memcpy(buf + pos, frame_buf, frame_pos);
     pos += frame_pos;
     free(frame_buf);
 
 done:
-    pos += (size_t)snprintf(buf + pos, sizeof(buf) - pos, "</svg></svg>\n");
+    pos += (size_t)snprintf(buf + pos, buf_cap - pos, "</svg></svg>\n");
 
-    *out_svg = strdup(buf);
-    *out_len = pos;
+    if (out_svg) {
+        *out_svg = strdup(buf);
+    }
+    if (out_len) {
+        *out_len = pos;
+    }
+    free(buf);
+}
+
+static int
+fg_start_internal(useconds_t               interval_us,
+                  uint64_t                 duration_ms,
+                  int                      auto_stop,
+                  csilk_flamegraph_done_cb cb,
+                  void*                    user_data)
+{
+    fg_ensure_init();
+    csilk_mutex_lock(&g_fg_mutex);
+
+    if (g_has_pending_join) {
+        csilk_thread_t prev = g_pending_join_thread;
+        g_has_pending_join = 0;
+        csilk_mutex_unlock(&g_fg_mutex);
+        csilk_thread_join(&prev);
+        csilk_mutex_lock(&g_fg_mutex);
+    }
+
+    if (g_profiler || g_finishing_profiler) {
+        csilk_mutex_unlock(&g_fg_mutex);
+        return -1;
+    }
+
+    fg_profiler_t* p = calloc(1, sizeof(fg_profiler_t));
+    if (!p) {
+        csilk_mutex_unlock(&g_fg_mutex);
+        return -1;
+    }
+
+    p->entries = calloc(FG_MAX_STACKS, sizeof(fg_stack_entry_t));
+    p->hash_table = malloc(FG_MAX_STACKS * sizeof(int));
+    if (!p->entries || !p->hash_table) {
+        free(p->entries);
+        free(p->hash_table);
+        free(p);
+        csilk_mutex_unlock(&g_fg_mutex);
+        return -1;
+    }
+    for (int i = 0; i < FG_MAX_STACKS; i++) {
+        p->hash_table[i] = -1;
+    }
+
+    p->interval_us = interval_us;
+    p->duration_ms = duration_ms;
+    p->auto_stop = auto_stop;
+    p->done_cb = cb;
+    p->user_data = user_data;
+
+    csilk_mutex_init(&p->mutex);
+    atomic_store(&p->running, 1);
+    atomic_store(&p->sample_count, 0);
+
+    if (csilk_thread_create(&p->sampler_thread, fg_sampler_thread, p) != 0) {
+        fg_destroy_profiler(p);
+        csilk_mutex_unlock(&g_fg_mutex);
+        return -1;
+    }
+
+    g_profiler = p;
+    csilk_mutex_unlock(&g_fg_mutex);
+    return 0;
 }
 
 /** @brief Start a background stack-sampling profiler.
@@ -360,41 +486,7 @@ done:
 int
 csilk_flamegraph_start(unsigned int interval_us)
 {
-    if (g_profiler) {
-        return -1;
-    }
-
-    fg_profiler_t* p = calloc(1, sizeof(fg_profiler_t));
-    if (!p) {
-        return -1;
-    }
-
-    p->entries = calloc(FG_MAX_STACKS, sizeof(fg_stack_entry_t));
-    p->hash_table = malloc(FG_MAX_STACKS * sizeof(int));
-    if (!p->entries || !p->hash_table) {
-        free(p->entries);
-        free(p->hash_table);
-        free(p);
-        return -1;
-    }
-    for (int i = 0; i < FG_MAX_STACKS; i++) {
-        p->hash_table[i] = -1;
-    }
-    p->interval_us = interval_us;
-    csilk_mutex_init(&p->mutex);
-    atomic_store(&p->running, 1);
-    atomic_store(&p->sample_count, 0);
-
-    if (csilk_thread_create(&p->sampler_thread, fg_sampler_thread, p) != 0) {
-        csilk_mutex_destroy(&p->mutex);
-        free(p->entries);
-        free(p->hash_table);
-        free(p);
-        return -1;
-    }
-
-    g_profiler = p;
-    return 0;
+    return fg_start_internal((useconds_t)interval_us, 0, 0, NULL, NULL);
 }
 
 /** @brief Stop the profiler and generate the flame graph SVG.
@@ -405,24 +497,42 @@ csilk_flamegraph_start(unsigned int interval_us)
  *
  * @param out_svg [out] Receives the SVG string (caller must free).
  * @param out_len [out] Receives the SVG byte length.
- * @return 0 on success, -1 if no profiler is active. */
+ * @return 0 on success, -1 if no profiler is active or session is auto-stop. */
 int
 csilk_flamegraph_stop(char** out_svg, size_t* out_len)
 {
-    fg_profiler_t* p = g_profiler;
+    fg_ensure_init();
+    csilk_mutex_lock(&g_fg_mutex);
+
+    if (g_has_pending_join) {
+        csilk_thread_t prev = g_pending_join_thread;
+        g_has_pending_join = 0;
+        csilk_mutex_unlock(&g_fg_mutex);
+        csilk_thread_join(&prev);
+        csilk_mutex_lock(&g_fg_mutex);
+    }
+
+    fg_profiler_t* p = g_profiler ? g_profiler : g_finishing_profiler;
     if (!p) {
+        csilk_mutex_unlock(&g_fg_mutex);
         return -1;
     }
 
-    /* Auto-stop sessions are managed by the sampler thread: it sets
-     * running=0, generates SVG, frees resources, and clears g_profiler
-     * itself.  If we reach here while auto_stop is active the session has
-     * already completed (g_profiler would be NULL) or the sampler is still
-     * in its cleanup window — just signal stop and join; do NOT double-free. */
+    /* Auto-stop sessions are managed by the sampler thread, except when stop()
+     * is explicitly requested (e.g. server shutdown) to drain and join. */
     if (p->auto_stop) {
+        p->joined_by_stop = true;
         atomic_store(&p->running, 0);
+        if (g_profiler == p) {
+            g_profiler = NULL;
+        }
+        if (g_finishing_profiler == p) {
+            g_finishing_profiler = NULL;
+        }
+        csilk_mutex_unlock(&g_fg_mutex);
+
         csilk_thread_join(&p->sampler_thread);
-        g_profiler = NULL;
+        fg_destroy_profiler(p);
         if (out_svg) {
             *out_svg = NULL;
         }
@@ -433,18 +543,12 @@ csilk_flamegraph_stop(char** out_svg, size_t* out_len)
     }
 
     atomic_store(&p->running, 0);
-    csilk_thread_join(&p->sampler_thread);
     g_profiler = NULL;
+    csilk_mutex_unlock(&g_fg_mutex);
 
+    csilk_thread_join(&p->sampler_thread);
     fg_generate_svg(p, out_svg, out_len);
-
-    csilk_mutex_destroy(&p->mutex);
-    /* entries[i].frames.stack is an inline member array (not heap-allocated),
-     * so only the entries array itself needs to be freed. */
-    free(p->entries);
-    free(p->hash_table);
-    free(p);
-
+    fg_destroy_profiler(p);
     return 0;
 }
 
@@ -453,7 +557,12 @@ csilk_flamegraph_stop(char** out_svg, size_t* out_len)
 int
 csilk_flamegraph_is_running(void)
 {
-    return g_profiler && atomic_load(&g_profiler->running);
+    fg_ensure_init();
+    csilk_mutex_lock(&g_fg_mutex);
+    fg_profiler_t* p = g_profiler;
+    int            running = p && atomic_load(&p->running);
+    csilk_mutex_unlock(&g_fg_mutex);
+    return running;
 }
 
 /** @brief Start sampling with auto-stop and completion callback.
@@ -473,45 +582,5 @@ csilk_flamegraph_start_async(useconds_t               interval_us,
                              csilk_flamegraph_done_cb cb,
                              void*                    user_data)
 {
-    if (g_profiler) {
-        return -1;
-    }
-
-    fg_profiler_t* p = calloc(1, sizeof(fg_profiler_t));
-    if (!p) {
-        return -1;
-    }
-
-    p->entries = calloc(FG_MAX_STACKS, sizeof(fg_stack_entry_t));
-    p->hash_table = malloc(FG_MAX_STACKS * sizeof(int));
-    if (!p->entries || !p->hash_table) {
-        free(p->entries);
-        free(p->hash_table);
-        free(p);
-        return -1;
-    }
-    for (int i = 0; i < FG_MAX_STACKS; i++) {
-        p->hash_table[i] = -1;
-    }
-
-    p->interval_us = interval_us;
-    p->duration_ms = duration_ms;
-    p->auto_stop = 1;
-    p->done_cb = cb;
-    p->user_data = user_data;
-
-    csilk_mutex_init(&p->mutex);
-    atomic_store(&p->running, 1);
-    atomic_store(&p->sample_count, 0);
-
-    if (csilk_thread_create(&p->sampler_thread, fg_sampler_thread, p) != 0) {
-        csilk_mutex_destroy(&p->mutex);
-        free(p->entries);
-        free(p->hash_table);
-        free(p);
-        return -1;
-    }
-
-    g_profiler = p;
-    return 0;
+    return fg_start_internal(interval_us, duration_ms, 1, cb, user_data);
 }

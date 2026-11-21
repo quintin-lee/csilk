@@ -386,7 +386,7 @@ on_close(csilk_io_handle_t* handle)
     csilk_conn_set_state(client, CSILK_CONN_CLOSING);
     _csilk_trigger_hooks(client->server, &client->ctx, CSILK_HOOK_CONN_CLOSE);
     client_list_remove(client->server, client);
-    client->ctx.conn_closed = 1;
+    atomic_store_explicit(&client->ctx.conn_closed, 1, memory_order_release);
 
     _csilk_client_stop_timers(client);
 

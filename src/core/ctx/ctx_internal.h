@@ -321,7 +321,7 @@ typedef struct csilk_conn_scope_s {
     struct csilk_server_s* server;
     void*                  _internal_client;
     csilk_rcu_token_t      router_token;
-    int                    conn_closed;
+    _Atomic int            conn_closed;
     size_t                 write_high_water_mark;
     size_t                 write_low_water_mark;
     size_t                 max_write_buffer_size;
@@ -366,7 +366,7 @@ typedef struct csilk_stream_scope_s {
     csilk_client_t*      h2_stream_owner;
     csilk_io_work_t      work_req;
     _Atomic int32_t      stream_ref;
-    int                  stream_closed;
+    _Atomic int          stream_closed;
     _Atomic int          stream_destroy_pending;
     uint64_t             stream_gen;
     csilk_stream_state_t stream_state;
@@ -422,7 +422,7 @@ struct csilk_ctx_s {
             struct csilk_server_s* server;
             void*                  _internal_client;
             csilk_rcu_token_t      router_token;
-            int                    conn_closed;
+            _Atomic int            conn_closed;
             size_t                 write_high_water_mark;
             size_t                 write_low_water_mark;
             size_t                 max_write_buffer_size;
@@ -458,7 +458,7 @@ struct csilk_ctx_s {
             csilk_client_t*      h2_stream_owner;
             csilk_io_work_t      work_req;
             _Atomic int32_t      stream_ref;
-            int                  stream_closed;
+            _Atomic int          stream_closed;
             _Atomic int          stream_destroy_pending;
             _Atomic int          stream_destroy_queued;
             uint64_t             stream_gen;
