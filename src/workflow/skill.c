@@ -1295,6 +1295,11 @@ csilk_skill_exec_local(
         return -1;
     }
 
+    int max_fd = (int)sysconf(_SC_OPEN_MAX);
+    if (max_fd < 3 || max_fd > 4096) {
+        max_fd = 4096;
+    }
+
     pid_t pid = fork();
     if (pid < 0) {
         close(pipefd[0]);
@@ -1314,6 +1319,15 @@ csilk_skill_exec_local(
         }
         dup2(pipefd[1], STDOUT_FILENO);
         close(pipefd[1]);
+        /* Close inherited file descriptors above stderr before execve (async-signal-safe). */
+#if defined(__linux__) && defined(__NR_close_range)
+        if (syscall(__NR_close_range, 3U, ~0U, 0U) != 0)
+#endif
+        {
+            for (int fd = 3; fd < max_fd; fd++) {
+                close(fd);
+            }
+        }
         if (chdir(sk->exec_cfg.root) != 0) {
             _exit(126);
         }

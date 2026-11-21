@@ -7,6 +7,7 @@
 #include <csilk/core/sys_io.h>
 
 #include "csilk/app/workflow.h"
+#include "csilk/app/workflow_wal.h"
 
 static _Atomic int g_step_a_ran = 0;
 static _Atomic int g_step_b_ran = 0;
@@ -87,9 +88,42 @@ test_workflow_persistence()
     printf("test_workflow_persistence: PASS\n");
 }
 
+static void
+test_workflow_resume_hardening(void)
+{
+    printf("Testing workflow WAL traversal & malformed payload hardening...\n");
+    mkdir("test_wals", 0755);
+
+    csilk_wf_t* wf = csilk_wf_new("hardening_wf");
+    csilk_wf_set_persistence(wf, "test_wals");
+    (void)csilk_wf_add(wf, "node_a", step_a_handler, nullptr);
+
+    /* Path traversal exec_id values must be rejected cleanly. */
+    csilk_wf_resume(wf, "../evil", nullptr);
+    csilk_wf_signal_continue(wf, "../../evil", nullptr, nullptr);
+
+    /* Unterminated WF_EV_NODE_FINISH payload & WF_EV_END should not OOB read. */
+    FILE* fp = fopen("test_wals/bad_payload.wal", "wb");
+    assert(fp != nullptr);
+    csilk_wf_wal_header_t h1 = {
+        .magic = CSILK_WF_MAGIC, .type = WF_EV_NODE_FINISH, .timestamp = 1, .payload_len = 6};
+    fwrite(&h1, sizeof(h1), 1, fp);
+    fwrite("node_a", 6, 1, fp); /* Intentionally NOT NUL-terminated */
+    csilk_wf_wal_header_t h2 = {
+        .magic = CSILK_WF_MAGIC, .type = WF_EV_END, .timestamp = 2, .payload_len = 0};
+    fwrite(&h2, sizeof(h2), 1, fp);
+    fclose(fp);
+
+    csilk_wf_resume(wf, "bad_payload", nullptr);
+    unlink("test_wals/bad_payload.wal");
+    csilk_wf_free(wf);
+    printf("test_workflow_resume_hardening: PASS\n");
+}
+
 int
 main()
 {
     test_workflow_persistence();
+    test_workflow_resume_hardening();
     return 0;
 }

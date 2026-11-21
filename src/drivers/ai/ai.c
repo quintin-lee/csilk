@@ -33,6 +33,7 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
+#include "../../core/internal/srv_impl.h"
 
 /* --- Global AI Metrics --- */
 static atomic_uint_fast64_t ai_requests_total = 0;
@@ -46,7 +47,7 @@ static atomic_uint_fast64_t ai_duration_us_total = 0;
 static csilk_ctx_t*  g_ai_monitors[16];
 static size_t        g_ai_monitor_count = 0;
 static csilk_mutex_t g_ai_monitor_mutex;
-static atomic_int    g_ai_monitor_init = 0;
+static csilk_once_t  g_ai_monitor_once = CSILK_ONCE_INIT;
 
 /* --- Global AI driver registry --- */
 static const csilk_ai_driver_t* g_drivers[MAX_DRIVERS];
@@ -74,12 +75,37 @@ csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
 
 /** @brief Lazily initialise the AI monitor registry mutex (idempotent). */
 static void
+ai_monitor_sync_init(void)
+{
+    csilk_mutex_init(&g_ai_monitor_mutex);
+}
+
+static void
 ai_ensure_monitor_init(void)
 {
-    int expected = 0;
-    if (atomic_compare_exchange_strong(&g_ai_monitor_init, &expected, 1)) {
-        csilk_mutex_init(&g_ai_monitor_mutex);
+    csilk_once(&g_ai_monitor_once, ai_monitor_sync_init);
+}
+
+typedef struct ai_ws_broadcast_task_s {
+    csilk_client_t* client;
+    csilk_ctx_t*    ctx;
+    char*           json;
+    size_t          len;
+} ai_ws_broadcast_task_t;
+
+static void
+_ai_broadcast_dispatch_cb(void* arg)
+{
+    ai_ws_broadcast_task_t* t = (ai_ws_broadcast_task_t*)arg;
+    if (!t) {
+        return;
     }
+    if (!csilk_ctx_is_closed(t->ctx)) {
+        csilk_ws_send(t->ctx, (const uint8_t*)t->json, t->len, 0x1);
+    }
+    csilk_client_unref(t->client);
+    free(t->json);
+    free(t);
 }
 
 /** @brief Broadcast an AI telemetry event to all registered monitor sockets.
@@ -97,11 +123,47 @@ _ai_broadcast(const char* event,
               const char* error)
 {
     ai_ensure_monitor_init();
-    if (g_ai_monitor_count == 0) {
+
+    csilk_ctx_t* inline_targets[16];
+    size_t       inline_count = 0;
+    csilk_ctx_t* dispatch_targets[16];
+    size_t       dispatch_count = 0;
+
+    csilk_mutex_lock(&g_ai_monitor_mutex);
+    for (size_t i = 0; i < g_ai_monitor_count;) {
+        csilk_ctx_t* mc = g_ai_monitors[i];
+        if (!mc || csilk_ctx_is_closed(mc)) {
+            for (size_t j = i; j + 1 < g_ai_monitor_count; j++) {
+                g_ai_monitors[j] = g_ai_monitors[j + 1];
+            }
+            g_ai_monitor_count--;
+            continue;
+        }
+        csilk_client_t* client = (csilk_client_t*)_csilk_get_internal_client(mc);
+        if (client != NULL) {
+            csilk_client_ref(client);
+            dispatch_targets[dispatch_count++] = mc;
+        } else {
+            inline_targets[inline_count++] = mc;
+        }
+        i++;
+    }
+    csilk_mutex_unlock(&g_ai_monitor_mutex);
+
+    if (inline_count == 0 && dispatch_count == 0) {
         return;
     }
 
     csilk_json_t* root = csilk_json_object();
+    if (!root) {
+        for (size_t i = 0; i < dispatch_count; i++) {
+            csilk_client_t* cl = (csilk_client_t*)_csilk_get_internal_client(dispatch_targets[i]);
+            if (cl) {
+                csilk_client_unref(cl);
+            }
+        }
+        return;
+    }
     csilk_json_add_string(root, "event", event);
     if (model) {
         csilk_json_add_string(root, "model", model);
@@ -115,23 +177,51 @@ _ai_broadcast(const char* event,
     }
     csilk_json_add_number(root, "timestamp", (double)time(NULL));
 
-    char* json = csilk_json_serialize(root, NULL);
-    csilk_mutex_lock(&g_ai_monitor_mutex);
-    for (size_t i = 0; i < g_ai_monitor_count;) {
-        csilk_ctx_t* mc = g_ai_monitors[i];
-        if (csilk_ctx_is_closed(mc)) {
-            for (size_t j = i; j + 1 < g_ai_monitor_count; j++) {
-                g_ai_monitors[j] = g_ai_monitors[j + 1];
-            }
-            g_ai_monitor_count--;
-            continue;
-        }
-        csilk_ws_send(mc, (uint8_t*)json, strlen(json), 0x1);
-        i++;
-    }
-    csilk_mutex_unlock(&g_ai_monitor_mutex);
-    free(json);
+    char*  json = csilk_json_serialize(root, NULL);
+    size_t json_len = json ? strlen(json) : 0;
     csilk_json_free(root);
+
+    if (json) {
+        for (size_t i = 0; i < inline_count; i++) {
+            if (!csilk_ctx_is_closed(inline_targets[i])) {
+                csilk_ws_send(inline_targets[i], (const uint8_t*)json, json_len, 0x1);
+            }
+        }
+        for (size_t i = 0; i < dispatch_count; i++) {
+            csilk_ctx_t*            mc = dispatch_targets[i];
+            csilk_client_t*         cl = (csilk_client_t*)_csilk_get_internal_client(mc);
+            ai_ws_broadcast_task_t* t = malloc(sizeof(ai_ws_broadcast_task_t));
+            char*                   jcopy = malloc(json_len + 1);
+            if (!t || !jcopy) {
+                free(t);
+                free(jcopy);
+                if (cl) {
+                    csilk_client_unref(cl);
+                }
+                continue;
+            }
+            memcpy(jcopy, json, json_len + 1);
+            t->client = cl;
+            t->ctx = mc;
+            t->json = jcopy;
+            t->len = json_len;
+            if (_csilk_dispatch_try(mc, _ai_broadcast_dispatch_cb, t) != 0) {
+                if (cl) {
+                    csilk_client_unref(cl);
+                }
+                free(t->json);
+                free(t);
+            }
+        }
+        free(json);
+    } else {
+        for (size_t i = 0; i < dispatch_count; i++) {
+            csilk_client_t* cl = (csilk_client_t*)_csilk_get_internal_client(dispatch_targets[i]);
+            if (cl) {
+                csilk_client_unref(cl);
+            }
+        }
+    }
 }
 
 /**

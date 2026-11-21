@@ -10,6 +10,8 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 
+#define CSILK_WF_MAX_WAL_PAYLOAD (16U * 1024U * 1024U)
+
 /**
  * @brief Resumes a paused or interrupted workflow execution from its WAL.
  *
@@ -30,7 +32,7 @@
 void
 csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data_t* result))
 {
-    if (!wf || !exec_id || !wf->wal_dir) {
+    if (!wf || !exec_id || !wf->wal_dir || !_wf_is_safe_exec_id(exec_id)) {
         return;
     }
 
@@ -39,36 +41,66 @@ csilk_wf_resume(csilk_wf_t* wf, const char* exec_id, void (*callback)(csilk_data
     _wf_cleanup_stale_ctx(wf, exec_id);
 
     char wal_path[512];
-    snprintf(wal_path, sizeof(wal_path), "%s/%s.wal", wf->wal_dir, exec_id);
+    int  wlen = snprintf(wal_path, sizeof(wal_path), "%s/%s.wal", wf->wal_dir, exec_id);
+    if (wlen <= 0 || (size_t)wlen >= sizeof(wal_path)) {
+        return;
+    }
     FILE* f = fopen(wal_path, "rb");
     if (!f) {
         return;
     }
     csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
+    if (!ctx) {
+        fclose(f);
+        return;
+    }
     atomic_init(&ctx->nodes_active, 0);
     ctx->wf = wf;
     ctx->callback = callback;
-    ctx->node_input_counts = calloc(wf->node_count, sizeof(int));
-    ctx->node_approved = calloc(wf->node_count, sizeof(int));
-    ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
+    size_t ncnt = wf->node_count > 0 ? wf->node_count : 1;
+    ctx->node_input_counts = calloc(ncnt, sizeof(int));
+    ctx->node_approved = calloc(ncnt, sizeof(int));
+    ctx->node_outputs = calloc(ncnt, sizeof(csilk_data_t*));
     ctx->arena = csilk_arena_new(0);
+    ctx->wal_path = strdup(wal_path);
+    int* node_started = calloc(ncnt, sizeof(int));
+    int* node_finished = calloc(ncnt, sizeof(int));
+    if (!ctx->node_input_counts || !ctx->node_approved || !ctx->node_outputs || !ctx->arena ||
+        !ctx->wal_path || !node_started || !node_finished) {
+        fclose(f);
+        free(node_started);
+        free(node_finished);
+        free(ctx->node_input_counts);
+        free(ctx->node_approved);
+        free(ctx->node_outputs);
+        if (ctx->arena) {
+            csilk_arena_free(ctx->arena);
+        }
+        free(ctx->wal_path);
+        free(ctx);
+        return;
+    }
     csilk_mutex_init(&ctx->mutex);
     csilk_mutex_init(&ctx->arena_mutex);
     csilk_mutex_init(&ctx->trace_mutex);
     snprintf(ctx->exec_id, sizeof(ctx->exec_id), "%s", exec_id);
-    ctx->wal_path = strdup(wal_path);
-    int *node_started = calloc(wf->node_count, sizeof(int)),
-        *node_finished = calloc(wf->node_count, sizeof(int));
     int                   wf_ended = 0;
     csilk_wf_wal_header_t header;
     while (fread(&header, sizeof(header), 1, f) == 1) {
-        if (header.magic != CSILK_WF_MAGIC) {
+        if (header.magic != CSILK_WF_MAGIC || header.payload_len > CSILK_WF_MAX_WAL_PAYLOAD) {
             break;
         }
-        char* payload = header.payload_len > 0 ? malloc(header.payload_len) : NULL;
-        if (payload && fread(payload, header.payload_len, 1, f) != 1) {
-            free(payload);
-            break;
+        char* payload = NULL;
+        if (header.payload_len > 0) {
+            payload = malloc((size_t)header.payload_len + 1);
+            if (!payload) {
+                break;
+            }
+            if (fread(payload, header.payload_len, 1, f) != 1) {
+                free(payload);
+                break;
+            }
+            payload[header.payload_len] = '\0';
         }
         switch (header.type) {
         case WF_EV_NODE_START:
@@ -189,7 +221,7 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
                          csilk_data_t* input,
                          void (*callback)(csilk_data_t* result))
 {
-    if (!wf || !exec_id || !wf->wal_dir) {
+    if (!wf || !exec_id || !wf->wal_dir || !_wf_is_safe_exec_id(exec_id)) {
         return;
     }
 
@@ -198,37 +230,65 @@ csilk_wf_signal_continue(csilk_wf_t*   wf,
     _wf_cleanup_stale_ctx(wf, exec_id);
 
     char wal_path[512];
-    snprintf(wal_path, sizeof(wal_path), "%s/%s.wal", wf->wal_dir, exec_id);
+    int  wlen = snprintf(wal_path, sizeof(wal_path), "%s/%s.wal", wf->wal_dir, exec_id);
+    if (wlen <= 0 || (size_t)wlen >= sizeof(wal_path)) {
+        return;
+    }
     FILE* f = fopen(wal_path, "rb");
     if (!f) {
         return;
     }
 
     csilk_wf_ctx_t* ctx = calloc(1, sizeof(csilk_wf_ctx_t));
+    if (!ctx) {
+        fclose(f);
+        return;
+    }
     atomic_init(&ctx->nodes_active, 0);
     ctx->wf = wf;
     ctx->callback = callback;
-    ctx->node_input_counts = calloc(wf->node_count, sizeof(int));
-    ctx->node_approved = calloc(wf->node_count, sizeof(int));
-    ctx->node_outputs = calloc(wf->node_count, sizeof(csilk_data_t*));
+    size_t ncnt = wf->node_count > 0 ? wf->node_count : 1;
+    ctx->node_input_counts = calloc(ncnt, sizeof(int));
+    ctx->node_approved = calloc(ncnt, sizeof(int));
+    ctx->node_outputs = calloc(ncnt, sizeof(csilk_data_t*));
     ctx->arena = csilk_arena_new(0);
+    ctx->wal_path = strdup(wal_path);
+    if (!ctx->node_input_counts || !ctx->node_approved || !ctx->node_outputs || !ctx->arena ||
+        !ctx->wal_path) {
+        fclose(f);
+        free(ctx->node_input_counts);
+        free(ctx->node_approved);
+        free(ctx->node_outputs);
+        if (ctx->arena) {
+            csilk_arena_free(ctx->arena);
+        }
+        free(ctx->wal_path);
+        free(ctx);
+        return;
+    }
     csilk_mutex_init(&ctx->mutex);
     csilk_mutex_init(&ctx->arena_mutex);
     csilk_mutex_init(&ctx->trace_mutex);
     snprintf(ctx->exec_id, sizeof(ctx->exec_id), "%s", exec_id);
-    ctx->wal_path = strdup(wal_path);
 
     char* paused_node_id = NULL;
 
     csilk_wf_wal_header_t header;
     while (fread(&header, sizeof(header), 1, f) == 1) {
-        if (header.magic != CSILK_WF_MAGIC) {
+        if (header.magic != CSILK_WF_MAGIC || header.payload_len > CSILK_WF_MAX_WAL_PAYLOAD) {
             break;
         }
-        char* payload = header.payload_len > 0 ? malloc(header.payload_len) : NULL;
-        if (payload && fread(payload, header.payload_len, 1, f) != 1) {
-            free(payload);
-            break;
+        char* payload = NULL;
+        if (header.payload_len > 0) {
+            payload = malloc((size_t)header.payload_len + 1);
+            if (!payload) {
+                break;
+            }
+            if (fread(payload, header.payload_len, 1, f) != 1) {
+                free(payload);
+                break;
+            }
+            payload[header.payload_len] = '\0';
         }
         switch (header.type) {
         case WF_EV_NODE_FINISH: {

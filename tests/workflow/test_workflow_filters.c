@@ -100,9 +100,49 @@ test_workflow_template_filters()
     printf("test_workflow_template_filters: PASS\n");
 }
 
+static csilk_data_t*
+recursive_producer_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
+{
+    (void)input;
+    (void)user_data;
+    return csilk_wf_data_new(
+        ctx, "text", csilk_wf_strdup(ctx, "{{prod.value}} and {{input.value}}"));
+}
+
+static void
+test_workflow_template_self_expanding(void)
+{
+    printf("Testing template engine non-recursive expansion...\n");
+    g_done = 0;
+    memset(g_final_prompt, 0, sizeof(g_final_prompt));
+
+    csilk_ai_register_driver(&mock_driver);
+    setenv("AGENT_API_KEY", "mock", 1);
+
+    csilk_wf_t*      wf = csilk_wf_new("nonrec_wf");
+    csilk_wf_node_t* n1 = csilk_wf_add(wf, "prod", recursive_producer_handler, nullptr);
+    csilk_wf_node_t* n2 = csilk_wf_add_ai(
+        wf, "agent", &(csilk_ai_config_t){.prompt = "OUT={{prod.value}}|IN={{input.value}}"});
+
+    csilk_wf_bind(n1, n2);
+    csilk_wf_node_set_entry(n1, 1);
+
+    csilk_data_t init_in = {.type = "text", .value = "{{input.value}}"};
+    csilk_wf_run(wf, &init_in, on_filter_done);
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+
+    assert(g_done == 1);
+    assert(strcmp(g_final_prompt, "OUT={{prod.value}} and {{input.value}}|IN={{input.value}}") ==
+           0);
+
+    csilk_wf_free(wf);
+    printf("test_workflow_template_self_expanding: PASS\n");
+}
+
 int
 main()
 {
     test_workflow_template_filters();
+    test_workflow_template_self_expanding();
     return 0;
 }

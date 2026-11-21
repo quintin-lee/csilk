@@ -202,9 +202,18 @@ after_worker_cb(csilk_io_work_t* req, int status)
             }
         }
         csilk_mutex_lock(&ctx->trace_mutex);
-        ctx->trace->nodes = realloc(ctx->trace->nodes,
-                                    sizeof(csilk_wf_trace_node_t*) * (ctx->trace->node_count + 1));
-        ctx->trace->nodes[ctx->trace->node_count++] = work->trace_node;
+        csilk_wf_trace_node_t** new_nodes = realloc(
+            ctx->trace->nodes, sizeof(csilk_wf_trace_node_t*) * (ctx->trace->node_count + 1));
+        if (new_nodes) {
+            ctx->trace->nodes = new_nodes;
+            ctx->trace->nodes[ctx->trace->node_count++] = work->trace_node;
+        } else {
+            free(work->trace_node->node_id);
+            free(work->trace_node->input_dump);
+            free(work->trace_node->output_dump);
+            free(work->trace_node->model);
+            free(work->trace_node);
+        }
         csilk_mutex_unlock(&ctx->trace_mutex);
     }
 
@@ -420,16 +429,22 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
     }
     csilk_mutex_unlock(&ctx->mutex);
 
+    node_work_t* work = calloc(1, sizeof(node_work_t));
+    if (!work) {
+        return;
+    }
+
     _wf_wal_log_event(ctx, WF_EV_NODE_START, node->id, NULL);
     _wf_broadcast(ctx->wf, "node_queued", node->id, NULL);
 
-    node_work_t* work = calloc(1, sizeof(node_work_t));
     if (ctx->trace) {
         csilk_wf_trace_node_t* tn = calloc(1, sizeof(csilk_wf_trace_node_t));
-        tn->node_id = strdup(node->id);
-        tn->start_time = csilk_io_hrtime() / 1000;
-        tn->input_dump = strdup(input && input->value ? (char*)input->value : "(null)");
-        work->trace_node = tn;
+        if (tn) {
+            tn->node_id = strdup(node->id);
+            tn->start_time = csilk_io_hrtime() / 1000;
+            tn->input_dump = strdup(input && input->value ? (char*)input->value : "(null)");
+            work->trace_node = tn;
+        }
     }
 
     csilk_mutex_lock(&ctx->mutex);

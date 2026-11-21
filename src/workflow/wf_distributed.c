@@ -13,8 +13,59 @@
 csilk_wf_node_t* csilk_wf_get_node(csilk_wf_t* wf, const char* id);
 
 /* --- Registry for Distributed Workflows --- */
-static csilk_wf_t* g_distributed_wfs[32];
-static size_t      g_distributed_wf_count = 0;
+static csilk_wf_t*   g_distributed_wfs[32];
+static size_t        g_distributed_wf_count = 0;
+static csilk_mutex_t g_dist_mutex;
+static csilk_once_t  g_dist_once = CSILK_ONCE_INIT;
+
+static void
+dist_sync_init(void)
+{
+    csilk_mutex_init(&g_dist_mutex);
+}
+
+CSILK_INTERNAL int
+_wf_is_safe_exec_id(const char* exec_id)
+{
+    if (!exec_id || exec_id[0] == '\0') {
+        return 0;
+    }
+    size_t len = strlen(exec_id);
+    if (len >= 128) {
+        return 0;
+    }
+    if (strstr(exec_id, "..") != NULL) {
+        return 0;
+    }
+    for (size_t i = 0; i < len; i++) {
+        char c = exec_id[i];
+        if (c == '/' || c == '\\' || (unsigned char)c < 0x20 || (unsigned char)c == 0x7f) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+CSILK_INTERNAL void
+_wf_distributed_unregister(csilk_wf_t* wf)
+{
+    if (!wf) {
+        return;
+    }
+    csilk_once(&g_dist_once, dist_sync_init);
+    csilk_mutex_lock(&g_dist_mutex);
+    for (size_t i = 0; i < g_distributed_wf_count;) {
+        if (g_distributed_wfs[i] == wf) {
+            for (size_t j = i; j + 1 < g_distributed_wf_count; j++) {
+                g_distributed_wfs[j] = g_distributed_wfs[j + 1];
+            }
+            g_distributed_wf_count--;
+        } else {
+            i++;
+        }
+    }
+    csilk_mutex_unlock(&g_dist_mutex);
+}
 
 static void
 on_remote_result(csilk_mq_ctx_t* m_ctx)
@@ -40,41 +91,63 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
     if (j_exec_id && csilk_json_is_string(j_exec_id) && j_output &&
         csilk_json_is_string(j_output)) {
         const char* exec_id = csilk_json_string_value(j_exec_id);
-        const char* node_id = j_node_id ? csilk_json_string_value(j_node_id) : NULL;
+        const char* node_id = (j_node_id && csilk_json_is_string(j_node_id))
+                                  ? csilk_json_string_value(j_node_id)
+                                  : NULL;
         const char* output_str = csilk_json_string_value(j_output);
 
-        for (size_t i = 0; i < g_distributed_wf_count; i++) {
-            csilk_wf_t* wf = g_distributed_wfs[i];
+        if (_wf_is_safe_exec_id(exec_id)) {
+            csilk_wf_t* snap[32];
+            size_t      snap_count = 0;
 
-            // 1. Check for Active Context (Hot Resume)
-            csilk_wf_ctx_t* active = _wf_find_active_ctx(wf, exec_id);
-            if (active) {
-                CSILK_LOG_I("Workflow found active execution %s, resuming hot", exec_id);
-                csilk_wf_node_t* n = node_id ? csilk_wf_get_node(wf, node_id) : NULL;
-                // If node_id wasn't provided, we might have to search the context for a
-                // paused node
+            csilk_once(&g_dist_once, dist_sync_init);
+            csilk_mutex_lock(&g_dist_mutex);
+            for (size_t i = 0; i < g_distributed_wf_count && snap_count < 32; i++) {
+                snap[snap_count] = g_distributed_wfs[i];
+                atomic_fetch_add(&snap[snap_count]->pending_completions, 1);
+                snap_count++;
+            }
+            csilk_mutex_unlock(&g_dist_mutex);
 
-                if (n) {
-                    csilk_mutex_lock(&active->mutex);
-                    active->node_approved[n->index] = 1;
-                    atomic_fetch_sub(&active->nodes_active, 1);
-                    csilk_mutex_unlock(&active->mutex);
+            for (size_t i = 0; i < snap_count; i++) {
+                csilk_wf_t* wf = snap[i];
 
-                    csilk_data_t* out_data = csilk_wf_data_new(
-                        active, "application/json", csilk_wf_strdup(active, output_str));
-                    _wf_execute_node(active, n, out_data);
-                    break;
+                // 1. Check for Active Context (Hot Resume)
+                csilk_wf_ctx_t* active = _wf_find_active_ctx(wf, exec_id);
+                if (active) {
+                    CSILK_LOG_I("Workflow found active execution %s, resuming hot", exec_id);
+                    csilk_wf_node_t* n = node_id ? csilk_wf_get_node(wf, node_id) : NULL;
+
+                    if (n) {
+                        csilk_mutex_lock(&active->mutex);
+                        active->node_approved[n->index] = 1;
+                        atomic_fetch_sub(&active->nodes_active, 1);
+                        csilk_mutex_unlock(&active->mutex);
+
+                        char* copied = output_str ? csilk_wf_strdup(active, output_str) : NULL;
+                        csilk_data_t* out_data =
+                            csilk_wf_data_new(active, "application/json", copied);
+                        _wf_execute_node(active, n, out_data);
+                        break;
+                    }
+                }
+
+                // 2. Fallback to Cold Resume (WAL)
+                if (wf->wal_dir) {
+                    char path[512];
+                    int  plen = snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, exec_id);
+                    if (plen > 0 && (size_t)plen < sizeof(path) && access(path, F_OK) == 0) {
+                        CSILK_LOG_I("Workflow found WAL for %s, signaling continue (cold)",
+                                    exec_id);
+                        csilk_data_t out_data = {"application/json", (void*)output_str, NULL, NULL};
+                        csilk_wf_signal_continue(wf, exec_id, &out_data, NULL);
+                        break;
+                    }
                 }
             }
 
-            // 2. Fallback to Cold Resume (WAL)
-            char path[512];
-            snprintf(path, sizeof(path), "%s/%s.wal", wf->wal_dir, exec_id);
-            if (access(path, F_OK) == 0) {
-                CSILK_LOG_I("Workflow found WAL for %s, signaling continue (cold)", exec_id);
-                csilk_data_t out_data = {"application/json", (void*)output_str, NULL, NULL};
-                csilk_wf_signal_continue(wf, exec_id, &out_data, NULL);
-                break;
+            for (size_t i = 0; i < snap_count; i++) {
+                atomic_fetch_sub(&snap[i]->pending_completions, 1);
             }
         }
     }
@@ -98,9 +171,19 @@ csilk_wf_enable_distributed(csilk_wf_t* wf, csilk_mq_t* mq)
         return;
     }
     wf->mq = mq;
-    if (g_distributed_wf_count < 32) {
+    csilk_once(&g_dist_once, dist_sync_init);
+    csilk_mutex_lock(&g_dist_mutex);
+    int exists = 0;
+    for (size_t i = 0; i < g_distributed_wf_count; i++) {
+        if (g_distributed_wfs[i] == wf) {
+            exists = 1;
+            break;
+        }
+    }
+    if (!exists && g_distributed_wf_count < 32) {
         g_distributed_wfs[g_distributed_wf_count++] = wf;
     }
+    csilk_mutex_unlock(&g_dist_mutex);
     csilk_mq_subscribe(mq, "csilk.wf.results", on_remote_result);
     CSILK_LOG_I("Workflow: enabled distributed execution on message queue topic "
                 "'csilk.wf.results' for workflow '%s'",

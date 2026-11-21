@@ -70,9 +70,17 @@ csilk_ai_react_execute_loop(csilk_ai_t*               ai,
 
     /* 1. Add optional system message */
     if (system_prompt && system_prompt[0]) {
+        char* sys_copy = strdup(system_prompt);
+        if (!sys_copy) {
+            free_conversation_messages(msgs, msg_count);
+            if (tools) {
+                csilk_ai_tools_free(tools, tool_count);
+            }
+            return -1;
+        }
         msgs[msg_count++] = (csilk_ai_message_t){
             .role = "system",
-            .content = strdup(system_prompt),
+            .content = sys_copy,
             .tool_calls = NULL,
             .tool_call_count = 0,
             .tool_call_id = NULL,
@@ -80,9 +88,17 @@ csilk_ai_react_execute_loop(csilk_ai_t*               ai,
     }
 
     /* 2. Add user prompt */
+    char* user_copy = strdup(user_prompt);
+    if (!user_copy) {
+        free_conversation_messages(msgs, msg_count);
+        if (tools) {
+            csilk_ai_tools_free(tools, tool_count);
+        }
+        return -1;
+    }
     msgs[msg_count++] = (csilk_ai_message_t){
         .role = "user",
-        .content = strdup(user_prompt),
+        .content = user_copy,
         .tool_calls = NULL,
         .tool_call_count = 0,
         .tool_call_id = NULL,
@@ -113,7 +129,7 @@ csilk_ai_react_execute_loop(csilk_ai_t*               ai,
         if (res.tool_call_count == 0) {
             *out_final_text = res.content ? strdup(res.content) : strdup("");
             csilk_ai_chat_response_free(&res);
-            rc = 0;
+            rc = (*out_final_text != NULL) ? 0 : -1;
             break;
         }
 
@@ -132,15 +148,24 @@ csilk_ai_react_execute_loop(csilk_ai_t*               ai,
         }
 
         /* Append assistant message containing tool_calls */
+        char*                 asst_content = res.content ? strdup(res.content) : strdup("");
+        csilk_ai_tool_call_t* tc_arr = calloc(n_calls, sizeof(csilk_ai_tool_call_t));
+        if (!asst_content || !tc_arr) {
+            free(asst_content);
+            free(tc_arr);
+            csilk_ai_chat_response_free(&res);
+            break;
+        }
         size_t asst_idx = msg_count++;
         msgs[asst_idx] = (csilk_ai_message_t){
             .role = "assistant",
-            .content = res.content ? strdup(res.content) : strdup(""),
+            .content = asst_content,
             .tool_call_id = NULL,
             .tool_call_count = n_calls,
-            .tool_calls = calloc(n_calls, sizeof(csilk_ai_tool_call_t)),
+            .tool_calls = tc_arr,
         };
 
+        int oom = 0;
         for (size_t j = 0; j < n_calls; j++) {
             msgs[asst_idx].tool_calls[j].id =
                 strdup(res.tool_calls[j].id ? res.tool_calls[j].id : "");
@@ -148,6 +173,15 @@ csilk_ai_react_execute_loop(csilk_ai_t*               ai,
                 strdup(res.tool_calls[j].name ? res.tool_calls[j].name : "");
             msgs[asst_idx].tool_calls[j].arguments =
                 strdup(res.tool_calls[j].arguments ? res.tool_calls[j].arguments : "{}");
+            if (!msgs[asst_idx].tool_calls[j].id || !msgs[asst_idx].tool_calls[j].name ||
+                !msgs[asst_idx].tool_calls[j].arguments) {
+                oom = 1;
+                break;
+            }
+        }
+        if (oom) {
+            csilk_ai_chat_response_free(&res);
+            break;
         }
 
         /* Execute each tool and append tool observation messages */
@@ -164,6 +198,12 @@ csilk_ai_react_execute_loop(csilk_ai_t*               ai,
             if (!result_str) {
                 result_str = strdup("{\"error\":\"tool dispatch failed\"}");
             }
+            if (!tc_id || !result_str) {
+                free(tc_id);
+                free(result_str);
+                oom = 1;
+                break;
+            }
 
             size_t tool_msg_idx = msg_count++;
             msgs[tool_msg_idx] = (csilk_ai_message_t){
@@ -176,6 +216,9 @@ csilk_ai_react_execute_loop(csilk_ai_t*               ai,
         }
 
         csilk_ai_chat_response_free(&res);
+        if (oom) {
+            break;
+        }
     }
 
     free_conversation_messages(msgs, msg_count);
