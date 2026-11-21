@@ -49,6 +49,9 @@ csilk_perm_init(void)
 
 /** @brief Register a permission driver in the global registry.
  *
+ * Re-registering an already-registered driver name is a no-op (the
+ * original entry is kept), which makes repeated calls to
+ * csilk_perm_simple_init() safe (e.g. re-init after csilk_perm_simple_clear()).
  * The first registered driver automatically becomes the default.
  * @param name   Driver name (e.g., "simple", "rbac").
  * @param driver Driver vtable with check() callback.
@@ -62,6 +65,10 @@ csilk_perm_register_driver(const char* name, csilk_perm_driver_t* driver)
                     name ? name : "NULL",
                     (!name || !driver) ? "invalid arguments" : "registry is full");
         return -1;
+    }
+
+    if (csilk_perm_get_driver(name)) {
+        return 0;
     }
 
     driver->name = name;

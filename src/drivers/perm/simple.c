@@ -13,10 +13,10 @@
  *   - The role is resolved from the request context (either a "role" key
  *     or the "jwt_payload" JSON object's "role" field).
  *   - All table state is guarded by a single process-lifetime static mutex
- *     (s_rules_mutex). The mutex is created lazily on first use via
- *     csilk_once(), so it is safe for csilk_perm_simple_clear() to reset
- *     the rule table without destroying it (the driver is a process-lifetime
- *     singleton; destroying a mutex still potentially in use is UB).
+ *     (s_rules_mutex), lazily created on first use via csilk_once(). This
+ *     makes csilk_perm_simple_clear() safe to call at any time: it only
+ *     resets the rule table and never destroys the lock, so the driver can
+ *     be re-initialized (csilk_perm_simple_init()) and used again.
  *
  * @copyright MIT License
  */
@@ -40,13 +40,13 @@ static csilk_perm_rule_t rules[MAX_RULES];
 /** @brief Current number of rules loaded. */
 static int rule_count = 0;
 /** @brief Lazily-initialized process-lifetime mutex guarding the rule table.
- * Created via csilk_once() (pthread_once / uv_once) on first access, so every
- * entry point (init / allow / check / clear) can lock it without an external
- * init call. A plain mutex is used (csilk has no rwlock primitive) — the
- * critical section is short (a handful of pointer stores) so the overhead of
- * a write-lock is negligible compared to the O(n) scan in simple_check().
- * NOTE: must never be destroyed while the driver is registered; it lives
- * for the entire process. */
+ * Created via csilk_once() (the once primitive from csilk/core/sync.h) on
+ * first access, so every entry point (init / allow / check / clear) can lock
+ * it without an external init call. A plain mutex is used (csilk has no
+ * rwlock primitive) — the critical section is short (a handful of pointer
+ * stores) so the overhead of a write-lock is negligible compared to the O(n)
+ * scan in simple_check(). NOTE: must never be destroyed while the driver is
+ * registered; it lives for the entire process. */
 static csilk_mutex_t s_rules_mutex;
 static csilk_once_t  s_rules_mutex_once;
 
