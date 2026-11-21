@@ -4,6 +4,7 @@
  * @copyright MIT License
  */
 
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -43,7 +44,13 @@ _csilk_gzip_work_cb(csilk_io_work_t* req)
 
     size_t      src_len = 0;
     const char* src_body = csilk_get_response_body(c, &src_len);
-    z_stream    strm;
+    if (!src_body || src_len == 0 || src_len > (size_t)UINT_MAX) {
+        CSILK_LOG_D("Gzip: invalid or oversized body (%zu bytes) in work callback", src_len);
+        state->ret = Z_DATA_ERROR;
+        return;
+    }
+
+    z_stream strm;
     memset(&strm, 0, sizeof(strm));
 
     CSILK_LOG_T("Gzip: starting deflation of %zu bytes in thread-pool", src_len);
@@ -55,16 +62,14 @@ _csilk_gzip_work_cb(csilk_io_work_t* req)
         return;
     }
 
-    /* Limit output size to prevent gzip bombs (CWE-400).
-     * A 10:1 expansion ratio cap (compressed ≤ 10 × original) is generous
-     * enough for all practical payloads while bounding worst-case memory
-     * use — the current 1024× factor is a DoS vector for incompressible
-     * data that inflates the allocation without meaningful gain. */
-    const size_t MAX_OUTPUT = (size_t)src_len * 10;
-    state->dest_cap = deflateBound(&strm, (uLong)src_len);
-    if (state->dest_cap > MAX_OUTPUT) {
-        state->dest_cap = MAX_OUTPUT;
+    uLong bound = deflateBound(&strm, (uLong)src_len);
+    if (bound == 0 || bound > (uLong)UINT_MAX) {
+        CSILK_LOG_E("Gzip: deflateBound overflow (%lu) for %zu input bytes", bound, src_len);
+        deflateEnd(&strm);
+        state->ret = Z_MEM_ERROR;
+        return;
     }
+    state->dest_cap = (size_t)bound;
     state->dest = malloc(state->dest_cap);
     if (!state->dest) {
         CSILK_LOG_E("Gzip: failed to allocate compressed destination buffer of %zu bytes",
@@ -88,13 +93,11 @@ _csilk_gzip_work_cb(csilk_io_work_t* req)
                     (double)state->compressed_len / (src_len ? src_len : 1) * 100.0,
                     src_len,
                     state->compressed_len);
-        /* Skip compression if output is not meaningfully smaller (CWE-400
-         * defence).  A 10:1 cap means we reject if compressed_len ≥ 10× input,
-         * which effectively disables gzip for incompressible payloads. */
-        if (state->compressed_len >= (size_t)src_len * 10) {
-            CSILK_LOG_D("Gzip: output not meaningfully smaller (%zu bytes); "
-                        "skipping compression",
-                        state->compressed_len);
+        /* Skip compression if output did not actually shrink relative to input. */
+        if (state->compressed_len >= src_len) {
+            CSILK_LOG_D("Gzip: output not smaller (%zu >= %zu bytes); skipping compression",
+                        state->compressed_len,
+                        src_len);
             state->ret = Z_OK; /* mark as "don't compress" — caller sends original */
             free(state->dest);
             state->dest = NULL;
@@ -227,11 +230,12 @@ csilk_gzip_middleware(csilk_ctx_t* c)
         return;
     }
 
-    if (body_len < CSILK_GZIP_MIN_LENGTH) {
-        CSILK_LOG_D("Gzip: skipping response compression - body length %zu is below "
-                    "minimum threshold of %d bytes",
+    if (body_len < CSILK_GZIP_MIN_LENGTH || body_len > (size_t)UINT_MAX) {
+        CSILK_LOG_D("Gzip: skipping response compression - body length %zu outside "
+                    "compressible range [%d, %u]",
                     body_len,
-                    CSILK_GZIP_MIN_LENGTH);
+                    CSILK_GZIP_MIN_LENGTH,
+                    UINT_MAX);
         return;
     }
 
@@ -254,6 +258,14 @@ csilk_gzip_middleware(csilk_ctx_t* c)
                 deflateEnd(&strm);
 
                 if (ret == Z_STREAM_END) {
+                    if (compressed_len >= body_len) {
+                        CSILK_LOG_D("Gzip: inline output not smaller (%zu >= %zu bytes); "
+                                    "skipping compression",
+                                    compressed_len,
+                                    body_len);
+                        free(dest);
+                        return;
+                    }
                     CSILK_LOG_D("Gzip: inline deflation complete, ratio: %.2f%% (%zu -> %zu bytes)",
                                 (double)compressed_len / (body_len ? body_len : 1) * 100.0,
                                 body_len,
