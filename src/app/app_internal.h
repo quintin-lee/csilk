@@ -12,6 +12,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
+#include <stdatomic.h>
 
 /** @brief Maximum number of static file routes per app. */
 enum { CSILK_MAX_STATIC = 32 };
@@ -84,11 +85,11 @@ struct csilk_app_s {
     int            static_n;
 
     /* ---- Per-app dual-parameter middleware thunk pool (was process-global). ---- */
-    mw_thunk_t mw_thunk_pool[CSILK_MAX_MW_THUNKS];
-    int        mw_thunk_used;
+    mw_thunk_t  mw_thunk_pool[CSILK_MAX_MW_THUNKS];
+    _Atomic int mw_thunk_used;
 
     /* ---- Per-app OpenAPI endpoint enable flag. ---- */
-    int openapi_enabled;
+    _Atomic int openapi_enabled;
 
     /* ---- Per-app mutex protecting the static-route table. ---- */
     csilk_mutex_t app_mutex;

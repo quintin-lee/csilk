@@ -9,6 +9,14 @@
 
 static int mid_called = 0;
 static int hnd_called = 0;
+static int dual_mw_sum = 0;
+
+static void
+dual_mw_handler(csilk_ctx_t* c, void* user_data)
+{
+    dual_mw_sum += (int)(intptr_t)user_data;
+    csilk_next(c);
+}
 
 static void
 mid_handler(csilk_ctx_t* c)
@@ -251,6 +259,19 @@ main()
         }
         csilk_config_t* cp = csilk_app_config(nullptr);
         assert(cp == nullptr);
+    }
+
+    printf("test_app_ext: dual-parameter middleware thunk table (> 8 slots & cap)...\n");
+    {
+        csilk_app_t* app = csilk_app_new(nullptr);
+        assert(app != nullptr);
+        /* Register >8 dual-parameter middlewares (up to the 30 remaining server
+         * middleware slots after recovery + logger) and attempt beyond the cap. */
+        for (int i = 1; i <= 33; i++) {
+            csilk_app_use_mw(app, dual_mw_handler, (void*)(intptr_t)i);
+        }
+        csilk_app_add_route(app, "GET", "/mw_many", hello_handler);
+        csilk_app_free(app);
     }
 
     printf("test_app_ext: PASS\n");
