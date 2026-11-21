@@ -398,12 +398,16 @@ typedef void (*csilk_io_udp_recv_cb)(csilk_io_udp_t*        handle,
  * address of the most recently received datagram is cached in `remote`. */
 struct csilk_io_udp_s {
     CSILK_IO_HANDLE_FIELDS
-    csilk_io_udp_recv_cb cb;              /**< Receive callback (set by csilk_io_udp_recv_start). */
-    csilk_io_timer_t     recv_timer;      /**< Timer handle used to poll the socket. */
-    int                  recv_started;    /**< 1 when the poll timer is armed. */
-    char                 recv_buf[65536]; /**< Scratch datagram buffer. */
-    struct sockaddr_in   remote;          /**< Remote address of last received datagram. */
-    int                  remote_len;      /**< Length of `remote` for sendto (0 when unset). */
+    csilk_io_udp_recv_cb    cb;           /**< Receive callback (set by csilk_io_udp_recv_start). */
+    csilk_io_timer_t        recv_timer;   /**< Timer handle used to poll the socket (legacy). */
+    int                     recv_started; /**< 1 when the poll timer / multishot recv is armed. */
+    char                    recv_buf[65536]; /**< Scratch datagram buffer. */
+    struct sockaddr_storage remote_storage;  /**< Dual-stack remote address (IPv4/IPv6). */
+    union {
+        struct sockaddr_in  v4;
+        struct sockaddr_in6 v6;
+    } remote;       /**< Remote address of last received datagram. */
+    int remote_len; /**< Length of `remote` for sendto (0 when unset). */
 };
 
 typedef struct csilk_io_udp_s csilk_io_udp_t;
