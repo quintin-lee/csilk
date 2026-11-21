@@ -4,7 +4,51 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/sync.h"
 #include "csilk/test/test.h"
+
+typedef struct {
+    int tid;
+} session_worker_arg_t;
+
+static void
+session_concurrent_worker(void* arg)
+{
+    session_worker_arg_t* w = (session_worker_arg_t*)arg;
+    for (int i = 0; i < 64; i++) {
+        csilk_ctx_t* c = csilk_test_ctx_new();
+        assert(c != nullptr);
+        csilk_session_start(c);
+        char val[32];
+        snprintf(val, sizeof(val), "t%d-%d", w->tid, i);
+        csilk_session_set(c, "k", val);
+        const char* got = (const char*)csilk_session_get(c, "k");
+        assert(got != nullptr && strcmp(got, val) == 0);
+        if ((i % 7) == 0) {
+            csilk_session_destroy(c);
+            assert(csilk_session_get(c, "k") == nullptr);
+        }
+        csilk_test_ctx_free(c);
+    }
+}
+
+static void
+test_session_concurrent_lru(void)
+{
+    csilk_session_init();
+
+    enum { NTHREADS = 4 };
+    csilk_thread_t       threads[NTHREADS];
+    session_worker_arg_t args[NTHREADS];
+    for (int i = 0; i < NTHREADS; i++) {
+        args[i].tid = i;
+        assert(csilk_thread_create(&threads[i], session_concurrent_worker, &args[i]) == 0);
+    }
+    for (int i = 0; i < NTHREADS; i++) {
+        assert(csilk_thread_join(&threads[i]) == 0);
+    }
+    printf("test_session_concurrent_lru passed\n");
+}
 
 static void
 test_session_start()
@@ -19,6 +63,7 @@ test_session_start()
     assert(session != nullptr);
 
     csilk_test_ctx_free(c);
+    test_session_concurrent_lru();
     printf("test_session_start passed\n");
 }
 

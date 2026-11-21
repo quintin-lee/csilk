@@ -347,17 +347,15 @@ jwt_verify_internal(csilk_ctx_t*               c,
         char sig_expected_b64[45];
         csilk_base64url_encode(sig_actual, 32, sig_expected_b64);
         explicit_bzero(sig_actual, sizeof(sig_actual));
-        /* Constant-time comparison of the base64url signature against the
-         * freshly-computed expected signature. Both strings are NUL-
-         * terminated; we compare a fixed 44-byte window (43 base64url chars
-         * + NUL terminator) with `constant_time_compare`, which never
-         * branches on byte values and always reads in-bounds. This avoids
-         * the weak timing oracle of the previous `len_mismatch ? 1 : CRYPTO_
-         * memcmp(...)` form, which short-circuited and leaked whether the
-         * attacker's signature length matched the expected one. A signature
-         * of any other length simply fails the NUL-terminator byte. */
-        sig_ok = (constant_time_compare(
-                      (const uint8_t*)sig_ptr, (const uint8_t*)sig_expected_b64, 44) == 0);
+        /* Constant-time comparison using a bounded 45-byte copy so short
+         * signature tokens cannot cause heap over-reads past sig_ptr's NUL. */
+        size_t  sig_len = strnlen(sig_ptr, 45);
+        uint8_t sig_actual_b64[45] = {0};
+        if (sig_len <= 44) {
+            memcpy(sig_actual_b64, sig_ptr, sig_len);
+        }
+        sig_ok = (sig_len == 43) &
+                 (constant_time_compare(sig_actual_b64, (const uint8_t*)sig_expected_b64, 44) == 0);
     } else {
         /* RS256/ES256: base64url-decode sig, then verify via cipher driver */
         uint8_t sig_decoded[CSILK_RSA_SIGNATURE_SIZE];

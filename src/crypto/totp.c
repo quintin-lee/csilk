@@ -270,11 +270,18 @@ csilk_totp_verify_and_consume_backup_code(const char* backup_codes_json,
     }
 
     csilk_json_t* new_arr = csilk_json_array();
+    if (!new_arr) {
+        csilk_json_free(arr);
+        return false;
+    }
     for (size_t i = 0; i < count; i++) {
         if ((int)i != match_idx) {
             const char* c = csilk_json_string_value(csilk_json_array_get(arr, i));
             if (c) {
-                csilk_json_array_append(new_arr, csilk_json_string_new(c));
+                csilk_json_t* item = csilk_json_string_new(c);
+                if (!item || !csilk_json_array_append(new_arr, item)) {
+                    csilk_json_free(item);
+                }
             }
         }
     }
@@ -286,8 +293,11 @@ csilk_totp_verify_and_consume_backup_code(const char* backup_codes_json,
 
     if (serialized) {
         if (out_updated_json && cap > 0) {
-            strncpy(out_updated_json, serialized, cap - 1);
-            out_updated_json[cap - 1] = '\0';
+            if (slen >= cap) {
+                free(serialized);
+                return false;
+            }
+            memcpy(out_updated_json, serialized, slen + 1);
         }
         free(serialized);
     }

@@ -123,7 +123,7 @@ get_metric_slot(const char* method, const char* route, int status)
         uint32_t              idx = (start_idx + i) % CSILK_METRICS_MAX_ENTRIES;
         csilk_route_metric_t* slot = &route_metrics[idx];
 
-        int state = atomic_load(&slot->in_use);
+        int state = atomic_load_explicit(&slot->in_use, memory_order_acquire);
         if (state == 0) {
             int expected = 0;
             if (atomic_compare_exchange_strong(&slot->in_use, &expected, 1)) {
@@ -136,10 +136,10 @@ get_metric_slot(const char* method, const char* route, int status)
                 for (int b = 0; b <= CSILK_METRICS_BUCKET_COUNT; b++) {
                     atomic_init(&slot->buckets[b], 0);
                 }
-                atomic_store(&slot->in_use, 2);
+                atomic_store_explicit(&slot->in_use, 2, memory_order_release);
                 return slot;
             }
-            state = atomic_load(&slot->in_use);
+            state = atomic_load_explicit(&slot->in_use, memory_order_acquire);
         }
 
         /* Slot is fully ready (state == 2). Check if it matches our keys. */
@@ -388,7 +388,7 @@ csilk_metrics_handler(csilk_ctx_t* c)
 
     for (int i = 0; i < CSILK_METRICS_MAX_ENTRIES; i++) {
         csilk_route_metric_t* slot = &route_metrics[i];
-        if (atomic_load(&slot->in_use)) {
+        if (atomic_load_explicit(&slot->in_use, memory_order_acquire) == 2) {
             uint64_t count = atomic_load(&slot->count);
             double   dur_sec = (double)atomic_load(&slot->duration_us) / 1e6;
 

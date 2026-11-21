@@ -284,8 +284,7 @@ static_work_cb(csilk_io_work_t* req)
     }
 
     csilk_io_fs_t stat_req;
-    csilk_io_fs_fstat(NULL, &stat_req, fd, NULL);
-    if (!S_ISREG(stat_req.statbuf.st_mode)) {
+    if (csilk_io_fs_fstat(NULL, &stat_req, fd, NULL) != 0 || !S_ISREG(stat_req.statbuf.st_mode)) {
         csilk_io_fs_req_cleanup(&stat_req);
         csilk_io_fs_t close_req;
         csilk_io_fs_close(NULL, &close_req, fd, NULL);
@@ -327,8 +326,7 @@ file_work_cb(csilk_io_work_t* req)
     }
 
     csilk_io_fs_t stat_req;
-    csilk_io_fs_fstat(NULL, &stat_req, fd, NULL);
-    if (!S_ISREG(stat_req.statbuf.st_mode)) {
+    if (csilk_io_fs_fstat(NULL, &stat_req, fd, NULL) != 0 || !S_ISREG(stat_req.statbuf.st_mode)) {
         csilk_io_fs_req_cleanup(&stat_req);
         csilk_io_fs_t close_req;
         csilk_io_fs_close(NULL, &close_req, fd, NULL);

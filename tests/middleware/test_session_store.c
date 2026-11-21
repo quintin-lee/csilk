@@ -99,6 +99,19 @@ test_mq_store(void)
     assert(strncmp(data, "hello", 5) == 0);
     free(data);
 
+    /* set + get roundtrip with embedded NUL bytes */
+    const char bin_val[7] = {'a', 'b', 'c', '\0', 'x', 'y', 'z'};
+    rc = csilk_session_store_set(store, "sess-bin", bin_val, sizeof(bin_val), 3600);
+    assert(rc == 0);
+    data = NULL;
+    len = 0;
+    rc = csilk_session_store_get(store, "sess-bin", &data, &len);
+    assert(rc == 0);
+    assert(data != NULL);
+    assert(len == sizeof(bin_val));
+    assert(memcmp(data, bin_val, sizeof(bin_val)) == 0);
+    free(data);
+
     /* del + get: not found */
     rc = csilk_session_store_del(store, "sess-1");
     assert(rc == 0);

@@ -196,15 +196,18 @@ _exporter_worker_fn(void* arg)
             uint64_t timeout_ns = (uint64_t)exp->interval_ms * 1000000ULL;
             csilk_cond_timedwait(&exp->cond, &exp->mutex, timeout_ns);
         }
+        int pending = exp->count;
+        void (*cb)(const char* json, void* user_data) = exp->flush_cb;
+        void* udata = exp->user_data;
         csilk_mutex_unlock(&exp->mutex);
 
-        if (!atomic_load(&exp->running) && exp->count == 0) {
+        if (!atomic_load(&exp->running) && pending == 0) {
             break;
         }
 
         int exported = csilk_otlp_exporter_export_json(exp, batch_buf, sizeof(batch_buf));
-        if (exported > 0 && exp->flush_cb) {
-            exp->flush_cb(batch_buf, exp->user_data);
+        if (exported > 0 && cb) {
+            cb(batch_buf, udata);
         }
     }
 }
