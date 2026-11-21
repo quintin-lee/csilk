@@ -60,4 +60,10 @@ struct csilk_wasm_plugin_s {
 
 void* csilk_wasm_get_memory_slice(csilk_wasm_memory_t* mem, uint32_t offset, uint32_t len);
 
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((visibility("hidden")))
+#endif
+void
+_csilk_wasm_mw_release_plugin(csilk_wasm_plugin_t* plugin);
+
 #endif /* CSILK_WASM_INTERNAL_H */

@@ -205,7 +205,114 @@ test_wasm_middleware_integration(void)
     csilk_test_ctx_free(ctx_trap);
     csilk_wasm_plugin_free(plugin);
 #endif
+    assert(csilk_wasm_plugin_middleware(NULL, "on_request") == NULL);
     printf("test_wasm_middleware_integration: PASS\n");
+}
+
+static void
+test_wasm_multi_middleware_isolation(void)
+{
+    printf("Testing WASM multi-middleware isolation (no overwrite)...\n");
+
+#if CSILK_ENABLE_EXPERIMENTAL_STUBS
+    const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
+    csilk_wasm_plugin_t* p1 = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+    csilk_wasm_plugin_t* p2 = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+    assert(p1 != NULL && p2 != NULL);
+
+    /* Register all 4 middlewares BEFORE invoking any of them. */
+    csilk_handler_t mw1 = csilk_wasm_plugin_middleware(p1, "mw_alpha");
+    csilk_handler_t mw2 = csilk_wasm_plugin_middleware(p1, "mw_beta");
+    csilk_handler_t mw3 = csilk_wasm_plugin_middleware(p2, "mw_gamma");
+    csilk_handler_t mw4 = csilk_wasm_plugin_middleware(p2, NULL); /* defaults to on_request */
+
+    assert(mw1 != NULL && mw2 != NULL && mw3 != NULL && mw4 != NULL);
+    assert(mw1 != mw2 && mw1 != mw3 && mw1 != mw4);
+    assert(mw2 != mw3 && mw2 != mw4 && mw3 != mw4);
+
+    const char*     expected[] = {"mw_alpha", "mw_beta", "mw_gamma", "on_request"};
+    csilk_handler_t mws[] = {mw1, mw2, mw3, mw4};
+
+    /* Invoke in reverse order to prove earlier registrations were not overwritten. */
+    for (int i = 3; i >= 0; i--) {
+        csilk_ctx_t* ctx = csilk_test_ctx_new();
+        assert(ctx != NULL);
+        csilk_test_ctx_set_request(ctx, "GET", "/multi");
+        mws[i](ctx);
+        const char* hdr = csilk_get_response_header(ctx, "X-WASM-Plugin");
+        assert(hdr != NULL && strcmp(hdr, expected[i]) == 0);
+        csilk_test_ctx_free(ctx);
+    }
+
+    csilk_wasm_plugin_free(p1);
+    csilk_wasm_plugin_free(p2);
+#endif
+    printf("test_wasm_multi_middleware_isolation: PASS\n");
+}
+
+static void
+test_wasm_middleware_saturation_and_reclamation(void)
+{
+    printf("Testing WASM 16-slot thunk saturation, reclamation on free, and post-free safety...\n");
+
+#if CSILK_ENABLE_EXPERIMENTAL_STUBS
+    const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
+    csilk_wasm_plugin_t* plugins[4] = {NULL};
+    csilk_handler_t      slots[16] = {NULL};
+
+    for (int p = 0; p < 4; p++) {
+        plugins[p] = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+        assert(plugins[p] != NULL);
+        for (int k = 0; k < 4; k++) {
+            char fname[32];
+            snprintf(fname, sizeof(fname), "slot_p%d_%d", p, k);
+            int idx = p * 4 + k;
+            slots[idx] = csilk_wasm_plugin_middleware(plugins[p], fname);
+            assert(slots[idx] != NULL);
+        }
+    }
+
+    /* Pool is now full (16 slots); 17th registration must return NULL, not overwrite. */
+    assert(csilk_wasm_plugin_middleware(plugins[0], "overflow") == NULL);
+
+    /* Free plugin 1 (held slots 4..7): all 4 slots must be reclaimed. */
+    csilk_handler_t stale_mw = slots[5];
+    csilk_wasm_plugin_free(plugins[1]);
+    plugins[1] = NULL;
+
+    /* Calling a stale thunk after csilk_wasm_plugin_free must be a safe no-op (no UAF). */
+    csilk_ctx_t* stale_ctx = csilk_test_ctx_new();
+    assert(stale_ctx != NULL);
+    csilk_test_ctx_set_request(stale_ctx, "GET", "/stale");
+    stale_mw(stale_ctx);
+    assert(csilk_get_response_header(stale_ctx, "X-WASM-Plugin") == NULL);
+    csilk_test_ctx_free(stale_ctx);
+
+    /* Re-register 4 middlewares into the reclaimed slots, then saturate again. */
+    csilk_wasm_plugin_t* p_new = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+    assert(p_new != NULL);
+    for (int k = 0; k < 4; k++) {
+        char fname[32];
+        snprintf(fname, sizeof(fname), "reclaimed_%d", k);
+        csilk_handler_t mw = csilk_wasm_plugin_middleware(p_new, fname);
+        assert(mw != NULL);
+
+        csilk_ctx_t* ctx = csilk_test_ctx_new();
+        assert(ctx != NULL);
+        csilk_test_ctx_set_request(ctx, "GET", "/reclaimed");
+        mw(ctx);
+        const char* hdr = csilk_get_response_header(ctx, "X-WASM-Plugin");
+        assert(hdr != NULL && strcmp(hdr, fname) == 0);
+        csilk_test_ctx_free(ctx);
+    }
+    assert(csilk_wasm_plugin_middleware(p_new, "overflow_again") == NULL);
+
+    csilk_wasm_plugin_free(p_new);
+    csilk_wasm_plugin_free(plugins[0]);
+    csilk_wasm_plugin_free(plugins[2]);
+    csilk_wasm_plugin_free(plugins[3]);
+#endif
+    printf("test_wasm_middleware_saturation_and_reclamation: PASS\n");
 }
 
 int
@@ -218,6 +325,8 @@ main()
     test_wasm_extended_host_api();
     test_wasm_section_validation();
     test_wasm_middleware_integration();
+    test_wasm_multi_middleware_isolation();
+    test_wasm_middleware_saturation_and_reclamation();
     printf("All WASM Plugin tests passed successfully!\n");
     return 0;
 }

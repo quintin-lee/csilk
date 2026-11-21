@@ -27,6 +27,58 @@
 #define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
 #endif
 
+enum { CSILK_WASM_MW_MAX_SLOTS = 16 };
+
+typedef struct {
+    csilk_wasm_plugin_t* plugin;
+    char                 func[64];
+    bool                 in_use;
+} wasm_mw_slot_t;
+
+static wasm_mw_slot_t s_wasm_mw_slots[CSILK_WASM_MW_MAX_SLOTS];
+static csilk_mutex_t  s_wasm_mw_mutex;
+static csilk_once_t   s_wasm_mw_once = CSILK_ONCE_INIT;
+
+#define CSILK_WASM_MW_THUNK_DECL(N) static void _csilk_wasm_mw_thunk_##N(csilk_ctx_t* ctx);
+CSILK_WASM_MW_THUNK_DECL(0)
+CSILK_WASM_MW_THUNK_DECL(1)
+CSILK_WASM_MW_THUNK_DECL(2)
+CSILK_WASM_MW_THUNK_DECL(3)
+CSILK_WASM_MW_THUNK_DECL(4)
+CSILK_WASM_MW_THUNK_DECL(5)
+CSILK_WASM_MW_THUNK_DECL(6)
+CSILK_WASM_MW_THUNK_DECL(7)
+CSILK_WASM_MW_THUNK_DECL(8)
+CSILK_WASM_MW_THUNK_DECL(9)
+CSILK_WASM_MW_THUNK_DECL(10)
+CSILK_WASM_MW_THUNK_DECL(11)
+CSILK_WASM_MW_THUNK_DECL(12)
+CSILK_WASM_MW_THUNK_DECL(13)
+CSILK_WASM_MW_THUNK_DECL(14)
+CSILK_WASM_MW_THUNK_DECL(15)
+#undef CSILK_WASM_MW_THUNK_DECL
+
+static const csilk_handler_t s_wasm_mw_thunks[CSILK_WASM_MW_MAX_SLOTS] = {
+    _csilk_wasm_mw_thunk_0,
+    _csilk_wasm_mw_thunk_1,
+    _csilk_wasm_mw_thunk_2,
+    _csilk_wasm_mw_thunk_3,
+    _csilk_wasm_mw_thunk_4,
+    _csilk_wasm_mw_thunk_5,
+    _csilk_wasm_mw_thunk_6,
+    _csilk_wasm_mw_thunk_7,
+    _csilk_wasm_mw_thunk_8,
+    _csilk_wasm_mw_thunk_9,
+    _csilk_wasm_mw_thunk_10,
+    _csilk_wasm_mw_thunk_11,
+    _csilk_wasm_mw_thunk_12,
+    _csilk_wasm_mw_thunk_13,
+    _csilk_wasm_mw_thunk_14,
+    _csilk_wasm_mw_thunk_15,
+};
+static_assert(sizeof(s_wasm_mw_thunks) / sizeof(s_wasm_mw_thunks[0]) == CSILK_WASM_MW_MAX_SLOTS,
+              "s_wasm_mw_thunks must match CSILK_WASM_MW_MAX_SLOTS");
+
 static inline int
 _decode_u32_leb128(const uint8_t* p, size_t max_len, uint32_t* out_val, size_t* out_bytes_read)
 {
@@ -339,28 +391,30 @@ csilk_wasm_host_log(int level, const char* msg)
     }
 }
 
-/* Per-middleware-instance context: replaces the old g_mw_plugin global.
- * Each csilk_wasm_plugin_middleware() call allocates one; the thunk
- * retrieves it via the user_data field of the csilk_handler_t. */
-typedef struct {
-    csilk_wasm_plugin_t* plugin;
-    char                 func[64];
-} wasm_mw_ctx_t;
+static void
+_csilk_wasm_mw_pool_init(void)
+{
+    csilk_mutex_init(&s_wasm_mw_mutex);
+}
 
 static void
-_csilk_wasm_middleware_thunk(csilk_ctx_t* ctx)
+_csilk_wasm_mw_dispatch(int slot, csilk_ctx_t* ctx)
 {
-    /* The middleware context is attached to the handler by the framework;
-     * for now we use the static per-plugin convention: the thunk is returned
-     * from csilk_wasm_plugin_middleware and the caller (csilk_use) stores
-     * the function pointer.  Since csilk_handler_t is a bare void(*)(ctx*)
-     * with no user_data slot, we use a per-plugin static context.  This is
-     * safe because csilk_wasm_plugin_middleware is typically called once
-     * per plugin at app setup time. */
-    extern wasm_mw_ctx_t* _csilk_wasm_mw_current;
-    wasm_mw_ctx_t*        mc = _csilk_wasm_mw_current;
-    if (mc && mc->plugin && mc->func[0]) {
-        int rc = csilk_wasm_plugin_execute(mc->plugin, ctx, mc->func);
+    csilk_wasm_plugin_t* plugin = NULL;
+    char                 func[64];
+    func[0] = '\0';
+
+    csilk_once(&s_wasm_mw_once, _csilk_wasm_mw_pool_init);
+    csilk_mutex_lock(&s_wasm_mw_mutex);
+    if (slot >= 0 && slot < CSILK_WASM_MW_MAX_SLOTS && s_wasm_mw_slots[slot].in_use &&
+        s_wasm_mw_slots[slot].plugin) {
+        plugin = s_wasm_mw_slots[slot].plugin;
+        snprintf(func, sizeof(func), "%s", s_wasm_mw_slots[slot].func);
+    }
+    csilk_mutex_unlock(&s_wasm_mw_mutex);
+
+    if (plugin && func[0]) {
+        int rc = csilk_wasm_plugin_execute(plugin, ctx, func);
         if (rc != 0) {
             return;
         }
@@ -368,38 +422,77 @@ _csilk_wasm_middleware_thunk(csilk_ctx_t* ctx)
     csilk_next(ctx);
 }
 
-/* Per-plugin static context — set by csilk_wasm_plugin_middleware.
- * In a multi-plugin scenario the caller must sequence middleware
- * registrations so only one is active; the framework's handler chain
- * executes middlewares in registration order, and each plugin's thunk
- * is bound to its own context. */
-static wasm_mw_ctx_t* g_wasm_mw_ctxs[16];
-static int            g_wasm_mw_ctx_count = 0;
-wasm_mw_ctx_t*        _csilk_wasm_mw_current = NULL;
+#define CSILK_WASM_MW_THUNK_DEF(N)                                                                 \
+    static void _csilk_wasm_mw_thunk_##N(csilk_ctx_t* ctx)                                         \
+    {                                                                                              \
+        _csilk_wasm_mw_dispatch(N, ctx);                                                           \
+    }
+CSILK_WASM_MW_THUNK_DEF(0)
+CSILK_WASM_MW_THUNK_DEF(1)
+CSILK_WASM_MW_THUNK_DEF(2)
+CSILK_WASM_MW_THUNK_DEF(3)
+CSILK_WASM_MW_THUNK_DEF(4)
+CSILK_WASM_MW_THUNK_DEF(5)
+CSILK_WASM_MW_THUNK_DEF(6)
+CSILK_WASM_MW_THUNK_DEF(7)
+CSILK_WASM_MW_THUNK_DEF(8)
+CSILK_WASM_MW_THUNK_DEF(9)
+CSILK_WASM_MW_THUNK_DEF(10)
+CSILK_WASM_MW_THUNK_DEF(11)
+CSILK_WASM_MW_THUNK_DEF(12)
+CSILK_WASM_MW_THUNK_DEF(13)
+CSILK_WASM_MW_THUNK_DEF(14)
+CSILK_WASM_MW_THUNK_DEF(15)
+#undef CSILK_WASM_MW_THUNK_DEF
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((visibility("hidden")))
+#endif
+void
+_csilk_wasm_mw_release_plugin(csilk_wasm_plugin_t* plugin)
+{
+    if (!plugin) {
+        return;
+    }
+    csilk_once(&s_wasm_mw_once, _csilk_wasm_mw_pool_init);
+    csilk_mutex_lock(&s_wasm_mw_mutex);
+    for (int i = 0; i < CSILK_WASM_MW_MAX_SLOTS; i++) {
+        if (s_wasm_mw_slots[i].in_use && s_wasm_mw_slots[i].plugin == plugin) {
+            s_wasm_mw_slots[i].in_use = false;
+            s_wasm_mw_slots[i].plugin = NULL;
+            s_wasm_mw_slots[i].func[0] = '\0';
+        }
+    }
+    csilk_mutex_unlock(&s_wasm_mw_mutex);
+}
 
 void (*csilk_wasm_plugin_middleware(csilk_wasm_plugin_t* plugin,
                                     const char*          func_name))(csilk_ctx_t*)
 {
-    if (g_wasm_mw_ctx_count >= 16) {
-        return _csilk_wasm_middleware_thunk; /* saturate: last one wins */
+    if (!plugin) {
+        return NULL;
     }
 
-    wasm_mw_ctx_t* mc = (wasm_mw_ctx_t*)calloc(1, sizeof(wasm_mw_ctx_t));
-    if (!mc) {
-        return _csilk_wasm_middleware_thunk;
+    csilk_once(&s_wasm_mw_once, _csilk_wasm_mw_pool_init);
+    csilk_mutex_lock(&s_wasm_mw_mutex);
+    for (int i = 0; i < CSILK_WASM_MW_MAX_SLOTS; i++) {
+        if (!s_wasm_mw_slots[i].in_use) {
+            s_wasm_mw_slots[i].plugin = plugin;
+            snprintf(s_wasm_mw_slots[i].func,
+                     sizeof(s_wasm_mw_slots[i].func),
+                     "%s",
+                     func_name ? func_name : "on_request");
+            s_wasm_mw_slots[i].in_use = true;
+            csilk_handler_t thunk = s_wasm_mw_thunks[i];
+            csilk_mutex_unlock(&s_wasm_mw_mutex);
+            return thunk;
+        }
     }
-    mc->plugin = plugin;
-    if (func_name) {
-        snprintf(mc->func, sizeof(mc->func), "%s", func_name);
-    } else {
-        snprintf(mc->func, sizeof(mc->func), "on_request");
-    }
+    csilk_mutex_unlock(&s_wasm_mw_mutex);
 
-    g_wasm_mw_ctxs[g_wasm_mw_ctx_count] = mc;
-    g_wasm_mw_ctx_count++;
-    _csilk_wasm_mw_current = mc;
-
-    return _csilk_wasm_middleware_thunk;
+    CSILK_LOG_E("wasm_plugin: middleware thunk pool exhausted (max %d slots)",
+                CSILK_WASM_MW_MAX_SLOTS);
+    return NULL;
 }
 
 /**
