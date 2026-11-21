@@ -419,6 +419,48 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                     }
                 }
                 /* else: genuine error (e.g. kernel reject) — drop silently. */
+            } else if (op == URING_OP_UDP_RECV) {
+                /* IORING_OP_RECVMSG multishot completion: the kernel delivers
+                 * one CQE per datagram.  The SQE remains armed by the kernel
+                 * (multishot semantics) — no re-submission needed on success.
+                 * The payload was written into handle->recv_buf and the sender
+                 * address into handle->remote_storage. */
+                csilk_io_udp_t* udp = (csilk_io_udp_t*)ptr;
+                if (is_stale_poll((csilk_io_handle_t*)udp, gen)) {
+                    continue;
+                }
+                if (res > 0 && udp->cb) {
+                    csilk_io_buf_t csbuf;
+                    csbuf.base = udp->recv_buf;
+                    csbuf.len = (size_t)res;
+                    const struct sockaddr* sender = (const struct sockaddr*)&udp->remote_storage;
+                    udp->cb(udp, (size_t)res, &csbuf, sender);
+                }
+                if (res < 0 && res != -ECANCELED && udp->recv_started && udp->fd >= 0) {
+                    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                    if (sqe) {
+                        struct msghdr msg;
+                        memset(&msg, 0, sizeof(msg));
+                        msg.msg_name = &udp->remote_storage;
+                        msg.msg_namelen = sizeof(udp->remote_storage);
+                        struct iovec iov;
+                        iov.iov_base = udp->recv_buf;
+                        iov.iov_len = sizeof(udp->recv_buf);
+                        msg.msg_iov = &iov;
+                        msg.msg_iovlen = 1;
+                        uint8_t ctrl_buf[sizeof(struct sockaddr_storage) + 16];
+                        memset(ctrl_buf, 0, sizeof(ctrl_buf));
+                        msg.msg_control = ctrl_buf;
+                        msg.msg_controllen = sizeof(ctrl_buf);
+                        uint64_t next_data =
+                            uring_encode_handle_data(URING_OP_UDP_RECV, (csilk_io_handle_t*)udp);
+                        if (next_data) {
+                            io_uring_prep_recvmsg_multishot(sqe, udp->fd, &msg, 0);
+                            io_uring_sqe_set_data64(sqe, next_data);
+                            io_uring_submit(ring);
+                        }
+                    }
+                }
             }
         }
 

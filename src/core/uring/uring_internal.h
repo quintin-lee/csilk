@@ -42,6 +42,7 @@ typedef enum {
     URING_OP_TMR_IDLE,
     URING_OP_TMR_REQ,
     URING_OP_TMR_GENERIC, /**< Timer started via csilk_io_timer_start. */
+    URING_OP_UDP_RECV,    /**< UDP datagram received via IORING_OP_RECVMSG multishot. */
 } uring_op_type_t;
 
 typedef struct {
