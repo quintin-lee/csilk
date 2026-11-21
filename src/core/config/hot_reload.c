@@ -42,6 +42,7 @@ typedef struct {
     csilk_mutex_t       reload_mutex;   /**< Mutex ensuring serialized reload executions. */
 } hot_reload_ctx_t;
 
+#ifdef _WIN32
 /**
  * @brief Copy a file from src to dst.
  */
@@ -78,11 +79,54 @@ copy_file(const char* src, const char* dst)
         return -1;
     }
 
-#ifndef _WIN32
-    chmod(dst, 0755);
-#endif
     return 0;
 }
+#else
+/**
+ * @brief Copy @p src directly into an already-open temp file descriptor and
+ *        restrict permissions to owner-only (0700).
+ */
+static int
+copy_file_to_fd(const char* src, int dst_fd)
+{
+    FILE* in = fopen(src, "rb");
+    if (!in) {
+        close(dst_fd);
+        return -1;
+    }
+    FILE* out = fdopen(dst_fd, "wb");
+    if (!out) {
+        fclose(in);
+        close(dst_fd);
+        return -1;
+    }
+    char buf[8192];
+    int  err = 0;
+    while (!feof(in) && !ferror(in)) {
+        size_t n = fread(buf, 1, sizeof(buf), in);
+        if (n > 0) {
+            if (fwrite(buf, 1, n, out) != n) {
+                err = 1;
+                break;
+            }
+        }
+    }
+    if (ferror(in)) {
+        err = 1;
+    }
+    if (!err && fflush(out) != 0) {
+        err = 1;
+    }
+    if (!err && fchmod(fileno(out), 0700) != 0) {
+        err = 1;
+    }
+    fclose(in);
+    if (fclose(out) != 0) {
+        err = 1;
+    }
+    return err ? -1 : 0;
+}
+#endif
 
 /**
  * @brief Create a uniquely named copy of the shared library to bypass dlopen caching.
@@ -96,7 +140,11 @@ create_temp_lib_copy(const char* src_path, char* out_path, size_t max_len)
     if (fd < 0) {
         return -1;
     }
-    close(fd);
+    if (copy_file_to_fd(src_path, fd) != 0) {
+        unlink(out_path);
+        return -1;
+    }
+    return 0;
 #else
     char temp_dir[MAX_PATH];
     GetTempPathA(sizeof(temp_dir), temp_dir);
@@ -106,12 +154,12 @@ create_temp_lib_copy(const char* src_path, char* out_path, size_t max_len)
              temp_dir,
              (unsigned long)time(NULL),
              rand());
-#endif
     if (copy_file(src_path, out_path) != 0) {
         unlink(out_path);
         return -1;
     }
     return 0;
+#endif
 }
 
 /**

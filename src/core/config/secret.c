@@ -83,11 +83,25 @@ secret_cache_slot(const char* key)
     return (size_t)(h % SECRET_CACHE_ENTRIES);
 }
 
+/* Wipe secret buffers without relying on platform-specific explicit_bzero. */
+static void
+secret_secure_zero(void* ptr, size_t len)
+{
+    if (!ptr || len == 0) {
+        return;
+    }
+    volatile unsigned char* p = (volatile unsigned char*)ptr;
+    while (len--) {
+        *p++ = 0;
+    }
+}
+
 /* Callers MUST hold s_secret_lock. Stores key/value with a TTL. */
 static void
 secret_cache_put(const char* key, const char* value, uint64_t ttl_ms)
 {
     secret_cache_entry_t* e = &s_secret_cache[secret_cache_slot(key)];
+    secret_secure_zero(e, sizeof(*e));
     strncpy(e->key, key, sizeof(e->key) - 1);
     e->key[sizeof(e->key) - 1] = '\0';
     strncpy(e->value, value, sizeof(e->value) - 1);
@@ -105,7 +119,7 @@ secret_cache_get(const char* key, char* out, size_t out_size)
         return false;
     }
     if (e->expires_ms <= secret_now_ms()) {
-        e->expires_ms = 0; /* expired */
+        secret_secure_zero(e, sizeof(*e)); /* wipe expired secret */
         return false;
     }
     strncpy(out, e->value, out_size - 1);
@@ -191,11 +205,14 @@ csilk_secret_set_test_override(const char* key, const char* value)
     for (size_t i = 0; i < s_override_count; i++) {
         if (strcasecmp(s_test_overrides[i].key, key) == 0) {
             if (value) {
+                secret_secure_zero(s_test_overrides[i].value, sizeof(s_test_overrides[i].value));
                 strncpy(s_test_overrides[i].value, value, sizeof(s_test_overrides[i].value) - 1);
                 s_test_overrides[i].value[sizeof(s_test_overrides[i].value) - 1] = '\0';
             } else {
                 s_test_overrides[i] = s_test_overrides[s_override_count - 1];
                 s_override_count--;
+                secret_secure_zero(&s_test_overrides[s_override_count],
+                                   sizeof(s_test_overrides[0]));
             }
             csilk_mutex_unlock(&s_secret_lock);
             return;
@@ -223,6 +240,7 @@ csilk_secret_clear_test_overrides(void)
 {
     ensure_lock_init();
     csilk_mutex_lock(&s_secret_lock);
+    secret_secure_zero(s_test_overrides, sizeof(s_test_overrides));
     s_override_count = 0;
     csilk_mutex_unlock(&s_secret_lock);
 }
@@ -413,7 +431,7 @@ validate_and_return:
                 "[CSILK SECURITY ERROR] Secret '%s' matched forbidden default pattern. "
                 "Production execution refused! Please configure a secure secret.\n",
                 key);
-        target_buf[0] = '\0';
+        secret_secure_zero(target_buf, target_sz);
         return NULL;
     }
 
@@ -475,5 +493,7 @@ csilk_secret_is_valid(const char* key)
 {
     char        buf[128];
     const char* val = csilk_secret_get(key, buf, sizeof(buf));
-    return (val != NULL && val[0] != '\0');
+    bool        valid = (val != NULL && val[0] != '\0');
+    secret_secure_zero(buf, sizeof(buf));
+    return valid;
 }
