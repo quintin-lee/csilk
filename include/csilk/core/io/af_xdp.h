@@ -9,7 +9,7 @@
  *          AF_XDP/XSK kernel sockets or attach to physical NICs. Disable
  *          simulation mode at configure time with -DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF.
  *
- * @version 0.5.2
+ * @version 1.1.1
  * @copyright MIT License
  */
 
