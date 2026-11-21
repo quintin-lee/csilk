@@ -216,7 +216,7 @@ jobs:
       run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-19 -DUSE_ASAN=ON -DUSE_FUZZER=ON
 
     - name: Build Fuzzers
-      run: cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc fuzz_mcp fuzz_sql_rewrite -j$(nproc)
+      run: cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc fuzz_mcp fuzz_sql_rewrite fuzz_wasm fuzz_h3 -j$(nproc)
 
     - name: Fuzz — fuzz_test (HTTP routing + query parsing)
       run: cd build && ./fuzz_test -max_total_time=120 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_test
@@ -244,6 +244,12 @@ jobs:
 
     - name: Fuzz — fuzz_sql_rewrite (SQL placeholder rewriting)
       run: cd build && ./fuzz_sql_rewrite -max_total_time=60 -dict=${{ github.workspace }}/fuzz/fuzz.dict ${{ github.workspace }}/fuzz/corpus/fuzz_sql_rewrite
+
+    - name: Fuzz — fuzz_wasm (WASM plugin validation & execution)
+      run: cd build && ./fuzz_wasm -max_total_time=30 -dict=${{ github.workspace }}/fuzz/fuzz.dict
+
+    - name: Fuzz — fuzz_h3 (HTTP/3 varint & frame decoding)
+      run: cd build && ./fuzz_h3 -max_total_time=30 -dict=${{ github.workspace }}/fuzz/fuzz.dict
 
   arm64:
     name: ARM64 Cross-Compile
