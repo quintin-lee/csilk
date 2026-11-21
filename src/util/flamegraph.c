@@ -126,6 +126,7 @@ fg_sb_appendf(fg_sb_t* sb, const char* fmt, ...)
     }
     va_list ap;
     va_start(ap, fmt);
+    // NOLINTNEXTLINE(clang-analyzer-security.VAList)
     int needed = vsnprintf(NULL, 0, fmt, ap);
     va_end(ap);
     if (needed < 0) {
@@ -153,6 +154,7 @@ fg_sb_appendf(fg_sb_t* sb, const char* fmt, ...)
         sb->cap = new_cap;
     }
     va_start(ap, fmt);
+    // NOLINTNEXTLINE(clang-analyzer-security.VAList)
     vsnprintf(sb->data + sb->len, sb->cap - sb->len, fmt, ap);
     va_end(ap);
     sb->len += add;

@@ -454,7 +454,8 @@ csilk_arena_alloc(csilk_arena_t* arena, size_t size)
     size_t    misalign = (size_t)((64ULL - (cur & 63ULL)) & 63ULL);
     size_t space = (arena->ptr && arena->end >= arena->ptr) ? (size_t)(arena->end - arena->ptr) : 0;
 
-    if (__builtin_expect(aligned_size <= SIZE_MAX - misalign && misalign + aligned_size <= space,
+    if (__builtin_expect(arena->ptr != NULL && aligned_size <= SIZE_MAX - misalign &&
+                             misalign + aligned_size <= space,
                          1)) {
         uint8_t* aligned_ptr = arena->ptr + misalign;
         arena->ptr = aligned_ptr + aligned_size;
