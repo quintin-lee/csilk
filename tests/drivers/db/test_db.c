@@ -220,6 +220,104 @@ test_db_sqlite_async_query(void)
     printf("test_db_sqlite_async_query passed\n");
 }
 
+typedef struct {
+    int            called;
+    csilk_db_err_t err;
+    char           msg[64];
+    size_t         rows;
+} query_ex_ctx_t;
+
+static void
+on_query_async_ex(csilk_json_t* result, csilk_db_err_t err, void* user_data)
+{
+    query_ex_ctx_t* qctx = (query_ex_ctx_t*)user_data;
+    qctx->called++;
+    qctx->err = err;
+    if (result) {
+        qctx->rows = csilk_json_array_size(result);
+        if (qctx->rows > 0) {
+            csilk_json_t* row = csilk_json_array_get(result, 0);
+            csilk_json_t* msg = row ? csilk_json_get(row, "msg") : nullptr;
+            if (msg && csilk_json_is_string(msg)) {
+                snprintf(qctx->msg, sizeof(qctx->msg), "%s", csilk_json_string_value(msg));
+            }
+        }
+        csilk_json_free(result);
+    }
+}
+
+void
+test_db_query_async_api(void)
+{
+    remove("test_query_async.db");
+    remove("test_query_async.db-journal");
+    csilk_db_init();
+
+    csilk_db_pool_t* pool = csilk_db_pool_new_ex("sqlite", "test_query_async.db", 2);
+    assert(pool != nullptr);
+    assert(csilk_db_exec(pool, "CREATE TABLE items (id INTEGER PRIMARY KEY, msg TEXT)") == 0);
+    assert(csilk_db_exec(pool, "INSERT INTO items (msg) VALUES ('custom_loop_ok')") == 0);
+
+    /* 1. Raw query on NULL loop (defaults to csilk_io_default_loop) */
+    query_ex_ctx_t c_default = {0};
+    assert(csilk_db_query_async(pool,
+                                "SELECT msg FROM items ORDER BY id",
+                                nullptr,
+                                nullptr,
+                                on_query_async_ex,
+                                &c_default) == 0);
+    csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_DEFAULT);
+    assert(c_default.called == 1);
+    assert(c_default.err == CSILK_DB_OK);
+    assert(c_default.rows == 1);
+    assert(strcmp(c_default.msg, "custom_loop_ok") == 0);
+
+    /* 2. Parameterized + concurrent queries on a custom csilk_io_loop_t */
+    csilk_io_loop_t custom_loop;
+    assert(csilk_io_loop_init(&custom_loop) == 0);
+
+    query_ex_ctx_t c_param = {0};
+    query_ex_ctx_t c_err = {0};
+    {
+        const char* p[] = {"custom_loop_ok", nullptr};
+        assert(csilk_db_query_async(pool,
+                                    "SELECT msg FROM items WHERE msg = ?",
+                                    p,
+                                    &custom_loop,
+                                    on_query_async_ex,
+                                    &c_param) == 0);
+    }
+    assert(csilk_db_query_async(pool,
+                                "SELECT * FROM nonexistent_tbl_404",
+                                nullptr,
+                                &custom_loop,
+                                on_query_async_ex,
+                                &c_err) == 0);
+    csilk_io_run(&custom_loop, CSILK_IO_RUN_DEFAULT);
+    csilk_io_loop_close(&custom_loop);
+
+    assert(c_param.called == 1);
+    assert(c_param.err == CSILK_DB_OK);
+    assert(c_param.rows == 1);
+    assert(strcmp(c_param.msg, "custom_loop_ok") == 0);
+
+    assert(c_err.called == 1);
+    assert(c_err.err != CSILK_DB_OK);
+    assert(c_err.rows == 0);
+
+    /* 3. Invalid arguments */
+    assert(csilk_db_query_async(
+               nullptr, "SELECT 1", nullptr, nullptr, on_query_async_ex, &c_default) == -1);
+    assert(csilk_db_query_async(pool, nullptr, nullptr, nullptr, on_query_async_ex, &c_default) ==
+           -1);
+    assert(csilk_db_query_async(pool, "SELECT 1", nullptr, nullptr, nullptr, &c_default) == -1);
+
+    csilk_db_pool_free(pool);
+    remove("test_query_async.db");
+    remove("test_query_async.db-journal");
+    printf("test_db_query_async_api passed\n");
+}
+
 int
 main(void)
 {
@@ -228,6 +326,7 @@ main(void)
     test_db_sqlite_insert_query();
     test_db_sqlite_transactions();
     test_db_sqlite_async_query();
+    test_db_query_async_api();
     printf("All db tests passed\n");
     return 0;
 }

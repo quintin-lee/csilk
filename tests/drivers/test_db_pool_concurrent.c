@@ -8,6 +8,7 @@
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
 #include "csilk/core/sync.h"
+#include "csilk/core/sys_io.h"
 
 /* Minimal "print the calling thread's id" helper — libuv's uv_thread_t is
  * an opaque struct; we just print its address for diagnostics. */
@@ -370,6 +371,168 @@ test_concurrent_hl_api_stress(void)
     printf("  passed\n");
 }
 
+/* ------------------------------------------------------------------
+ * Unlocked execution & reentrancy & condvar wakeup tests
+ * ------------------------------------------------------------------ */
+
+typedef struct {
+    csilk_db_pool_t* pool;
+    atomic_int       entered;
+    atomic_int       reentrant_ok;
+    int              sleep_us;
+} slow_with_ctx_t;
+
+static int
+reentrant_inner_fn(void* conn, void* user_ctx)
+{
+    (void)conn;
+    atomic_int* ok = (atomic_int*)user_ctx;
+    atomic_store(ok, 1);
+    return 0;
+}
+
+static int
+slow_with_fn(void* conn, void* user_ctx)
+{
+    slow_with_ctx_t* ctx = (slow_with_ctx_t*)user_ctx;
+    (void)conn;
+
+    /* Same-thread reentrant csilk_db_with_conn must reuse the held slot
+     * without deadlocking. */
+    int rc = csilk_db_with_conn(ctx->pool, reentrant_inner_fn, &ctx->reentrant_ok);
+    assert(rc == 0);
+
+    atomic_store(&ctx->entered, 1);
+    usleep((useconds_t)ctx->sleep_us);
+    return 0;
+}
+
+static void
+slow_with_worker(void* arg)
+{
+    slow_with_ctx_t* ctx = (slow_with_ctx_t*)arg;
+    int              rc = csilk_db_with_conn(ctx->pool, slow_with_fn, ctx);
+    assert(rc == 0);
+}
+
+static int
+fast_noop_fn(void* conn, void* user_ctx)
+{
+    (void)conn;
+    atomic_int* done = (atomic_int*)user_ctx;
+    atomic_store(done, 1);
+    return 0;
+}
+
+static void
+test_with_conn_unlocked_parallel_and_reentrant(void)
+{
+    printf("Testing csilk_db_with_conn releases mutex during callback & supports reentrancy...\n");
+    cleanup();
+    csilk_db_init();
+
+    csilk_db_pool_t* pool = csilk_db_pool_new_ex("sqlite", TEST_DB_PATH, 2);
+    assert(pool != nullptr);
+
+    slow_with_ctx_t ctx = {pool, 0, 0, 80000}; /* 80 ms callback */
+    csilk_thread_t  tid;
+    assert(csilk_thread_create(&tid, slow_with_worker, &ctx) == 0);
+
+    while (!atomic_load(&ctx.entered)) {
+        csilk_thread_yield();
+    }
+
+    /* While thread 1 sleeps 80 ms inside slot 0 callback, slot 1 and
+     * pool->mutex must remain immediately available (< 40 ms). */
+    uint64_t t0 = csilk_io_hrtime();
+    void*    conn2 = NULL;
+    assert(csilk_db_pool_acquire_timeout(pool, &conn2, 200) == 0);
+    assert(conn2 != NULL);
+    assert(csilk_db_pool_put(pool, conn2) == 0);
+
+    atomic_int fast_done = 0;
+    assert(csilk_db_with_conn(pool, fast_noop_fn, &fast_done) == 0);
+    uint64_t elapsed_ms = (csilk_io_hrtime() - t0) / 1000000ULL;
+
+    assert(atomic_load(&fast_done) == 1);
+    assert(elapsed_ms < 40);
+
+    csilk_thread_join(&tid);
+    assert(atomic_load(&ctx.reentrant_ok) == 1);
+
+    csilk_db_pool_free(pool);
+    cleanup();
+    printf("  passed (second thread finished in %llu ms)\n", (unsigned long long)elapsed_ms);
+}
+
+static void
+test_with_conn_signals_timeout_waiter(void)
+{
+    printf("Testing csilk_db_with_conn wakes csilk_db_pool_acquire_timeout waiter...\n");
+    cleanup();
+    csilk_db_init();
+
+    csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", TEST_DB_PATH);
+    assert(pool != nullptr);
+
+    slow_with_ctx_t ctx = {pool, 0, 0, 40000}; /* 40 ms */
+    csilk_thread_t  tid;
+    assert(csilk_thread_create(&tid, slow_with_worker, &ctx) == 0);
+
+    while (!atomic_load(&ctx.entered)) {
+        csilk_thread_yield();
+    }
+
+    void* conn = NULL;
+    assert(csilk_db_pool_acquire_timeout(pool, &conn, 500) == 0);
+    assert(conn != NULL);
+    assert(csilk_db_pool_put(pool, conn) == 0);
+
+    csilk_thread_join(&tid);
+    csilk_db_pool_free(pool);
+    cleanup();
+    printf("  passed\n");
+}
+
+static void
+thread_cross_api_with_conn_worker(void* arg)
+{
+    with_ctx_t* ctx = (with_ctx_t*)arg;
+    for (int i = 0; i < 200; i++) {
+        assert(csilk_db_with_conn(ctx->pool, with_fn, ctx) == 0);
+        const char*   p[] = {"x", NULL};
+        csilk_json_t* r = csilk_db_query_param_json(ctx->pool, "SELECT ? AS v", p);
+        if (r) {
+            csilk_json_free(r);
+        }
+    }
+}
+
+static void
+test_with_conn_concurrent_with_hl_api(void)
+{
+    printf("Testing concurrent csilk_db_with_conn + csilk_db_query_param_json safety...\n");
+    cleanup();
+    csilk_db_init();
+
+    csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", TEST_DB_PATH);
+    assert(pool != nullptr);
+
+    with_ctx_t     ctx = {pool, 0};
+    csilk_thread_t tids[4];
+    for (int i = 0; i < 4; i++) {
+        assert(csilk_thread_create(&tids[i], thread_cross_api_with_conn_worker, &ctx) == 0);
+    }
+    for (int i = 0; i < 4; i++) {
+        csilk_thread_join(&tids[i]);
+    }
+    assert(atomic_load(&ctx.count) == 4 * 200);
+
+    csilk_db_pool_free(pool);
+    cleanup();
+    printf("  passed\n");
+}
+
 int
 main(void)
 {
@@ -379,6 +542,9 @@ main(void)
     test_concurrent_with_conn_stress();
     test_concurrent_acquire_put_stress();
     test_concurrent_hl_api_stress();
+    test_with_conn_unlocked_parallel_and_reentrant();
+    test_with_conn_signals_timeout_waiter();
+    test_with_conn_concurrent_with_hl_api();
 
     printf("test_db_pool_concurrent: ALL PASSED\n");
     return 0;
