@@ -1022,7 +1022,14 @@ csilk_hnsw_load(const char* filepath)
 
     /* Version 2: Load into mutable heap index */
     if (version == CSILK_HNSW_VERSION_2) {
-        rewind(fp);
+        struct stat st;
+        if (fstat(fileno(fp), &st) != 0 || st.st_size < (off_t)sizeof(csilk_hnsw_header_v2_t) ||
+            fseek(fp, 0, SEEK_SET) != 0) {
+            fclose(fp);
+            return NULL;
+        }
+        uint64_t file_len = (uint64_t)st.st_size;
+
         csilk_hnsw_header_v2_t hdr;
         if (fread(&hdr, sizeof(hdr), 1, fp) != 1) {
             fclose(fp);
@@ -1036,8 +1043,26 @@ csilk_hnsw_load(const char* filepath)
         uint32_t enter_id = hdr.enter_id;
 
         if (dim == 0 || dim > HNSW_MAX_DIM || m == 0 || m > HNSW_MAX_M ||
-            node_count > HNSW_MAX_NODES || (uint32_t)max_level > HNSW_MAX_LEVEL ||
+            node_count > HNSW_MAX_NODES || max_level < 0 || (uint32_t)max_level > HNSW_MAX_LEVEL ||
             (node_count > 0 && enter_id >= node_count)) {
+            fclose(fp);
+            return NULL;
+        }
+
+        uint64_t min_stride = (uint64_t)dim * sizeof(float);
+        if (hdr.stride_bytes < min_stride || hdr.stride_bytes > min_stride + 64 ||
+            hdr.node_meta_offset > file_len ||
+            (uint64_t)node_count * sizeof(csilk_hnsw_node_meta_v2_t) >
+                file_len - hdr.node_meta_offset ||
+            hdr.vector_offset > file_len ||
+            (uint64_t)node_count * (uint64_t)hdr.stride_bytes > file_len - hdr.vector_offset ||
+            hdr.string_offset > hdr.graph_offset || hdr.graph_offset > file_len) {
+            fclose(fp);
+            return NULL;
+        }
+
+        size_t str_table_size = (size_t)(hdr.graph_offset - hdr.string_offset);
+        if (str_table_size > (size_t)HNSW_MAX_NODES * (HNSW_MAX_DOC_LEN + 1)) {
             fclose(fp);
             return NULL;
         }
@@ -1058,24 +1083,31 @@ csilk_hnsw_load(const char* filepath)
             return index;
         }
 
-        csilk_hnsw_node_meta_v2_t* meta = calloc(node_count, sizeof(csilk_hnsw_node_meta_v2_t));
+        size_t n_count = (size_t)node_count;
+        if (n_count > HNSW_MAX_NODES) {
+            n_count = HNSW_MAX_NODES;
+        }
+        // NOLINTNEXTLINE(clang-analyzer-optin.taint.TaintedAlloc)
+        csilk_hnsw_node_meta_v2_t* meta = calloc(n_count, sizeof(csilk_hnsw_node_meta_v2_t));
         if (!meta) {
             csilk_hnsw_index_free(index);
             fclose(fp);
             return NULL;
         }
         if (fseek(fp, (long)hdr.node_meta_offset, SEEK_SET) != 0 ||
-            fread(meta, sizeof(csilk_hnsw_node_meta_v2_t), node_count, fp) != node_count) {
+            fread(meta, sizeof(csilk_hnsw_node_meta_v2_t), n_count, fp) != n_count) {
             free(meta);
             csilk_hnsw_index_free(index);
             fclose(fp);
             return NULL;
         }
 
-        if (node_count > index->node_capacity) {
-            size_t              new_cap = node_count + 64;
-            csilk_hnsw_node_t** new_nodes =
-                realloc(index->nodes, new_cap * sizeof(csilk_hnsw_node_t*));
+        if (n_count > index->node_capacity) {
+            size_t              new_cap = n_count + 64;
+            size_t              alloc_sz = new_cap * sizeof(csilk_hnsw_node_t*);
+            csilk_hnsw_node_t** new_nodes;
+            // NOLINTNEXTLINE(clang-analyzer-optin.taint.TaintedAlloc)
+            new_nodes = realloc(index->nodes, alloc_sz);
             if (!new_nodes) {
                 free(meta);
                 csilk_hnsw_index_free(index);
@@ -1086,8 +1118,8 @@ csilk_hnsw_load(const char* filepath)
             index->node_capacity = new_cap;
         }
 
-        size_t str_table_size = (size_t)(hdr.graph_offset - hdr.string_offset);
-        char*  str_table = malloc(str_table_size > 0 ? str_table_size : 1);
+        // NOLINTNEXTLINE(clang-analyzer-optin.taint.TaintedAlloc)
+        char* str_table = malloc(str_table_size > 0 ? str_table_size : 1);
         if (!str_table ||
             (str_table_size > 0 && (fseek(fp, (long)hdr.string_offset, SEEK_SET) != 0 ||
                                     fread(str_table, 1, str_table_size, fp) != str_table_size))) {
@@ -1100,7 +1132,13 @@ csilk_hnsw_load(const char* filepath)
 
         for (uint32_t i = 0; i < node_count; i++) {
             if (meta[i].level < 0 || (uint32_t)meta[i].level > HNSW_MAX_LEVEL ||
-                meta[i].doc_id_len > HNSW_MAX_DOC_LEN || meta[i].id != i) {
+                meta[i].doc_id_len > HNSW_MAX_DOC_LEN || meta[i].id != i ||
+                meta[i].doc_id_offset >= str_table_size ||
+                (uint64_t)meta[i].doc_id_len > str_table_size - meta[i].doc_id_offset ||
+                memchr(str_table + meta[i].doc_id_offset,
+                       '\0',
+                       str_table_size - (size_t)meta[i].doc_id_offset) == NULL ||
+                meta[i].neighbor_offset > file_len - hdr.graph_offset) {
                 free(str_table);
                 free(meta);
                 csilk_hnsw_index_free(index);
@@ -1132,9 +1170,12 @@ csilk_hnsw_load(const char* filepath)
                 return NULL;
             }
 
-            int lvl = node->level;
-            node->neighbors = calloc((size_t)lvl + 1, sizeof(uint32_t*));
-            node->neighbor_count = calloc((size_t)lvl + 1, sizeof(uint16_t));
+            int    lvl = node->level;
+            size_t nb_arr_n = (size_t)lvl + 1;
+            // NOLINTNEXTLINE(clang-analyzer-optin.taint.TaintedAlloc)
+            node->neighbors = calloc(nb_arr_n, sizeof(uint32_t*));
+            // NOLINTNEXTLINE(clang-analyzer-optin.taint.TaintedAlloc)
+            node->neighbor_count = calloc(nb_arr_n, sizeof(uint16_t));
             if (!node->neighbors || !node->neighbor_count) {
                 hnsw_free_node(node);
                 free(str_table);
@@ -1164,8 +1205,17 @@ csilk_hnsw_load(const char* filepath)
                     fclose(fp);
                     return NULL;
                 }
-                node->neighbor_count[l] = deg;
                 size_t cap = hnsw_layer_cap(index, l);
+                if (deg > cap) {
+                    hnsw_free_node(node);
+                    free(str_table);
+                    free(meta);
+                    csilk_hnsw_index_free(index);
+                    fclose(fp);
+                    return NULL;
+                }
+                node->neighbor_count[l] = deg;
+                // NOLINTNEXTLINE(clang-analyzer-optin.taint.TaintedAlloc)
                 node->neighbors[l] = calloc(cap, sizeof(uint32_t));
                 if (!node->neighbors[l] ||
                     (deg > 0 && fread(node->neighbors[l], sizeof(uint32_t), deg, fp) != deg)) {
@@ -1175,6 +1225,16 @@ csilk_hnsw_load(const char* filepath)
                     csilk_hnsw_index_free(index);
                     fclose(fp);
                     return NULL;
+                }
+                for (uint16_t k = 0; k < deg; k++) {
+                    if (node->neighbors[l][k] >= node_count) {
+                        hnsw_free_node(node);
+                        free(str_table);
+                        free(meta);
+                        csilk_hnsw_index_free(index);
+                        fclose(fp);
+                        return NULL;
+                    }
                 }
             }
             index->nodes[index->node_count++] = node;
@@ -1230,6 +1290,7 @@ csilk_hnsw_load(const char* filepath)
             fclose(fp);
             return NULL;
         }
+        // NOLINTNEXTLINE(clang-analyzer-optin.taint.TaintedAlloc)
         csilk_hnsw_node_t** new_nodes = realloc(index->nodes, new_cap * sizeof(csilk_hnsw_node_t*));
         if (!new_nodes) {
             csilk_hnsw_index_free(index);
@@ -1264,17 +1325,21 @@ csilk_hnsw_load(const char* filepath)
             return NULL;
         }
 
+        size_t d_len = (size_t)doc_len;
+        if (d_len > HNSW_MAX_DOC_LEN) {
+            d_len = HNSW_MAX_DOC_LEN;
+        }
         node->id = id;
         node->level = level;
-        node->doc_id = malloc((size_t)doc_len + 1);
-        if (!node->doc_id || fread(node->doc_id, 1, doc_len, fp) != doc_len) {
+        node->doc_id = malloc(d_len + 1);
+        if (!node->doc_id || fread(node->doc_id, 1, d_len, fp) != d_len) {
             free(node->doc_id);
             free(node);
             csilk_hnsw_index_free(index);
             fclose(fp);
             return NULL;
         }
-        node->doc_id[doc_len] = '\0';
+        node->doc_id[d_len] = '\0'; // NOLINT(clang-analyzer-security.ArrayBound)
 
         node->vector = csilk_aligned_alloc(32, (size_t)dim * sizeof(float));
         if (!node->vector || fread(node->vector, sizeof(float), dim, fp) != dim) {
@@ -1370,12 +1435,20 @@ csilk_hnsw_mmap_open(const char* filepath)
     uint32_t m = hdr->M;
     int32_t  max_level = hdr->max_level;
     uint32_t enter_id = hdr->enter_id;
+    uint64_t file_len = (uint64_t)st.st_size;
+    uint64_t min_stride = (uint64_t)dim * sizeof(float);
 
     if (dim == 0 || dim > HNSW_MAX_DIM || m == 0 || m > HNSW_MAX_M || node_count > HNSW_MAX_NODES ||
-        (uint32_t)max_level > HNSW_MAX_LEVEL || (node_count > 0 && enter_id >= node_count) ||
-        hdr->node_meta_offset >= (uint64_t)st.st_size ||
-        hdr->vector_offset >= (uint64_t)st.st_size || hdr->string_offset > (uint64_t)st.st_size ||
-        hdr->graph_offset > (uint64_t)st.st_size) {
+        max_level < 0 || (uint32_t)max_level > HNSW_MAX_LEVEL ||
+        (node_count > 0 && enter_id >= node_count) || hdr->node_meta_offset > file_len ||
+        (hdr->node_meta_offset & 3u) != 0 ||
+        (uint64_t)node_count * sizeof(csilk_hnsw_node_meta_v2_t) >
+            file_len - hdr->node_meta_offset ||
+        hdr->vector_offset > file_len || (hdr->vector_offset & 3u) != 0 ||
+        hdr->stride_bytes < min_stride || hdr->stride_bytes > min_stride + 64 ||
+        (hdr->stride_bytes & 3u) != 0 ||
+        (uint64_t)node_count * (uint64_t)hdr->stride_bytes > file_len - hdr->vector_offset ||
+        hdr->string_offset > hdr->graph_offset || hdr->graph_offset > file_len) {
         munmap(base, (size_t)st.st_size);
         return NULL;
     }
@@ -1419,13 +1492,22 @@ csilk_hnsw_mmap_open(const char* filepath)
     }
 
     const uint8_t*                   bptr = (const uint8_t*)base;
+    const uint8_t*                   end_ptr = bptr + (size_t)st.st_size;
+    const char*                      str_ptr = (const char*)(bptr + hdr->string_offset);
+    size_t                           str_bytes = (size_t)(hdr->graph_offset - hdr->string_offset);
+    size_t                           graph_bytes = (size_t)(file_len - hdr->graph_offset);
     const csilk_hnsw_node_meta_v2_t* meta =
         (const csilk_hnsw_node_meta_v2_t*)(bptr + hdr->node_meta_offset);
     uint32_t stride = hdr->stride_bytes;
 
     for (uint32_t i = 0; i < node_count; i++) {
         if (meta[i].level < 0 || (uint32_t)meta[i].level > HNSW_MAX_LEVEL ||
-            meta[i].doc_id_len > HNSW_MAX_DOC_LEN || meta[i].id != i) {
+            meta[i].doc_id_len > HNSW_MAX_DOC_LEN || meta[i].id != i ||
+            meta[i].doc_id_offset >= str_bytes ||
+            (uint64_t)meta[i].doc_id_len > str_bytes - meta[i].doc_id_offset ||
+            memchr(str_ptr + meta[i].doc_id_offset, '\0', str_bytes - meta[i].doc_id_offset) ==
+                NULL ||
+            meta[i].neighbor_offset > graph_bytes) {
             csilk_hnsw_index_free(index);
             return NULL;
         }
@@ -1439,7 +1521,7 @@ csilk_hnsw_mmap_open(const char* filepath)
         node->id = meta[i].id;
         node->level = meta[i].level;
         /* Zero-copy pointers to mmapped memory */
-        node->doc_id = (char*)(bptr + hdr->string_offset + meta[i].doc_id_offset);
+        node->doc_id = (char*)(str_ptr + meta[i].doc_id_offset);
         node->vector = (float*)(bptr + hdr->vector_offset + (uint64_t)i * stride);
 
         int lvl = node->level;
@@ -1455,11 +1537,42 @@ csilk_hnsw_mmap_open(const char* filepath)
 
         const uint8_t* gptr = bptr + hdr->graph_offset + meta[i].neighbor_offset;
         for (int l = 0; l <= lvl; l++) {
-            uint16_t deg = *(const uint16_t*)gptr;
+            if ((size_t)(end_ptr - gptr) < sizeof(uint16_t)) {
+                index->node_count = i;
+                free(node->neighbor_count);
+                free(node->neighbors);
+                free(node);
+                csilk_hnsw_index_free(index);
+                return NULL;
+            }
+            uint16_t deg = 0;
+            memcpy(&deg, gptr, sizeof(uint16_t));
             gptr += sizeof(uint16_t);
+            size_t cap = hnsw_layer_cap(index, l);
+            size_t list_bytes = (size_t)deg * sizeof(uint32_t);
+            if (deg > cap || (size_t)(end_ptr - gptr) < list_bytes) {
+                index->node_count = i;
+                free(node->neighbor_count);
+                free(node->neighbors);
+                free(node);
+                csilk_hnsw_index_free(index);
+                return NULL;
+            }
+            for (uint16_t k = 0; k < deg; k++) {
+                uint32_t nb_id = 0;
+                memcpy(&nb_id, gptr + (size_t)k * sizeof(uint32_t), sizeof(uint32_t));
+                if (nb_id >= node_count) {
+                    index->node_count = i;
+                    free(node->neighbor_count);
+                    free(node->neighbors);
+                    free(node);
+                    csilk_hnsw_index_free(index);
+                    return NULL;
+                }
+            }
             node->neighbor_count[l] = deg;
             node->neighbors[l] = (uint32_t*)gptr; /* Zero-copy pointer directly into mmap! */
-            gptr += (size_t)deg * sizeof(uint32_t);
+            gptr += list_bytes;
         }
 
         index->nodes[i] = node;

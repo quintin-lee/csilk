@@ -135,7 +135,10 @@ csilk_db_tx_scope_rollback(csilk_db_pool_t* pool, csilk_db_tx_scope_t* scope)
         snprintf(sql, sizeof(sql), "ROLLBACK TO SAVEPOINT %s;", scope->name);
         rc = csilk_db_exec(pool, sql);
         snprintf(sql, sizeof(sql), "RELEASE SAVEPOINT %s;", scope->name);
-        csilk_db_exec(pool, sql);
+        int rel_rc = csilk_db_exec(pool, sql);
+        if (rc == 0 && rel_rc != 0) {
+            rc = rel_rc;
+        }
     } else {
         rc = csilk_db_exec(pool, "ROLLBACK;");
     }

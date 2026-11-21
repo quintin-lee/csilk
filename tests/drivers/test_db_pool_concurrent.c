@@ -533,6 +533,50 @@ test_with_conn_concurrent_with_hl_api(void)
     printf("  passed\n");
 }
 
+static int
+noop_drv_connect(csilk_db_pool_t* pool, const char* dsn)
+{
+    (void)pool;
+    (void)dsn;
+    csilk_db_pool_set_connection(pool, (void*)0x1);
+    return 0;
+}
+
+static int
+noop_drv_disconnect(csilk_db_pool_t* pool)
+{
+    csilk_db_pool_set_connection(pool, NULL);
+    return 0;
+}
+
+static void
+test_non_stmt_driver_null_guard(void)
+{
+    static csilk_db_driver_t no_stmt_drv = {
+        .name = "test_no_stmt",
+        .connect = noop_drv_connect,
+        .disconnect = noop_drv_disconnect,
+    };
+    csilk_db_init();
+    assert(csilk_db_register_driver("test_no_stmt", &no_stmt_drv) == 0);
+    csilk_db_pool_t* pool = csilk_db_pool_new("test_no_stmt", "ignored");
+    assert(pool != nullptr);
+
+    const char*      p[] = {"a", NULL};
+    csilk_db_param_t tp[2] = {0};
+    tp[0].kind = CSILK_DB_PARAM_TEXT;
+    tp[0].text_val = "a";
+    tp[1].kind = (csilk_db_param_kind_t)(CSILK_DB_PARAM_NULL + 1);
+
+    assert(csilk_db_query_param_json(pool, "SELECT ?", p) == NULL);
+    assert(csilk_db_query_param_json_typed(pool, "SELECT ?", tp) == NULL);
+    assert(csilk_db_exec_param(pool, "INSERT ?", p) == -1);
+    assert(csilk_db_exec_param_typed(pool, "INSERT ?", tp) == -1);
+
+    csilk_db_pool_free(pool);
+    printf("test_non_stmt_driver_null_guard passed\n");
+}
+
 int
 main(void)
 {
@@ -545,6 +589,7 @@ main(void)
     test_with_conn_unlocked_parallel_and_reentrant();
     test_with_conn_signals_timeout_waiter();
     test_with_conn_concurrent_with_hl_api();
+    test_non_stmt_driver_null_guard();
 
     printf("test_db_pool_concurrent: ALL PASSED\n");
     return 0;

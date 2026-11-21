@@ -249,14 +249,24 @@ csilk_vector_db_search(csilk_vector_db_t*              db,
         float* scores = NULL;
         size_t count = 0;
         if (csilk_hnsw_search(idx, vector, (size_t)limit, &doc_ids, &scores, &count) == 0) {
-            res->count = count;
-            res->results = calloc(count, sizeof(csilk_vector_search_result_t));
-            if (res->results) {
+            if (count > 0) {
+                res->results = calloc(count, sizeof(csilk_vector_search_result_t));
+                if (!res->results) {
+                    for (size_t i = 0; i < count; i++) {
+                        free(doc_ids[i]);
+                    }
+                    free(scores);
+                    free(doc_ids);
+                    return -1;
+                }
                 for (size_t i = 0; i < count; i++) {
                     res->results[i].id = doc_ids[i];
                     res->results[i].score = scores[i];
                 }
+            } else {
+                res->results = NULL;
             }
+            res->count = count;
             free(scores);
             free(doc_ids);
             return 0;
