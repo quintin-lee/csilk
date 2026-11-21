@@ -18,6 +18,7 @@
 #elif __has_include(<mysql.h>)
 #include <mysql.h>
 #endif
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -84,14 +85,15 @@ mysql_parse_dsn(
         return;
     }
 
-    char* token = strtok(buf, ";");
+    char* saveptr = NULL;
+    char* token = strtok_r(buf, ";", &saveptr);
     while (token) {
         while (*token == ' ') {
             token++;
         }
         char* eq = strchr(token, '=');
         if (!eq) {
-            token = strtok(NULL, ";");
+            token = strtok_r(NULL, ";", &saveptr);
             continue;
         }
         *eq = '\0';
@@ -102,7 +104,12 @@ mysql_parse_dsn(
             free(*host);
             *host = strdup(val);
         } else if (strcmp(key, "port") == 0) {
-            *port = atoi(val);
+            char* endp = NULL;
+            errno = 0;
+            long parsed = strtol(val, &endp, 10);
+            if (errno == 0 && endp != val && *endp == '\0' && parsed > 0 && parsed <= 65535) {
+                *port = (int)parsed;
+            }
         } else if (strcmp(key, "user") == 0) {
             free(*user);
             *user = strdup(val);
@@ -114,7 +121,7 @@ mysql_parse_dsn(
             *dbname = strdup(val);
         }
 
-        token = strtok(NULL, ";");
+        token = strtok_r(NULL, ";", &saveptr);
     }
     free(buf);
 }
