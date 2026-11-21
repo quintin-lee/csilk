@@ -18,6 +18,7 @@
 
 #include "csilk/core/json/json.h"
 #include "csilk/core/internal.h"
+#include "../core/internal/srv_impl.h"
 #include "mq_internal.h"
 #include "csilk/core/sync.h"
 #include "csilk/messaging/mq.h"
@@ -25,13 +26,86 @@
 /* Forward declaration for synchronous MQ dispatch in io_uring backend */
 void on_mq_async(csilk_io_async_t* handle);
 
+typedef struct mq_ws_broadcast_task_s {
+    csilk_client_t* client;
+    csilk_ctx_t*    ctx;
+    char*           json;
+    size_t          len;
+} mq_ws_broadcast_task_t;
+
+static void
+_mq_broadcast_dispatch_cb(void* arg)
+{
+    mq_ws_broadcast_task_t* t = (mq_ws_broadcast_task_t*)arg;
+    if (!t) {
+        return;
+    }
+    if (!csilk_ctx_is_closed(t->ctx)) {
+        csilk_ws_send(t->ctx, (const uint8_t*)t->json, t->len, 0x1);
+    }
+    csilk_client_unref(t->client);
+    free(t->json);
+    free(t);
+}
+
 /* Sends a JSON monitor event describing a publish/deliver event to every
- * registered WebSocket monitor; the event is serialized and sent under
- * monitor_mutex. */
+ * registered WebSocket monitor without holding monitor_mutex across sends. */
 static void
 _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
 {
-    if (!mq || mq->monitor_count == 0) {
+    if (!mq) {
+        return;
+    }
+
+    size_t        inline_cap = 0;
+    size_t        dispatch_cap = 0;
+    csilk_ctx_t*  inline_stack[16];
+    csilk_ctx_t*  dispatch_stack[16];
+    csilk_ctx_t** inline_targets = inline_stack;
+    csilk_ctx_t** dispatch_targets = dispatch_stack;
+    size_t        inline_count = 0;
+    size_t        dispatch_count = 0;
+
+    csilk_mutex_lock(&mq->monitor_mutex);
+    size_t max_n = mq->monitor_count;
+    if (max_n > 16) {
+        inline_targets = malloc(max_n * sizeof(csilk_ctx_t*));
+        dispatch_targets = malloc(max_n * sizeof(csilk_ctx_t*));
+        inline_cap = inline_targets ? max_n : 0;
+        dispatch_cap = dispatch_targets ? max_n : 0;
+    } else {
+        inline_cap = 16;
+        dispatch_cap = 16;
+    }
+    for (size_t i = 0; i < mq->monitor_count;) {
+        csilk_ctx_t* mc = mq->monitors[i];
+        if (!mc || csilk_ctx_is_closed(mc)) {
+            for (size_t j = i; j + 1 < mq->monitor_count; j++) {
+                mq->monitors[j] = mq->monitors[j + 1];
+            }
+            mq->monitor_count--;
+            continue;
+        }
+        csilk_client_t* cl = (csilk_client_t*)_csilk_get_internal_client(mc);
+        if (cl != NULL) {
+            if (dispatch_count < dispatch_cap) {
+                csilk_client_ref(cl);
+                dispatch_targets[dispatch_count++] = mc;
+            }
+        } else if (inline_count < inline_cap) {
+            inline_targets[inline_count++] = mc;
+        }
+        i++;
+    }
+    csilk_mutex_unlock(&mq->monitor_mutex);
+
+    if (inline_count == 0 && dispatch_count == 0) {
+        if (inline_targets != inline_stack) {
+            free(inline_targets);
+        }
+        if (dispatch_targets != dispatch_stack) {
+            free(dispatch_targets);
+        }
         return;
     }
 
@@ -39,34 +113,70 @@ _mq_broadcast(csilk_mq_t* mq, const char* event, const char* topic, size_t len)
                 event,
                 topic ? topic : "",
                 len,
-                mq->monitor_count);
+                inline_count + dispatch_count);
 
     csilk_json_t* root = csilk_json_object();
-    csilk_json_add_string(root, "event", event);
-    if (topic) {
-        csilk_json_add_string(root, "topic", topic);
-    }
-    csilk_json_add_number(root, "payload_len", (double)len);
-    csilk_json_add_number(root, "timestamp", (double)time(NULL));
-    char* json = csilk_json_serialize(root, NULL);
-
-    csilk_mutex_lock(&mq->monitor_mutex);
-    for (size_t i = 0; i < mq->monitor_count;) {
-        csilk_ctx_t* mc = mq->monitors[i];
-        if (csilk_ctx_is_closed(mc)) {
-            for (size_t j = i; j + 1 < mq->monitor_count; j++) {
-                mq->monitors[j] = mq->monitors[j + 1];
-            }
-            mq->monitor_count--;
-            continue;
+    char*         json = NULL;
+    if (root) {
+        csilk_json_add_string(root, "event", event);
+        if (topic) {
+            csilk_json_add_string(root, "topic", topic);
         }
-        csilk_ws_send(mc, (uint8_t*)json, strlen(json), 0x1);
-        i++;
+        csilk_json_add_number(root, "payload_len", (double)len);
+        csilk_json_add_number(root, "timestamp", (double)time(NULL));
+        json = csilk_json_serialize(root, NULL);
+        csilk_json_free(root);
     }
-    csilk_mutex_unlock(&mq->monitor_mutex);
 
-    free(json);
-    csilk_json_free(root);
+    size_t json_len = json ? strlen(json) : 0;
+    if (json) {
+        for (size_t i = 0; i < inline_count; i++) {
+            if (!csilk_ctx_is_closed(inline_targets[i])) {
+                csilk_ws_send(inline_targets[i], (const uint8_t*)json, json_len, 0x1);
+            }
+        }
+        for (size_t i = 0; i < dispatch_count; i++) {
+            csilk_ctx_t*            mc = dispatch_targets[i];
+            csilk_client_t*         cl = (csilk_client_t*)_csilk_get_internal_client(mc);
+            mq_ws_broadcast_task_t* t = malloc(sizeof(mq_ws_broadcast_task_t));
+            char*                   jcopy = malloc(json_len + 1);
+            if (!t || !jcopy) {
+                free(t);
+                free(jcopy);
+                if (cl) {
+                    csilk_client_unref(cl);
+                }
+                continue;
+            }
+            memcpy(jcopy, json, json_len + 1);
+            t->client = cl;
+            t->ctx = mc;
+            t->json = jcopy;
+            t->len = json_len;
+            if (_csilk_dispatch_try(mc, _mq_broadcast_dispatch_cb, t) != 0) {
+                if (cl) {
+                    csilk_client_unref(cl);
+                }
+                free(t->json);
+                free(t);
+            }
+        }
+        free(json);
+    } else {
+        for (size_t i = 0; i < dispatch_count; i++) {
+            csilk_client_t* cl = (csilk_client_t*)_csilk_get_internal_client(dispatch_targets[i]);
+            if (cl) {
+                csilk_client_unref(cl);
+            }
+        }
+    }
+
+    if (inline_targets != inline_stack) {
+        free(inline_targets);
+    }
+    if (dispatch_targets != dispatch_stack) {
+        free(dispatch_targets);
+    }
 }
 
 /**
@@ -174,11 +284,9 @@ csilk_mq_publish(csilk_mq_t* mq, const char* topic, const void* payload, size_t 
 
     CSILK_LOG_D("MQ: Publishing message on topic '%s' (len: %zu)", topic, len);
 
-    if (mq->wal_fd >= 0) {
-        if (_mq_append_wal(mq, topic, payload, len) != 0) {
-            CSILK_LOG_E("MQ: Failed to append message to WAL for topic '%s'", topic);
-            return -1;
-        }
+    if (_mq_append_wal(mq, topic, payload, len) != 0) {
+        CSILK_LOG_E("MQ: Failed to append message to WAL for topic '%s'", topic);
+        return -1;
     }
 
     return _mq_enqueue(mq, topic, payload, len);

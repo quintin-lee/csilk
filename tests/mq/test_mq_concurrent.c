@@ -216,12 +216,57 @@ test_mq_rapid_publish(void)
     printf("MQ rapid publish: PASS (%d delivered)\n", (int)g_rapid_count);
 }
 
+static void
+test_mq_concurrent_publish_with_wal_switch(void)
+{
+    printf("Testing MQ concurrent publish with csilk_mq_set_persistence...\n");
+    char path1[] = "/tmp/csilk_mq_wal_sw1_XXXXXX";
+    char path2[] = "/tmp/csilk_mq_wal_sw2_XXXXXX";
+    int  fd1 = mkstemp(path1);
+    int  fd2 = mkstemp(path2);
+    assert(fd1 >= 0 && fd2 >= 0);
+    close(fd1);
+    close(fd2);
+
+    csilk_io_loop_t* loop = csilk_io_default_loop();
+    csilk_router_t*  router = csilk_router_new();
+    csilk_server_t*  server = csilk_server_new(router);
+    csilk_mq_t*      mq = csilk_server_get_mq(server);
+    assert(csilk_mq_set_persistence(mq, path1) == 0);
+
+    g_alice_count = 0;
+    csilk_mq_subscribe(mq, "wal_topic", alice_sub);
+
+    pthread_t    th[2];
+    thread_arg_t args[2] = {
+        {.mq = mq, .topic = "wal_topic", .id = 0, .count = 50},
+        {.mq = mq, .topic = "wal_topic", .id = 1, .count = 50},
+    };
+    for (int i = 0; i < 2; i++) {
+        pthread_create(&th[i], nullptr, publisher_thread, &args[i]);
+    }
+    assert(csilk_mq_set_persistence(mq, path2) == 0);
+    for (int i = 0; i < 2; i++) {
+        pthread_join(th[i], nullptr);
+    }
+
+    drain_loop(loop, &g_alice_count, 100);
+    assert(g_alice_count == 100);
+
+    csilk_server_free(server);
+    csilk_router_free(router);
+    unlink(path1);
+    unlink(path2);
+    printf("MQ concurrent publish with WAL switch: PASS\n");
+}
+
 int
 main(void)
 {
     test_mq_concurrent_publish();
     test_mq_concurrent_stress();
     test_mq_rapid_publish();
+    test_mq_concurrent_publish_with_wal_switch();
     printf("test_mq_concurrent: ALL PASSED\n");
     return 0;
 }

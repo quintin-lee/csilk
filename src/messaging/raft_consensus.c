@@ -277,10 +277,17 @@ _raft_flush_apply_callbacks(csilk_raft_node_t* node)
     if (node->apply_cb_pending) {
         idx = node->last_applied;
         const csilk_raft_log_entry_t* ent = _raft_log_get_locked(node, idx);
-        if (ent) {
+        if (ent && ent->data) {
             term = ent->term;
-            data = (uint8_t*)ent->data;
             len = ent->len;
+            data = malloc(len ? len : 1U);
+            if (data) {
+                if (len > 0) {
+                    memcpy(data, ent->data, len);
+                }
+            } else {
+                len = 0;
+            }
         }
         apply_cb = node->apply_cb;
         apply_user_data = node->apply_user_data;
@@ -290,8 +297,17 @@ _raft_flush_apply_callbacks(csilk_raft_node_t* node)
     if (node->snapshot_apply_cb_pending) {
         snap_idx = node->snapshot_last_index;
         snap_term = node->snapshot_last_term;
-        snap_data = (uint8_t*)node->snapshot_data;
-        snap_len = node->snapshot_len;
+        if (node->snapshot_data) {
+            snap_len = node->snapshot_len;
+            snap_data = malloc(snap_len ? snap_len : 1U);
+            if (snap_data) {
+                if (snap_len > 0) {
+                    memcpy(snap_data, node->snapshot_data, snap_len);
+                }
+            } else {
+                snap_len = 0;
+            }
+        }
         snap_cb = node->snapshot_apply_cb;
         apply_user_data = node->apply_user_data;
         node->snapshot_apply_cb_pending = 0;
@@ -301,9 +317,11 @@ _raft_flush_apply_callbacks(csilk_raft_node_t* node)
     if (data && apply_cb) {
         apply_cb(idx, term, data, len, apply_user_data);
     }
+    free(data);
     if (snap_data && snap_cb) {
         snap_cb(snap_idx, snap_term, snap_data, snap_len, apply_user_data);
     }
+    free(snap_data);
 }
 
 static void
@@ -844,20 +862,25 @@ raft_handle_is_req_locked(csilk_raft_node_t* node,
 
     if (req.offset == 0) {
         free(node->snap_rx_buf);
+        node->snap_rx_buf = NULL;
+        node->snap_rx_total = 0;
+        node->snap_rx_received = 0;
+        node->snap_rx_index = 0;
+        node->snap_rx_term = 0;
+
         node->snap_rx_buf = malloc((size_t)req.total_len);
         if (!node->snap_rx_buf) {
             goto send_reply;
         }
         node->snap_rx_total = (size_t)req.total_len;
-        node->snap_rx_received = 0;
         node->snap_rx_index = req.last_included_index;
         node->snap_rx_term = req.last_included_term;
     }
 
     if (!node->snap_rx_buf || req.last_included_index != node->snap_rx_index ||
         req.total_len != (uint64_t)node->snap_rx_total ||
-        req.offset != (uint64_t)node->snap_rx_received ||
-        req.offset + (uint64_t)req.chunk_len > req.total_len) {
+        req.offset != (uint64_t)node->snap_rx_received || req.offset > req.total_len ||
+        (uint64_t)req.chunk_len > req.total_len - req.offset) {
         resp.next_offset = (uint64_t)node->snap_rx_received;
         goto send_reply;
     }
@@ -890,6 +913,8 @@ raft_handle_is_req_locked(csilk_raft_node_t* node,
         node->snap_rx_buf = NULL;
         node->snap_rx_total = 0;
         node->snap_rx_received = 0;
+        node->snap_rx_index = 0;
+        node->snap_rx_term = 0;
     }
 
 send_reply: {
@@ -1157,36 +1182,31 @@ csilk_raft_node_listen(csilk_raft_node_t* node, const char* bind_addr)
     /* Re-binding closes the old listen fd. If the transport thread is running
      * and still holds a stale copy of that fd outside the lock, closing it
      * underneath would let it poll/recv/send on a number that the OS may
-     * reuse. Stop the transport before touching the fd, matching the teardown
-     * order used by csilk_raft_node_stop. */
+     * reuse. Stop and join the transport BEFORE closing or swapping listen_fd. */
     int rebind_transport_running = node->transport_running;
-    if (node->listen_fd >= 0) {
-        close(node->listen_fd);
-    }
-    node->listen_fd = fd;
-    node->listen_port = ntohs(bound.sin_port);
-    snprintf(node->listen_addr, sizeof(node->listen_addr), "%s", bind_addr);
-    csilk_mutex_unlock(&node->mutex);
-
     if (rebind_transport_running) {
-        csilk_mutex_lock(&node->mutex);
         node->transport_stop = 1;
         node->started = 0;
         csilk_cond_broadcast(&node->commit_cond);
         csilk_mutex_unlock(&node->mutex);
         (void)csilk_thread_join(&node->transport_thread);
 
-        /* Restart the transport against the freshly-bound fd. */
         csilk_mutex_lock(&node->mutex);
         node->transport_running = 0;
         node->transport_stop = 0;
-        if (node->listen_fd >= 0 && !node->transport_running) {
-            if (csilk_thread_create(&node->transport_thread, raft_transport_loop, node) == 0) {
-                node->transport_running = 1;
-            }
-        }
-        csilk_mutex_unlock(&node->mutex);
     }
+    if (node->listen_fd >= 0) {
+        close(node->listen_fd);
+    }
+    node->listen_fd = fd;
+    node->listen_port = ntohs(bound.sin_port);
+    snprintf(node->listen_addr, sizeof(node->listen_addr), "%s", bind_addr);
+    if (rebind_transport_running && node->listen_fd >= 0 && !node->transport_running) {
+        if (csilk_thread_create(&node->transport_thread, raft_transport_loop, node) == 0) {
+            node->transport_running = 1;
+        }
+    }
+    csilk_mutex_unlock(&node->mutex);
     return 0;
 }
 

@@ -215,7 +215,13 @@ _mq_wal_flush(void)
 CSILK_INTERNAL int
 _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t len)
 {
-    if (!mq || mq->wal_fd < 0 || !topic) {
+    if (!mq || !topic) {
+        return 0;
+    }
+
+    csilk_mutex_lock(&mq->wal_mutex);
+    if (mq->wal_fd < 0) {
+        csilk_mutex_unlock(&mq->wal_mutex);
         return 0;
     }
 
@@ -231,12 +237,14 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
 
     mq_wal_task_t* task = malloc(sizeof(mq_wal_task_t));
     if (!task) {
+        csilk_mutex_unlock(&mq->wal_mutex);
         return -1;
     }
     task->fd = mq->wal_fd;
     task->topic = strdup(topic);
     if (!task->topic) {
         free(task);
+        csilk_mutex_unlock(&mq->wal_mutex);
         return -1;
     }
     task->len = len;
@@ -245,6 +253,7 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
         if (!task->payload) {
             free(task->topic);
             free(task);
+            csilk_mutex_unlock(&mq->wal_mutex);
             return -1;
         }
         memcpy(task->payload, payload, len);
@@ -263,6 +272,7 @@ _mq_append_wal(csilk_mq_t* mq, const char* topic, const void* payload, size_t le
     }
     csilk_cond_signal(&g_mq_wal_cond);
     csilk_mutex_unlock(&g_mq_wal_mutex);
+    csilk_mutex_unlock(&mq->wal_mutex);
 
     return 0;
 }
