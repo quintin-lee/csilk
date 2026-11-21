@@ -62,7 +62,8 @@ csilk_wasm_get_memory_slice(csilk_wasm_memory_t* mem, uint32_t offset, uint32_t 
 csilk_wasm_plugin_t*
 csilk_wasm_plugin_load_file(const char* filepath, const csilk_wasm_config_t* config)
 {
-#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS && !defined(HAS_WAMR)
+    /* No WAMR and no stubs: fail-closed. */
     (void)filepath;
     (void)config;
     errno = ENOTSUP;
@@ -154,14 +155,21 @@ csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin)
         free(plugin->memory.data);
     }
 #ifdef HAS_WAMR
-    /* Unload the WAMR module before freeing the struct. WAMR copies the
-     * bytecode internally (wasm_runtime_load sets wasm_binary_freeable=false),
-     * so free(plugin->bytecode) below is always safe regardless of WAMR state.
-     * The unload here is for orderly WAMR-internal resource cleanup. */
-    if (plugin->use_wamr && plugin->wasm_module_id) {
-        wasm_runtime_unload((wasm_module_t)(uintptr_t)plugin->wasm_module_id);
-        plugin->wasm_module_id = 0;
-        plugin->wasm_instance = 0;
+    /* WAMR resource cleanup: de-instantiate the instance first, then
+     * unload the module.  The module was loaded with wasm_runtime_load
+     * (which takes ownership of the bytecode internally), so the module
+     * owns its own copy — free(plugin->bytecode) below is always safe.
+     * The instance must be de-instantiated before the module is unloaded,
+     * otherwise WAMR leaks the instance's internal frames. */
+    if (plugin->use_wamr) {
+        if (plugin->wasm_instance) {
+            wasm_runtime_deinstantiate((wasm_module_inst_t)(uintptr_t)plugin->wasm_instance);
+            plugin->wasm_instance = 0;
+        }
+        if (plugin->wasm_module_id) {
+            wasm_runtime_unload((wasm_module_t)(uintptr_t)plugin->wasm_module_id);
+            plugin->wasm_module_id = 0;
+        }
         plugin->use_wamr = false;
     }
 #endif

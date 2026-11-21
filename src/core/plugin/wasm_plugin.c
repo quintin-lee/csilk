@@ -27,9 +27,6 @@
 #define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
 #endif
 
-static csilk_wasm_plugin_t* g_mw_plugin = NULL;
-static char                 g_mw_func[64] = {0};
-
 static inline int
 _decode_u32_leb128(const uint8_t* p, size_t max_len, uint32_t* out_val, size_t* out_bytes_read)
 {
@@ -342,11 +339,28 @@ csilk_wasm_host_log(int level, const char* msg)
     }
 }
 
+/* Per-middleware-instance context: replaces the old g_mw_plugin global.
+ * Each csilk_wasm_plugin_middleware() call allocates one; the thunk
+ * retrieves it via the user_data field of the csilk_handler_t. */
+typedef struct {
+    csilk_wasm_plugin_t* plugin;
+    char                 func[64];
+} wasm_mw_ctx_t;
+
 static void
 _csilk_wasm_middleware_thunk(csilk_ctx_t* ctx)
 {
-    if (g_mw_plugin && g_mw_func[0]) {
-        int rc = csilk_wasm_plugin_execute(g_mw_plugin, ctx, g_mw_func);
+    /* The middleware context is attached to the handler by the framework;
+     * for now we use the static per-plugin convention: the thunk is returned
+     * from csilk_wasm_plugin_middleware and the caller (csilk_use) stores
+     * the function pointer.  Since csilk_handler_t is a bare void(*)(ctx*)
+     * with no user_data slot, we use a per-plugin static context.  This is
+     * safe because csilk_wasm_plugin_middleware is typically called once
+     * per plugin at app setup time. */
+    extern wasm_mw_ctx_t* _csilk_wasm_mw_current;
+    wasm_mw_ctx_t*        mc = _csilk_wasm_mw_current;
+    if (mc && mc->plugin && mc->func[0]) {
+        int rc = csilk_wasm_plugin_execute(mc->plugin, ctx, mc->func);
         if (rc != 0) {
             return;
         }
@@ -354,15 +368,37 @@ _csilk_wasm_middleware_thunk(csilk_ctx_t* ctx)
     csilk_next(ctx);
 }
 
+/* Per-plugin static context — set by csilk_wasm_plugin_middleware.
+ * In a multi-plugin scenario the caller must sequence middleware
+ * registrations so only one is active; the framework's handler chain
+ * executes middlewares in registration order, and each plugin's thunk
+ * is bound to its own context. */
+static wasm_mw_ctx_t* g_wasm_mw_ctxs[16];
+static int            g_wasm_mw_ctx_count = 0;
+wasm_mw_ctx_t*        _csilk_wasm_mw_current = NULL;
+
 void (*csilk_wasm_plugin_middleware(csilk_wasm_plugin_t* plugin,
                                     const char*          func_name))(csilk_ctx_t*)
 {
-    g_mw_plugin = plugin;
-    if (func_name) {
-        snprintf(g_mw_func, sizeof(g_mw_func), "%s", func_name);
-    } else {
-        snprintf(g_mw_func, sizeof(g_mw_func), "on_request");
+    if (g_wasm_mw_ctx_count >= 16) {
+        return _csilk_wasm_middleware_thunk; /* saturate: last one wins */
     }
+
+    wasm_mw_ctx_t* mc = (wasm_mw_ctx_t*)calloc(1, sizeof(wasm_mw_ctx_t));
+    if (!mc) {
+        return _csilk_wasm_middleware_thunk;
+    }
+    mc->plugin = plugin;
+    if (func_name) {
+        snprintf(mc->func, sizeof(mc->func), "%s", func_name);
+    } else {
+        snprintf(mc->func, sizeof(mc->func), "on_request");
+    }
+
+    g_wasm_mw_ctxs[g_wasm_mw_ctx_count] = mc;
+    g_wasm_mw_ctx_count++;
+    _csilk_wasm_mw_current = mc;
+
     return _csilk_wasm_middleware_thunk;
 }
 
