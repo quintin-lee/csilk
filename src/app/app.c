@@ -38,64 +38,48 @@
 #include "core/internal/srv_internal.h"
 #include "app_internal.h"
 
-/** @brief Maximum number of static file routes per app. */
-enum { CSILK_MAX_STATIC = 32 };
 /** @brief Default HTTP listen port. */
 enum { CSILK_DFL_PORT = 8080 };
 
-/** @brief Internal: descriptor for a static file serving route mapping URL
- * prefix to filesystem directory. */
-typedef struct {
-    char url_prefix[128];
-    char root_dir[256];
-} static_route_t;
+/** @brief Router reference for the built-in OpenAPI handler.
+ * Now per-app: each app instance owns its own static-route table and
+ * middleware thunk pool, so multiple apps in one process do not
+ * interfere with each other. */
 
-/** @brief Router reference for the built-in OpenAPI handler. */
-static csilk_router_t* s_openapi_router = NULL;
-static csilk_mutex_t   s_app_mutex;
-static csilk_once_t    s_app_mutex_once = CSILK_ONCE_INIT;
-
-/* ---- global static-route table ---- */
-static static_route_t g_static[CSILK_MAX_STATIC];
-static int            g_static_n = 0;
-
-/* ---- global middleware thunk pool ---- */
-static mw_thunk_t s_mw_thunk_pool[CSILK_MAX_MW_THUNKS];
-static int        s_mw_thunk_used = 0;
-
-/** @brief Internal: initialize the application-level mutex (called once via
- * csilk_once). */
-static void
-init_app_mutex(void)
+/** @brief Internal: recover the owning app instance from a request context.
+ * Handlers registered via csilk_app_* are static functions that cannot
+ * capture a csilk_app_t* directly, so they recover it through the
+ * context's server handle. */
+static csilk_app_t*
+ctx_app(csilk_ctx_t* c)
 {
-    csilk_mutex_init(&s_app_mutex);
+    if (!c) {
+        return NULL;
+    }
+    csilk_server_t* s = csilk_ctx_get_server(c);
+    if (!s) {
+        return NULL;
+    }
+    return (csilk_app_t*)s->app;
 }
 
-/** @brief Internal: safely retrieve the current OpenAPI router under the app
- * mutex. */
+/** @brief Internal: safely retrieve the app's router under a per-app lock.
+ * Returns the app's router if the OpenAPI endpoint is enabled, else NULL. */
 static csilk_router_t*
-get_openapi_router(void)
+app_openapi_router(csilk_app_t* app)
 {
-    csilk_mutex_lock(&s_app_mutex);
-    csilk_router_t* r = s_openapi_router;
-    csilk_mutex_unlock(&s_app_mutex);
-    return r;
-}
-
-/** @brief Internal: atomically set the global OpenAPI router reference. */
-static void
-set_openapi_router(csilk_router_t* r)
-{
-    csilk_mutex_lock(&s_app_mutex);
-    s_openapi_router = r;
-    csilk_mutex_unlock(&s_app_mutex);
+    if (!app || !app->openapi_enabled) {
+        return NULL;
+    }
+    return app->router;
 }
 
 /** @brief Built-in handler for the /openapi.json endpoint. */
 static void
 openapi_handler(csilk_ctx_t* c)
 {
-    csilk_router_t* router = get_openapi_router();
+    csilk_app_t*    app = ctx_app(c);
+    csilk_router_t* router = app_openapi_router(app);
 
     if (router) {
         csilk_serve_openapi(
@@ -110,7 +94,8 @@ openapi_handler(csilk_ctx_t* c)
 static void
 docs_handler(csilk_ctx_t* c)
 {
-    csilk_router_t* router = get_openapi_router();
+    csilk_app_t*    app = ctx_app(c);
+    csilk_router_t* router = app_openapi_router(app);
 
     if (!router) {
         csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
@@ -172,7 +157,8 @@ contains_path_traversal(const char* path)
 }
 
 /** @brief Internal: serve a file from the matched static route prefix,
- * rejecting directory-traversal paths. */
+ * rejecting directory-traversal paths.  Now per-app: the static-route table
+ * lives inside the owning csilk_app_t so multiple apps do not share state. */
 static void
 static_serve(csilk_ctx_t* c)
 {
@@ -184,20 +170,26 @@ static_serve(csilk_ctx_t* c)
         return;
     }
 
-    csilk_mutex_lock(&s_app_mutex);
-    int n = g_static_n;
+    csilk_app_t* app = ctx_app(c);
+    if (!app) {
+        csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+        return;
+    }
+
+    csilk_mutex_lock(&app->app_mutex);
+    int n = app->static_n;
     for (int i = 0; i < n; i++) {
-        size_t plen = strlen(g_static[i].url_prefix);
-        if (!strncmp(path, g_static[i].url_prefix, plen)) {
-            const char* prefix = g_static[i].url_prefix;
-            const char* root = g_static[i].root_dir;
-            csilk_mutex_unlock(&s_app_mutex);
+        size_t plen = strlen(app->static_routes[i].url_prefix);
+        if (!strncmp(path, app->static_routes[i].url_prefix, plen)) {
+            const char* prefix = app->static_routes[i].url_prefix;
+            const char* root = app->static_routes[i].root_dir;
+            csilk_mutex_unlock(&app->app_mutex);
             csilk_set(c, "static_prefix", (void*)prefix);
             csilk_static(c, root);
             return;
         }
     }
-    csilk_mutex_unlock(&s_app_mutex);
+    csilk_mutex_unlock(&app->app_mutex);
     csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
 }
 
@@ -219,7 +211,8 @@ csilk_app_new(const char* config_path)
         return NULL;
     }
 
-    csilk_once(&s_app_mutex_once, init_app_mutex);
+    csilk_mutex_init(&app->app_mutex);
+    app->openapi_enabled = 1;
     memset(&app->config, 0, sizeof(app->config));
 
     if (config_path && csilk_load_config(config_path, &app->config) == 0) {
@@ -248,6 +241,7 @@ csilk_app_new(const char* config_path)
     if (!app->router || !app->server) {
         goto fail;
     }
+    app->server->app = app; /* back-reference so handlers can recover the app */
 
     csilk_server_set_config(app->server, &app->config.server);
     csilk_server_use(app->server, csilk_recovery_handler);
@@ -259,7 +253,6 @@ csilk_app_new(const char* config_path)
     }
 
     /* Register built-in /openapi.json and /docs /swagger endpoints */
-    set_openapi_router(app->router);
     {
         csilk_handler_t openapi_h[] = {openapi_handler};
         csilk_router_add_extended(app->router,
@@ -319,6 +312,7 @@ csilk_app_free(csilk_app_t* app)
     }
     csilk_router_free(app->router);
     csilk_config_free(&app->config);
+    csilk_mutex_destroy(&app->app_mutex);
     extern void csilk_openapi_cache_invalidate(void);
     csilk_openapi_cache_invalidate();
     free(app);
@@ -402,11 +396,15 @@ csilk_app_log_json(csilk_app_t* app, int enable)
  * call csilk_app_use_mw at startup. */
 
 /** @brief Internal: emit a distinct trampoline that dispatches to thunk slot
- * @p N.  Expands to one static function per slot. */
+ * @p N.  The slot is resolved through the owning csilk_app_t (recovered from
+ * the request context) so each app has its own bounded thunk pool. */
 #define CSILK_MW_THUNK_SHIM(N)                                                                     \
     static void _csilk_mw_thunk_shim_##N(csilk_ctx_t* c)                                           \
     {                                                                                              \
-        s_mw_thunk_pool[N].fn(c, s_mw_thunk_pool[N].user_data);                                    \
+        csilk_app_t* app = ctx_app(c);                                                             \
+        if (app && app->mw_thunk_used > N) {                                                       \
+            app->mw_thunk_pool[N].fn(c, app->mw_thunk_pool[N].user_data);                          \
+        }                                                                                          \
     }
 
 CSILK_MW_THUNK_SHIM(0)
@@ -440,19 +438,20 @@ csilk_app_use_mw(csilk_app_t* app, csilk_middleware_t mw, void* user_data)
     if (!app || !app->server || !mw) {
         return;
     }
-    int slot = s_mw_thunk_used;
-    if (slot >= 8) {
-        CSILK_LOG_E("App: dual-parameter middleware shim limit (8) reached. Dropped: %p",
+    int slot = app->mw_thunk_used;
+    if (slot >= CSILK_MAX_MW_THUNKS) {
+        CSILK_LOG_E("App: dual-parameter middleware shim limit (%d) reached. Dropped: %p",
+                    CSILK_MAX_MW_THUNKS,
                     (void*)mw);
         return;
     }
-    s_mw_thunk_pool[slot].fn = mw;
-    s_mw_thunk_pool[slot].user_data = user_data;
-    s_mw_thunk_used = slot + 1;
+    app->mw_thunk_pool[slot].fn = mw;
+    app->mw_thunk_pool[slot].user_data = user_data;
+    app->mw_thunk_used = slot + 1;
 
     csilk_handler_t shim = s_mw_thunk_shims[slot];
     if (csilk_server_use(app->server, shim) != 0) {
-        s_mw_thunk_used = slot; /* roll back slot on failure */
+        app->mw_thunk_used = slot; /* roll back slot on failure */
         CSILK_LOG_E("App: failed to register dual-parameter middleware %p", (void*)mw);
         return;
     }
@@ -483,7 +482,7 @@ csilk_app_enable_openapi(csilk_app_t* app, int enable)
     if (!app) {
         return;
     }
-    set_openapi_router(enable ? app->router : NULL);
+    app->openapi_enabled = enable;
     CSILK_LOG_I("OpenAPI endpoint %s", enable ? "enabled" : "disabled");
 }
 
@@ -503,18 +502,21 @@ csilk_app_static(csilk_app_t* app, const char* prefix, const char* root_dir)
         return;
     }
 
-    csilk_once(&s_app_mutex_once, init_app_mutex);
-    csilk_mutex_lock(&s_app_mutex);
-    if (g_static_n >= CSILK_MAX_STATIC) {
-        csilk_mutex_unlock(&s_app_mutex);
+    csilk_mutex_lock(&app->app_mutex);
+    if (app->static_n >= CSILK_MAX_STATIC) {
+        csilk_mutex_unlock(&app->app_mutex);
         CSILK_LOG_E("Static route limit (%d) reached. Route dropped: %s", CSILK_MAX_STATIC, prefix);
         return;
     }
 
-    int idx = g_static_n++;
-    snprintf(g_static[idx].url_prefix, sizeof(g_static[idx].url_prefix), "%s", prefix);
-    snprintf(g_static[idx].root_dir, sizeof(g_static[idx].root_dir), "%s", root_dir);
-    csilk_mutex_unlock(&s_app_mutex);
+    int idx = app->static_n++;
+    snprintf(app->static_routes[idx].url_prefix,
+             sizeof(app->static_routes[idx].url_prefix),
+             "%s",
+             prefix);
+    snprintf(
+        app->static_routes[idx].root_dir, sizeof(app->static_routes[idx].root_dir), "%s", root_dir);
+    csilk_mutex_unlock(&app->app_mutex);
 
     char wild[] = "/*path";
     char idxrt[] = "/";

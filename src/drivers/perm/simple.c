@@ -17,6 +17,7 @@
  */
 
 #include "csilk/core/json/json.h"
+#include "csilk/core/sync.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,10 +29,16 @@
 enum { MAX_RULES = 128 };
 
 /** @brief Global rule table.  Populated at startup by
- * csilk_perm_simple_allow(). */
+ * csilk_perm_simple_allow().  Protected by s_rules_mutex so the table can be
+ * hot-modified while request threads read it. */
 static csilk_perm_rule_t rules[MAX_RULES];
 /** @brief Current number of rules loaded. */
 static int rule_count = 0;
+/** @brief Read-write style mutex guarding the rule table.
+ * A plain mutex is used (csilk has no rwlock primitive) — the critical
+ * section is short (a handful of pointer stores) so the overhead of a
+ * write-lock is negligible compared to the O(n) scan in simple_check(). */
+static csilk_mutex_t s_rules_mutex;
 
 /**
  * @brief Match a pattern string against a value.
@@ -117,12 +124,16 @@ simple_check(csilk_ctx_t* c, const char* permission, const char* resource)
         return -1;
     }
 
-    for (int i = 0; i < rule_count; i++) {
+    csilk_mutex_lock(&s_rules_mutex);
+    int n = rule_count;
+    for (int i = 0; i < n; i++) {
         if (match_pattern(rules[i].role, role) && match_pattern(rules[i].permission, permission) &&
             match_pattern(rules[i].resource, resource)) {
+            csilk_mutex_unlock(&s_rules_mutex);
             return 0;
         }
     }
+    csilk_mutex_unlock(&s_rules_mutex);
 
     return -1;
 }
@@ -141,7 +152,10 @@ csilk_perm_driver_t csilk_perm_simple_driver = {
 void
 csilk_perm_simple_init(void)
 {
+    csilk_mutex_init(&s_rules_mutex);
+    csilk_mutex_lock(&s_rules_mutex);
     rule_count = 0;
+    csilk_mutex_unlock(&s_rules_mutex);
     csilk_perm_register_driver("simple", &csilk_perm_simple_driver);
 }
 
@@ -156,22 +170,31 @@ csilk_perm_simple_init(void)
 int
 csilk_perm_simple_allow(const char* role, const char* permission, const char* resource)
 {
-    if (!role || !permission || !resource || rule_count >= MAX_RULES) {
+    if (!role || !permission || !resource) {
+        return -1;
+    }
+    csilk_mutex_lock(&s_rules_mutex);
+    if (rule_count >= MAX_RULES) {
+        csilk_mutex_unlock(&s_rules_mutex);
         return -1;
     }
     rules[rule_count].role = role;
     rules[rule_count].permission = permission;
     rules[rule_count].resource = resource;
     rule_count++;
+    csilk_mutex_unlock(&s_rules_mutex);
     return 0;
 }
 
-/**
- * @brief Remove all permission rules.
+/** @brief Remove all permission rules.
  * Resets the table so that all subsequent checks will be denied.
- */
+ * Also destroys the rule-table mutex (the simple driver is a process-lifetime
+ * singleton; call csilk_perm_simple_init() again to re-initialize). */
 void
 csilk_perm_simple_clear(void)
 {
+    csilk_mutex_lock(&s_rules_mutex);
     rule_count = 0;
+    csilk_mutex_unlock(&s_rules_mutex);
+    csilk_mutex_destroy(&s_rules_mutex);
 }
