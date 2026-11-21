@@ -114,9 +114,40 @@ test_workflow_distributed_mq()
     printf("test_workflow_distributed_mq: PASS\n");
 }
 
+static void
+test_workflow_distributed_unregister_on_free(void)
+{
+    printf("Testing distributed workflow unregister-on-free UAF safety...\n");
+    mkdir("test_distributed_wals", 0755);
+
+    csilk_server_t* server = csilk_server_new(nullptr);
+    csilk_mq_t*     mq = csilk_server_get_mq(server);
+
+    csilk_wf_t* wf = csilk_wf_new("dist_free_wf");
+    csilk_wf_set_persistence(wf, "test_distributed_wals");
+    csilk_wf_enable_distributed(wf, mq);
+
+    /* Destroy the workflow before an orphan MQ result message arrives. */
+    csilk_wf_free(wf);
+
+    const char* msg = "{\"exec_id\":\"../bad\",\"node_id\":\"n\",\"output\":\"x\"}";
+    csilk_mq_publish(mq, "csilk.wf.results", msg, strlen(msg));
+    const char* msg2 = "{\"exec_id\":\"orphan_id\",\"node_id\":\"n\",\"output\":\"x\"}";
+    csilk_mq_publish(mq, "csilk.wf.results", msg2, strlen(msg2));
+
+    for (int i = 0; i < 20; i++) {
+        csilk_io_run(csilk_io_default_loop(), CSILK_IO_RUN_NOWAIT);
+        usleep(2000);
+    }
+
+    csilk_server_free(server);
+    printf("test_workflow_distributed_unregister_on_free: PASS\n");
+}
+
 int
 main()
 {
     test_workflow_distributed_mq();
+    test_workflow_distributed_unregister_on_free();
     return 0;
 }

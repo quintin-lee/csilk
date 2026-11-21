@@ -93,7 +93,35 @@ class OpenAIMockHandler(BaseHTTPRequestHandler):
             self.send_header('Connection', 'close')
             self.end_headers()
 
-            if tools or "weather" in last_msg.lower():
+            if "negative_tool_idx" in last_msg:
+                chunks = [
+                    {
+                        "id": "chatcmpl-mock-neg",
+                        "object": "chat.completion.chunk",
+                        "created": int(time.time()),
+                        "model": "gpt-3.5-turbo",
+                        "choices": [{
+                            "index": 0,
+                            "delta": {
+                                "role": "assistant",
+                                "tool_calls": [
+                                    {
+                                        "index": -1,
+                                        "id": "call_bad",
+                                        "function": {"name": "bad_tool", "arguments": "{}"}
+                                    },
+                                    {
+                                        "index": 0,
+                                        "id": "call_ok",
+                                        "function": {"name": "get_weather", "arguments": "{\"city\":\"NYC\"}"}
+                                    }
+                                ]
+                            },
+                            "finish_reason": None
+                        }]
+                    }
+                ]
+            elif tools or "weather" in last_msg.lower():
                 # Streamed tool call
                 chunks = [
                     {

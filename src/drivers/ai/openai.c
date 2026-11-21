@@ -241,7 +241,11 @@ process_stream_line(struct curl_context* ctx, const char* line)
                     csilk_json_t* idx_json = csilk_json_get(tc, "index");
                     size_t        idx = 0;
                     if (idx_json) {
-                        idx = (size_t)csilk_json_int_value(idx_json);
+                        int raw_idx = csilk_json_int_value(idx_json);
+                        if (raw_idx < 0 || raw_idx >= 256) {
+                            continue;
+                        }
+                        idx = (size_t)raw_idx;
                     } else if (ctx->res->tool_call_count > 0) {
                         idx = ctx->res->tool_call_count - 1;
                     }
@@ -266,9 +270,9 @@ process_stream_line(struct curl_context* ctx, const char* line)
                     csilk_json_t* fid = csilk_json_get(tc, "id");
                     if (fid && csilk_json_is_string(fid)) {
                         const char* id_str = csilk_json_string_value(fid);
-                        if (!ctx->res->tool_calls[idx].id) {
+                        if (id_str && !ctx->res->tool_calls[idx].id) {
                             ctx->res->tool_calls[idx].id = strdup(id_str);
-                        } else {
+                        } else if (id_str) {
                             size_t cur_id_len = strlen(ctx->res->tool_calls[idx].id);
                             size_t id_len = strlen(id_str);
                             size_t total_id_len = cur_id_len + id_len + 1;
@@ -287,9 +291,9 @@ process_stream_line(struct curl_context* ctx, const char* line)
                         csilk_json_t* fname = csilk_json_get(func, "name");
                         if (fname && csilk_json_is_string(fname)) {
                             const char* name_str = csilk_json_string_value(fname);
-                            if (!ctx->res->tool_calls[idx].name) {
+                            if (name_str && !ctx->res->tool_calls[idx].name) {
                                 ctx->res->tool_calls[idx].name = strdup(name_str);
-                            } else {
+                            } else if (name_str) {
                                 size_t cur_name_len = strlen(ctx->res->tool_calls[idx].name);
                                 size_t name_len = strlen(name_str);
                                 size_t total_name_len = cur_name_len + name_len + 1;
@@ -306,7 +310,7 @@ process_stream_line(struct curl_context* ctx, const char* line)
                         csilk_json_t* fargs = csilk_json_get(func, "arguments");
                         if (fargs && csilk_json_is_string(fargs)) {
                             const char* arg_chunk = csilk_json_string_value(fargs);
-                            size_t      alen = strlen(arg_chunk);
+                            size_t      alen = arg_chunk ? strlen(arg_chunk) : 0;
                             if (alen > 0) {
                                 size_t cur_alen = ctx->res->tool_calls[idx].arguments
                                                       ? strlen(ctx->res->tool_calls[idx].arguments)
@@ -670,23 +674,41 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
             /* Extract tool calls if the model requested function invocations */
             csilk_json_t* tcalls = csilk_json_get(msg, "tool_calls");
             if (csilk_json_is_array(tcalls)) {
-                res->tool_call_count = csilk_json_array_size(tcalls);
-                res->tool_calls = calloc(res->tool_call_count, sizeof(csilk_ai_tool_call_t));
-                for (size_t i = 0; i < res->tool_call_count; i++) {
-                    csilk_json_t* tc = csilk_json_array_get(tcalls, i);
-                    csilk_json_t* fid = csilk_json_get(tc, "id");
-                    csilk_json_t* func = csilk_json_get(tc, "function");
-                    csilk_json_t* fname = csilk_json_get(func, "name");
-                    csilk_json_t* fargs = csilk_json_get(func, "arguments");
+                size_t raw_cnt = csilk_json_array_size(tcalls);
+                if (raw_cnt > 1024) {
+                    raw_cnt = 1024;
+                }
+                res->tool_calls = calloc(raw_cnt ? raw_cnt : 1, sizeof(csilk_ai_tool_call_t));
+                if (res->tool_calls) {
+                    res->tool_call_count = raw_cnt;
+                    for (size_t i = 0; i < res->tool_call_count; i++) {
+                        csilk_json_t* tc = csilk_json_array_get(tcalls, i);
+                        if (!tc) {
+                            continue;
+                        }
+                        csilk_json_t* fid = csilk_json_get(tc, "id");
+                        csilk_json_t* func = csilk_json_get(tc, "function");
+                        csilk_json_t* fname = func ? csilk_json_get(func, "name") : NULL;
+                        csilk_json_t* fargs = func ? csilk_json_get(func, "arguments") : NULL;
 
-                    if (fid) {
-                        res->tool_calls[i].id = strdup(csilk_json_string_value(fid));
-                    }
-                    if (fname) {
-                        res->tool_calls[i].name = strdup(csilk_json_string_value(fname));
-                    }
-                    if (fargs) {
-                        res->tool_calls[i].arguments = strdup(csilk_json_string_value(fargs));
+                        if (fid && csilk_json_is_string(fid)) {
+                            const char* s = csilk_json_string_value(fid);
+                            if (s) {
+                                res->tool_calls[i].id = strdup(s);
+                            }
+                        }
+                        if (fname && csilk_json_is_string(fname)) {
+                            const char* s = csilk_json_string_value(fname);
+                            if (s) {
+                                res->tool_calls[i].name = strdup(s);
+                            }
+                        }
+                        if (fargs && csilk_json_is_string(fargs)) {
+                            const char* s = csilk_json_string_value(fargs);
+                            if (s) {
+                                res->tool_calls[i].arguments = strdup(s);
+                            }
+                        }
                     }
                 }
             }

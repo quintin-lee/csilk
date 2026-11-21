@@ -61,6 +61,8 @@ typedef struct {
 
 /* --- Top-Level Static Function Prototypes --- */
 
+static void  _csilk_llama_lib_mutex_init(void);
+static bool  _csilk_llama_is_safe_lib_path(const char* path);
 static void  _csilk_llama_lib_ensure_init(void);
 static void* llama_init(const char* api_key, const char* base_url);
 static int
@@ -77,7 +79,7 @@ static void llama_free(void* state_ptr);
 static llama_lib_t   g_llama_lib = {0};
 static int           g_llama_lib_probed = 0;
 static csilk_mutex_t g_llama_lib_mutex;
-static int           g_llama_lib_mutex_inited = 0;
+static csilk_once_t  g_llama_lib_once = CSILK_ONCE_INIT;
 
 static const csilk_ai_driver_t s_llama_driver = {
     .name = "llama",
@@ -98,18 +100,50 @@ static const csilk_ai_driver_t s_llama_cpp_driver = {
 /* --- Implementation --- */
 
 static void
+_csilk_llama_lib_mutex_init(void)
+{
+    csilk_mutex_init(&g_llama_lib_mutex);
+}
+
+static bool
+_csilk_llama_is_safe_lib_path(const char* path)
+{
+    if (!path || path[0] == '\0') {
+        return false;
+    }
+    size_t len = strlen(path);
+    if (len >= 512) {
+        return false;
+    }
+    for (size_t i = 0; i < len; i++) {
+        unsigned char ch = (unsigned char)path[i];
+        if (ch < 0x20 || ch == 0x7f) {
+            return false;
+        }
+    }
+    /* Reject parent-directory traversal components. */
+    if (strstr(path, "..") != nullptr) {
+        return false;
+    }
+    /* Require a shared library filename (.so or .dylib). */
+    if (strstr(path, ".so") == nullptr && strstr(path, ".dylib") == nullptr) {
+        return false;
+    }
+    return true;
+}
+
+static void
 _csilk_llama_lib_ensure_init(void)
 {
-    if (!g_llama_lib_mutex_inited) {
-        csilk_mutex_init(&g_llama_lib_mutex);
-        g_llama_lib_mutex_inited = 1;
-    }
+    csilk_once(&g_llama_lib_once, _csilk_llama_lib_mutex_init);
 
     csilk_mutex_lock(&g_llama_lib_mutex);
     if (!g_llama_lib_probed) {
         g_llama_lib_probed = 1;
 
-        const char* custom_lib = getenv("CSILK_LLAMA_LIB");
+        const char* raw_custom_lib = getenv("CSILK_LLAMA_LIB");
+        const char* custom_lib =
+            _csilk_llama_is_safe_lib_path(raw_custom_lib) ? raw_custom_lib : nullptr;
         const char* candidates[] = {
             custom_lib,
             "libllama.so",
@@ -118,10 +152,11 @@ _csilk_llama_lib_ensure_init(void)
             nullptr,
         };
 
-        for (size_t i = 0; candidates[i] != nullptr; i++) {
+        for (size_t i = 0; i < sizeof(candidates) / sizeof(candidates[0]); i++) {
             if (!candidates[i] || candidates[i][0] == '\0') {
                 continue;
             }
+            // NOLINTNEXTLINE(clang-analyzer-optin.taint.GenericTaint)
             void* h = dlopen(candidates[i], RTLD_NOW | RTLD_LOCAL);
             if (h) {
                 g_llama_lib.dl_handle = h;
@@ -168,6 +203,11 @@ llama_init(const char* api_key, const char* base_url)
                            ? base_url
                            : ((api_key && api_key[0] != '\0') ? api_key : "simulated-llama");
     state->model_path = strdup(path);
+    if (!state->model_path) {
+        csilk_mutex_destroy(&state->mutex);
+        free(state);
+        return nullptr;
+    }
     state->n_threads = 4;
     state->n_ctx = 2048;
     state->temperature = 0.7f;

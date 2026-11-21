@@ -615,6 +615,34 @@ test_embeddings_async(void)
 }
 
 static void
+test_chat_streaming_negative_tool_idx(void)
+{
+    printf("Testing chat completion (streaming with out-of-range tool index)...\n");
+    csilk_ai_t* ai = csilk_ai_new("openai", "mock-key", get_base_url());
+    assert(ai != NULL);
+
+    csilk_ai_message_t      msg = {.role = "user", .content = "negative_tool_idx"};
+    csilk_ai_chat_request_t req = {0};
+    req.model = "gpt-3.5-turbo";
+    req.messages = &msg;
+    req.message_count = 1;
+    req.stream = true;
+    req.timeout_ms = 5000;
+
+    csilk_ai_chat_response_t res = {0};
+    int                      rc = csilk_ai_chat(ai, &req, &res);
+    assert(rc == 0);
+    assert(res.tool_call_count == 1);
+    assert(res.tool_calls != NULL);
+    assert(res.tool_calls[0].id != NULL && strcmp(res.tool_calls[0].id, "call_ok") == 0);
+    assert(res.tool_calls[0].name != NULL && strcmp(res.tool_calls[0].name, "get_weather") == 0);
+
+    csilk_ai_chat_response_free(&res);
+    csilk_ai_free(ai);
+    printf("  passed\n");
+}
+
+static void
 test_free_null_ai(void)
 {
     printf("Testing csilk_ai_free with NULL...\n");
@@ -639,6 +667,7 @@ main(void)
     test_chat_non_streaming();
     test_chat_streaming();
     test_chat_streaming_with_tools();
+    test_chat_streaming_negative_tool_idx();
     test_chat_with_tools();
     test_chat_null_request();
     test_chat_null_response();

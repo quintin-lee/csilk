@@ -91,8 +91,12 @@ csilk_ai_trace_set_system_prompt(csilk_ai_trace_t* t, const char* prompt)
     if (!t) {
         return;
     }
+    char* copy = strdup(prompt ? prompt : "");
+    if (!copy) {
+        return;
+    }
     free(t->system_prompt);
-    t->system_prompt = strdup(prompt ? prompt : "");
+    t->system_prompt = copy;
 }
 
 void
@@ -106,6 +110,9 @@ csilk_ai_trace_append_output(csilk_ai_trace_t* t, const char* chunk)
     }
     size_t clen = strlen(chunk);
     size_t olen = t->output_content ? strlen(t->output_content) : 0;
+    if (clen > SIZE_MAX - olen - 1) {
+        return;
+    }
     size_t nlen = olen + clen + 1;
     char*  buf = realloc(t->output_content, nlen);
     if (!buf) {

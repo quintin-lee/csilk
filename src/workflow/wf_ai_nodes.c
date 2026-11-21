@@ -32,12 +32,19 @@ apply_filter(csilk_wf_ctx_t* ctx, const char* filter, char* val)
             val[i] = tolower(val[i]);
         }
     } else if (strcmp(filter, "trim") == 0) {
+        size_t vlen = strlen(val);
+        if (vlen == 0) {
+            return val;
+        }
         char* start = val;
-        while (*start && isspace(*start)) {
+        while (*start && isspace((unsigned char)*start)) {
             start++;
         }
-        char* end = val + strlen(val) - 1;
-        while (end > start && isspace(*end)) {
+        if (*start == '\0') {
+            return start;
+        }
+        char* end = val + vlen - 1;
+        while (end > start && isspace((unsigned char)*end)) {
             end--;
         }
         *(end + 1) = '\0';
@@ -49,14 +56,21 @@ apply_filter(csilk_wf_ctx_t* ctx, const char* filter, char* val)
         }
     } else if (strcmp(filter, "json_escape") == 0) {
         csilk_json_t* j = csilk_json_string_new(val);
-        char*         escaped = csilk_json_serialize(j, NULL);
-        size_t        elen = strlen(escaped);
+        if (!j) {
+            return val;
+        }
+        char* escaped = csilk_json_serialize(j, NULL);
+        if (!escaped) {
+            csilk_json_free(j);
+            return val;
+        }
+        size_t elen = strlen(escaped);
         if (elen >= 2) {
             escaped[elen - 1] = '\0';
             char* inner = csilk_wf_strdup(ctx, escaped + 1);
             free(escaped);
             csilk_json_free(j);
-            return inner;
+            return inner ? inner : val;
         }
         free(escaped);
         csilk_json_free(j);
@@ -69,24 +83,29 @@ apply_filter(csilk_wf_ctx_t* ctx, const char* filter, char* val)
 static char*
 resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
 {
+    static const size_t MAX_TEMPLATE_BYTES = 16U * 1024U * 1024U;
     if (!template) {
         return NULL;
     }
     char* res = csilk_wf_strdup(ctx, template);
+    if (!res) {
+        return NULL;
+    }
 
     for (size_t i = 0; i < ctx->wf->node_count; i++) {
         csilk_wf_node_t* n = ctx->wf->nodes[i];
         char             base_pattern[256];
         snprintf(base_pattern, sizeof(base_pattern), "{{%s.value", n->id);
 
-        char* pos;
-        while ((pos = strstr(res, base_pattern)) != NULL) {
+        size_t search_offset = 0;
+        char*  pos;
+        while ((pos = strstr(res + search_offset, base_pattern)) != NULL) {
             char* end = strstr(pos, "}}");
             if (!end) {
                 break;
             }
 
-            size_t        pat_full_len = end - pos + 2;
+            size_t        pat_full_len = (size_t)(end - pos + 2);
             char*         replacement = "(null)";
             csilk_data_t* out = ctx->node_outputs[n->index];
 
@@ -100,71 +119,89 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
                 char* filter_start = pipe ? pipe + 1 : NULL;
                 char* actual_end = pipe ? pipe : end;
 
-                if (*path_start == '.') {
+                if (*path_start == '.' && actual_end > path_start + 1) {
                     path_start++;
-                    size_t path_len = actual_end - path_start;
+                    size_t path_len = (size_t)(actual_end - path_start);
                     char*  path = malloc(path_len + 1);
-                    memcpy(path, path_start, path_len);
-                    path[path_len] = '\0';
+                    if (path) {
+                        memcpy(path, path_start, path_len);
+                        path[path_len] = '\0';
 
-                    csilk_json_t* json = csilk_json_parse((char*)out->value);
-                    if (json) {
-                        char* val = _csilk_json_get_path(ctx, json, path);
-                        if (val) {
-                            replacement = val;
+                        csilk_json_t* json = csilk_json_parse((char*)out->value);
+                        if (json) {
+                            char* val = _csilk_json_get_path(ctx, json, path);
+                            if (val) {
+                                replacement = val;
+                            }
+                            csilk_json_free(json);
                         }
-                        csilk_json_free(json);
+                        free(path);
                     }
-                    free(path);
                 } else {
-                    replacement = csilk_wf_strdup(ctx, (char*)out->value);
+                    char* dup = csilk_wf_strdup(ctx, (char*)out->value);
+                    if (dup) {
+                        replacement = dup;
+                    }
                 }
 
-                if (filter_start) {
-                    size_t flen = end - filter_start;
+                if (filter_start && end > filter_start) {
+                    size_t flen = (size_t)(end - filter_start);
                     char*  filters = malloc(flen + 1);
-                    memcpy(filters, filter_start, flen);
-                    filters[flen] = '\0';
+                    if (filters) {
+                        memcpy(filters, filter_start, flen);
+                        filters[flen] = '\0';
 
-                    char* saveptr;
-                    char* f = strtok_r(filters, "|", &saveptr);
-                    while (f) {
-                        while (*f == ' ') {
-                            f++;
-                        }
-                        char* fe = f + strlen(f) - 1;
-                        while (fe > f && *fe == ' ') {
-                            *fe = '\0';
-                            fe--;
-                        }
+                        char* saveptr;
+                        char* f = strtok_r(filters, "|", &saveptr);
+                        while (f) {
+                            while (*f == ' ') {
+                                f++;
+                            }
+                            size_t fl = strlen(f);
+                            char*  fe = fl > 0 ? f + fl - 1 : f;
+                            while (fe > f && *fe == ' ') {
+                                *fe = '\0';
+                                fe--;
+                            }
 
-                        replacement = apply_filter(ctx, f, replacement);
-                        f = strtok_r(NULL, "|", &saveptr);
+                            replacement = apply_filter(ctx, f, replacement);
+                            f = strtok_r(NULL, "|", &saveptr);
+                        }
+                        free(filters);
                     }
-                    free(filters);
                 }
             }
 
             size_t rep_len = strlen(replacement);
             size_t res_len = strlen(res);
-            char*  new_res = csilk_wf_alloc(ctx, res_len - pat_full_len + rep_len + 1);
-            size_t prefix_len = pos - res;
+            size_t prefix_len = (size_t)(pos - res);
+            size_t new_len = res_len - pat_full_len + rep_len;
+            if (rep_len > MAX_TEMPLATE_BYTES || new_len > MAX_TEMPLATE_BYTES) {
+                search_offset = prefix_len + pat_full_len;
+                continue;
+            }
+            char* new_res = csilk_wf_alloc(ctx, new_len + 1);
+            if (!new_res) {
+                return res;
+            }
             memcpy(new_res, res, prefix_len);
             memcpy(new_res + prefix_len, replacement, rep_len);
             memcpy(new_res + prefix_len + rep_len, end + 2, strlen(end + 2) + 1);
             res = new_res;
+            search_offset = prefix_len + rep_len;
         }
     }
 
     const char* in_pattern = "{{input.value";
+    size_t      in_search_offset = 0;
     char*       pos;
-    while ((pos = strstr(res, in_pattern)) != NULL) {
+    while ((pos = strstr(res + in_search_offset, in_pattern)) != NULL) {
         char* end = strstr(pos, "}}");
         if (!end) {
             break;
         }
 
-        size_t pat_full_len = end - pos + 2;
+        size_t pat_full_len = (size_t)(end - pos + 2);
         char*  replacement = "(null)";
 
         if (ctx->initial_input && ctx->initial_input->value) {
@@ -176,57 +213,74 @@ resolve_templates(csilk_wf_ctx_t* ctx, const char* template)
             char* filter_start = pipe ? pipe + 1 : NULL;
             char* actual_end = pipe ? pipe : end;
 
-            if (*path_start == '.') {
+            if (*path_start == '.' && actual_end > path_start + 1) {
                 path_start++;
-                size_t path_len = actual_end - path_start;
+                size_t path_len = (size_t)(actual_end - path_start);
                 char*  path = malloc(path_len + 1);
-                memcpy(path, path_start, path_len);
-                path[path_len] = '\0';
+                if (path) {
+                    memcpy(path, path_start, path_len);
+                    path[path_len] = '\0';
 
-                csilk_json_t* json = csilk_json_parse((char*)ctx->initial_input->value);
-                if (json) {
-                    char* val = _csilk_json_get_path(ctx, json, path);
-                    if (val) {
-                        replacement = val;
+                    csilk_json_t* json = csilk_json_parse((char*)ctx->initial_input->value);
+                    if (json) {
+                        char* val = _csilk_json_get_path(ctx, json, path);
+                        if (val) {
+                            replacement = val;
+                        }
+                        csilk_json_free(json);
                     }
-                    csilk_json_free(json);
+                    free(path);
                 }
-                free(path);
             } else {
-                replacement = csilk_wf_strdup(ctx, (char*)ctx->initial_input->value);
+                char* dup = csilk_wf_strdup(ctx, (char*)ctx->initial_input->value);
+                if (dup) {
+                    replacement = dup;
+                }
             }
 
-            if (filter_start) {
-                size_t flen = end - filter_start;
+            if (filter_start && end > filter_start) {
+                size_t flen = (size_t)(end - filter_start);
                 char*  filters = malloc(flen + 1);
-                memcpy(filters, filter_start, flen);
-                filters[flen] = '\0';
-                char* saveptr;
-                char* f = strtok_r(filters, "|", &saveptr);
-                while (f) {
-                    while (*f == ' ') {
-                        f++;
+                if (filters) {
+                    memcpy(filters, filter_start, flen);
+                    filters[flen] = '\0';
+                    char* saveptr;
+                    char* f = strtok_r(filters, "|", &saveptr);
+                    while (f) {
+                        while (*f == ' ') {
+                            f++;
+                        }
+                        size_t fl = strlen(f);
+                        char*  fe = fl > 0 ? f + fl - 1 : f;
+                        while (fe > f && *fe == ' ') {
+                            *fe = '\0';
+                            fe--;
+                        }
+                        replacement = apply_filter(ctx, f, replacement);
+                        f = strtok_r(NULL, "|", &saveptr);
                     }
-                    char* fe = f + strlen(f) - 1;
-                    while (fe > f && *fe == ' ') {
-                        *fe = '\0';
-                        fe--;
-                    }
-                    replacement = apply_filter(ctx, f, replacement);
-                    f = strtok_r(NULL, "|", &saveptr);
+                    free(filters);
                 }
-                free(filters);
             }
         }
 
         size_t rep_len = strlen(replacement);
         size_t res_len = strlen(res);
-        char*  new_res = csilk_wf_alloc(ctx, res_len - pat_full_len + rep_len + 1);
-        size_t prefix_len = pos - res;
+        size_t prefix_len = (size_t)(pos - res);
+        size_t new_len = res_len - pat_full_len + rep_len;
+        if (rep_len > MAX_TEMPLATE_BYTES || new_len > MAX_TEMPLATE_BYTES) {
+            in_search_offset = prefix_len + pat_full_len;
+            continue;
+        }
+        char* new_res = csilk_wf_alloc(ctx, new_len + 1);
+        if (!new_res) {
+            return res;
+        }
         memcpy(new_res, res, prefix_len);
         memcpy(new_res + prefix_len, replacement, rep_len);
         memcpy(new_res + prefix_len + rep_len, end + 2, strlen(end + 2) + 1);
         res = new_res;
+        in_search_offset = prefix_len + rep_len;
     }
 
     return res;

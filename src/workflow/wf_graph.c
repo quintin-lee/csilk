@@ -269,6 +269,7 @@ csilk_wf_free(csilk_wf_t* wf)
         return;
     }
     CSILK_LOG_D("Workflow: destroying workflow instance '%s'", wf->name);
+    _wf_distributed_unregister(wf);
     /* Wait for any after_worker_cb completion block still running on the
      * loop thread: its tail (unregister_active_ctx, trace free, cleanup)
      * touches wf->ctx_mutex and the active-context registry, so destroying

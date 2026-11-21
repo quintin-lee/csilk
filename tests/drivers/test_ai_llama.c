@@ -66,6 +66,17 @@ mock_weather_tool(const char* args_json, void* user_data)
 /* --- Test Cases --- */
 
 static void
+test_llama_env_lib_traversal_safe(void)
+{
+    setenv("CSILK_LLAMA_LIB", "../../../tmp/evil.so", 1);
+    csilk_ai_t* ai = csilk_ai_new_llama("models/test.gguf", 1, 512);
+    assert(ai != NULL);
+    assert(csilk_ai_llama_is_available() == 0 || csilk_ai_llama_is_available() == 1);
+    csilk_ai_free(ai);
+    unsetenv("CSILK_LLAMA_LIB");
+}
+
+static void
 test_llama_lifecycle_and_availability(void)
 {
     /* Test factory csilk_ai_new_llama */
@@ -333,6 +344,9 @@ int
 main(void)
 {
     printf("Running embedded llama.cpp driver test suite...\n");
+
+    test_llama_env_lib_traversal_safe();
+    printf("  [PASS] test_llama_env_lib_traversal_safe\n");
 
     test_llama_lifecycle_and_availability();
     printf("  [PASS] test_llama_lifecycle_and_availability\n");

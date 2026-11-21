@@ -163,7 +163,7 @@ _wf_wal_flush(void)
 CSILK_INTERNAL int
 _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* payload, size_t len)
 {
-    if (!wal_path) {
+    if (!wal_path || len > UINT32_MAX) {
         return -1;
     }
 
@@ -182,13 +182,20 @@ _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* pay
         return -1;
     }
     task->wal_path = strdup(wal_path);
+    if (!task->wal_path) {
+        free(task);
+        return -1;
+    }
     task->type = type;
-    task->len = len;
-    if (len > 0 && payload) {
-        task->payload = malloc(len);
-        if (task->payload) {
-            memcpy(task->payload, payload, len);
+    task->len = (payload && len > 0) ? len : 0;
+    if (task->len > 0) {
+        task->payload = malloc(task->len);
+        if (!task->payload) {
+            free(task->wal_path);
+            free(task);
+            return -1;
         }
+        memcpy(task->payload, payload, task->len);
     } else {
         task->payload = NULL;
     }
