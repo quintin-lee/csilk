@@ -3,10 +3,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "csilk/messaging/raft.h"
 #include "csilk/messaging/raft_wal.h"
+#include "messaging/raft_internal.h"
 
 static void
 rm_rf_dir(const char* dir)
@@ -217,6 +219,48 @@ test_raft_wal_corruption_variants(void)
     rm_rf_dir(wal_dir);
 }
 
+static void
+test_raft_wal_truncate_preserves_entries_on_io_failure(void)
+{
+    if (geteuid() == 0) {
+        /* Root bypasses chmod 0500 read-only directory permissions. */
+        return;
+    }
+
+    char  dir_tmpl[] = "/tmp/csilk_raft_wal_ro_XXXXXX";
+    char* wal_dir = mkdtemp(dir_tmpl);
+    assert(wal_dir != NULL);
+
+    csilk_raft_config_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.node_id = 1;
+    cfg.cluster_size = 1;
+    cfg.wal_dir = wal_dir;
+    cfg.sync_policy = CSILK_RAFT_SYNC_ALWAYS;
+
+    csilk_raft_node_t* node = csilk_raft_node_new(&cfg);
+    assert(node != NULL);
+    assert(csilk_raft_node_start(node) == 0);
+
+    assert(csilk_raft_append_log(node, (const uint8_t*)"one", 3) == 1);
+    assert(csilk_raft_append_log(node, (const uint8_t*)"two", 3) == 2);
+
+    /* Make WAL directory read-only so creating .tmp fails during prefix compaction. */
+    assert(chmod(wal_dir, 0500) == 0);
+    int rc = _raft_wal_compact_prefix_locked(node, 1, 2);
+    assert(rc == -1);
+    /* In-memory entry 1 must NOT have been destroyed by failed WAL rewrite. */
+    uint8_t* data = NULL;
+    size_t   len = 0;
+    assert(csilk_raft_get_log_entry(node, 1, NULL, &data, &len) == 0);
+    assert(len == 3 && memcmp(data, "one", 3) == 0);
+    free(data);
+
+    assert(chmod(wal_dir, 0755) == 0);
+    csilk_raft_node_free(node);
+    rm_rf_dir(wal_dir);
+}
+
 int
 main(void)
 {
@@ -225,6 +269,7 @@ main(void)
     test_raft_wal_persistence_and_recovery();
     test_raft_wal_sync_policies();
     test_raft_wal_corruption_variants();
+    test_raft_wal_truncate_preserves_entries_on_io_failure();
     printf("test_raft_wal: PASS\n");
     return 0;
 }

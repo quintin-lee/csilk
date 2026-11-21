@@ -465,31 +465,20 @@ _raft_wal_compact_prefix_locked(csilk_raft_node_t* node,
     size_t drop_count = 0;
     while (drop_count < node->entry_count &&
            node->entries[drop_count].index <= last_included_index) {
-        free(node->entries[drop_count].data);
-        node->entries[drop_count].data = NULL;
         drop_count++;
     }
-
     size_t remain = node->entry_count - drop_count;
-    if (remain > 0 && drop_count > 0) {
-        memmove(
-            &node->entries[0], &node->entries[drop_count], remain * sizeof(csilk_raft_log_entry_t));
-    }
-    node->entry_count = remain;
-    node->log_base_index = last_included_index;
-    node->log_base_term = last_included_term;
-
-    if (node->last_log_index < last_included_index) {
-        node->last_log_index = last_included_index;
-    }
-    if (node->commit_index < last_included_index) {
-        node->commit_index = last_included_index;
-    }
 
     if (node->wal_fd >= 0 && node->wal_path) {
+        uint64_t* new_offsets = remain > 0 ? malloc(remain * sizeof(uint64_t)) : NULL;
+        if (remain > 0 && !new_offsets) {
+            return -1;
+        }
+
         size_t tmp_cap = strlen(node->wal_path) + 16U;
         char*  tmp_path = malloc(tmp_cap);
         if (!tmp_path) {
+            free(new_offsets);
             return -1;
         }
         snprintf(tmp_path, tmp_cap, "%s.tmp", node->wal_path);
@@ -497,19 +486,21 @@ _raft_wal_compact_prefix_locked(csilk_raft_node_t* node,
         int tmp_fd = open(tmp_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
         if (tmp_fd < 0) {
             free(tmp_path);
+            free(new_offsets);
             return -1;
         }
 
         uint64_t offset = 0;
-        for (size_t i = 0; i < node->entry_count; i++) {
-            csilk_raft_log_entry_t* ent = &node->entries[i];
+        for (size_t i = 0; i < remain; i++) {
+            const csilk_raft_log_entry_t* ent = &node->entries[drop_count + i];
             if (raft_write_wal_record_fd(tmp_fd, ent->index, ent->term, ent->data, ent->len) != 0) {
                 close(tmp_fd);
                 unlink(tmp_path);
                 free(tmp_path);
+                free(new_offsets);
                 return -1;
             }
-            ent->wal_offset = offset;
+            new_offsets[i] = offset;
             offset += sizeof(csilk_raft_wal_rec_hdr_t) + (uint64_t)ent->len + sizeof(uint32_t);
         }
 
@@ -517,6 +508,7 @@ _raft_wal_compact_prefix_locked(csilk_raft_node_t* node,
             close(tmp_fd);
             unlink(tmp_path);
             free(tmp_path);
+            free(new_offsets);
             return -1;
         }
         close(tmp_fd);
@@ -527,6 +519,7 @@ _raft_wal_compact_prefix_locked(csilk_raft_node_t* node,
         if (rename(tmp_path, node->wal_path) != 0) {
             unlink(tmp_path);
             free(tmp_path);
+            free(new_offsets);
             node->wal_fd = open(node->wal_path, O_RDWR | O_CREAT, 0644);
             return -1;
         }
@@ -534,15 +527,58 @@ _raft_wal_compact_prefix_locked(csilk_raft_node_t* node,
         free(tmp_path);
 
         node->wal_fd = open(node->wal_path, O_RDWR | O_CREAT, 0644);
-        if (node->wal_fd < 0) {
-            return -1;
+        int fd_ok = (node->wal_fd >= 0 && lseek(node->wal_fd, (off_t)offset, SEEK_SET) >= 0);
+
+        for (size_t i = 0; i < drop_count; i++) {
+            free(node->entries[i].data);
+            node->entries[i].data = NULL;
         }
-        if (lseek(node->wal_fd, (off_t)offset, SEEK_SET) < 0) {
-            return -1;
+        if (remain > 0) {
+            for (size_t i = 0; i < remain; i++) {
+                node->entries[drop_count + i].wal_offset = new_offsets[i];
+            }
+            if (drop_count > 0) {
+                memmove(&node->entries[0],
+                        &node->entries[drop_count],
+                        remain * sizeof(csilk_raft_log_entry_t));
+            }
+        }
+        free(new_offsets);
+
+        node->entry_count = remain;
+        node->log_base_index = last_included_index;
+        node->log_base_term = last_included_term;
+        if (node->last_log_index < last_included_index) {
+            node->last_log_index = last_included_index;
+        }
+        if (node->commit_index < last_included_index) {
+            node->commit_index = last_included_index;
         }
         node->wal_file_size = offset;
         node->pending_sync_entries = 0;
         node->sync_count++;
+        if (!fd_ok) {
+            return -1;
+        }
+    } else {
+        for (size_t i = 0; i < drop_count; i++) {
+            free(node->entries[i].data);
+            node->entries[i].data = NULL;
+        }
+        if (remain > 0 && drop_count > 0) {
+            memmove(&node->entries[0],
+                    &node->entries[drop_count],
+                    remain * sizeof(csilk_raft_log_entry_t));
+        }
+        node->entry_count = remain;
+        node->log_base_index = last_included_index;
+        node->log_base_term = last_included_term;
+        if (node->last_log_index < last_included_index) {
+            node->last_log_index = last_included_index;
+        }
+        if (node->commit_index < last_included_index) {
+            node->commit_index = last_included_index;
+        }
     }
 
     return 0;

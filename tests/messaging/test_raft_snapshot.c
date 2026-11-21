@@ -343,6 +343,83 @@ test_snapshot_install_chunked_rpc(void)
     printf("  passed\n");
 }
 
+static void
+test_snapshot_install_malformed_offset_and_reset(void)
+{
+    printf("Testing InstallSnapshot malformed offset overflow & reset...\n");
+    csilk_raft_config_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.node_id = 2;
+    cfg.cluster_size = 3;
+
+    csilk_raft_node_t* follower = csilk_raft_node_new(&cfg);
+    assert(follower != NULL);
+
+    uint8_t* pkt = malloc(CSILK_RAFT_RPC_MAX_PACKET);
+    uint8_t* reply = malloc(4096);
+    assert(pkt && reply);
+
+    uint8_t chunk0[16] = {1, 2, 3, 4};
+
+    /* 1. Start valid partial upload of 64 bytes */
+    csilk_raft_is_req_t req;
+    memset(&req, 0, sizeof(req));
+    req.term = 2;
+    req.leader_id = 1;
+    req.last_included_index = 10;
+    req.last_included_term = 2;
+    req.total_len = 64;
+    req.offset = 0;
+    req.chunk_len = sizeof(chunk0);
+    req.done = 0;
+
+    int plen = _raft_rpc_encode_is_req(&req,
+                                       chunk0,
+                                       pkt + sizeof(csilk_raft_hdr_t),
+                                       CSILK_RAFT_RPC_MAX_PACKET - sizeof(csilk_raft_hdr_t));
+    assert(plen > 0);
+    assert(csilk_raft_rpc_encode_hdr(CSILK_RAFT_MSG_INSTALL_SNAPSHOT_REQ,
+                                     2,
+                                     (uint32_t)plen,
+                                     pkt,
+                                     CSILK_RAFT_RPC_MAX_PACKET) > 0);
+    size_t rlen = 0;
+    assert(_raft_handle_rpc_packet(
+               follower, pkt, sizeof(csilk_raft_hdr_t) + (size_t)plen, NULL, reply, 4096, &rlen) ==
+           0);
+    csilk_raft_is_resp_t resp;
+    assert(_raft_rpc_decode_is_resp(
+               reply + sizeof(csilk_raft_hdr_t), rlen - sizeof(csilk_raft_hdr_t), &resp) == 0);
+    assert(resp.success == 1);
+    assert(resp.next_offset == 16);
+
+    /* 2. Malicious chunk with offset = UINT64_MAX - 8 (overflow guard) must fail */
+    req.offset = UINT64_MAX - 8ULL;
+    req.chunk_len = 16;
+    plen = _raft_rpc_encode_is_req(&req,
+                                   chunk0,
+                                   pkt + sizeof(csilk_raft_hdr_t),
+                                   CSILK_RAFT_RPC_MAX_PACKET - sizeof(csilk_raft_hdr_t));
+    assert(plen > 0);
+    assert(csilk_raft_rpc_encode_hdr(CSILK_RAFT_MSG_INSTALL_SNAPSHOT_REQ,
+                                     2,
+                                     (uint32_t)plen,
+                                     pkt,
+                                     CSILK_RAFT_RPC_MAX_PACKET) > 0);
+    assert(_raft_handle_rpc_packet(
+               follower, pkt, sizeof(csilk_raft_hdr_t) + (size_t)plen, NULL, reply, 4096, &rlen) ==
+           0);
+    assert(_raft_rpc_decode_is_resp(
+               reply + sizeof(csilk_raft_hdr_t), rlen - sizeof(csilk_raft_hdr_t), &resp) == 0);
+    assert(resp.success == 0);
+    assert(resp.next_offset == 16);
+
+    free(reply);
+    free(pkt);
+    csilk_raft_node_free(follower);
+    printf("  passed\n");
+}
+
 int
 main(void)
 {
@@ -357,6 +434,7 @@ main(void)
     test_snapshot_roundtrip();
     test_snapshot_disk_compaction_and_recovery();
     test_snapshot_install_chunked_rpc();
+    test_snapshot_install_malformed_offset_and_reset();
 
     printf("All test_raft_snapshot tests passed successfully!\n");
     return 0;

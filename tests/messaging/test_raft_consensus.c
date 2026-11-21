@@ -206,6 +206,38 @@ test_raft_node_lifecycle_and_callbacks(void)
     printf("test_raft_node_lifecycle_and_callbacks passed\n");
 }
 
+static void
+test_raft_relisten_with_running_transport(void)
+{
+    csilk_raft_config_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.node_id = 1;
+    cfg.cluster_size = 1;
+    cfg.heartbeat_interval_ms = 20;
+    cfg.election_timeout_min_ms = 60;
+    cfg.election_timeout_max_ms = 120;
+
+    csilk_raft_node_t* node = csilk_raft_node_new(&cfg);
+    assert(node != nullptr);
+    assert(csilk_raft_node_listen(node, "127.0.0.1:0") == 0);
+    uint16_t p1 = csilk_raft_node_get_port(node);
+    assert(p1 > 0);
+
+    assert(csilk_raft_node_start(node) == 0);
+    usleep(20000);
+
+    /* Rebind while transport_thread is actively running; must join transport
+     * before closing/replacing listen_fd without EBADF or data race. */
+    assert(csilk_raft_node_listen(node, "127.0.0.1:0") == 0);
+    uint16_t p2 = csilk_raft_node_get_port(node);
+    assert(p2 > 0);
+    usleep(20000);
+
+    assert(csilk_raft_node_stop(node) == 0);
+    csilk_raft_node_free(node);
+    printf("test_raft_relisten_with_running_transport passed\n");
+}
+
 int
 main(void)
 {
@@ -213,6 +245,7 @@ main(void)
     test_raft_randomized_election_timeout();
     test_raft_three_node_election_and_replication();
     test_raft_node_lifecycle_and_callbacks();
+    test_raft_relisten_with_running_transport();
     printf("All test_raft_consensus tests passed successfully!\n");
     return 0;
 }

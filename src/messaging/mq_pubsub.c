@@ -36,6 +36,10 @@ get_or_create_topic(csilk_mq_t* mq, const char* name)
         return NULL;
     }
     t->name = strdup(name);
+    if (!t->name) {
+        free(t);
+        return NULL;
+    }
     t->next = mq->topics;
     mq->topics = t;
     CSILK_LOG_D("MQ: Created topic entry '%s'", name);
