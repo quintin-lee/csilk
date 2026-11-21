@@ -7,13 +7,9 @@
 /*
  * AF_XDP driver test.
  *
- * Since v1.1, csilk_xdp_socket_new always allocates the socket struct and the
- * UMEM ring (cursor-simulation fallback). On Linux it additionally attempts a
- * real AF_XDP socket (socket/ioctl/mmap) which fails gracefully without
- * CAP_NET_RAW, falling back to the in-memory cursor path. TX/RX burst calls
- * operate on the UMEM ring regardless of whether the kernel socket succeeded.
- *
- * This test verifies the fallback cursor path works on all platforms.
+ * When CSILK_ENABLE_EXPERIMENTAL_STUBS=0 (the hardened default), AF_XDP stub
+ * entrypoints fail closed with ENOTSUP/NULL. When enabled (=1), csilk_xdp_socket_new
+ * allocates the simulated UMEM ring and TX/RX bursts operate on the in-memory cursor path.
  */
 int
 main(void)
@@ -23,6 +19,14 @@ main(void)
     csilk_xdp_config_t cfg = {.ifname = "eth0", .queue_id = 0, .frame_size = 2048, .frame_num = 16};
 
     csilk_xdp_socket_t* xsk = csilk_xdp_socket_new(&cfg);
+#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+    assert(xsk == NULL);
+    assert(errno == ENOTSUP);
+    assert(csilk_xdp_tx_burst(NULL, NULL, 0) == -ENOTSUP);
+    assert(csilk_xdp_rx_burst(NULL, NULL, NULL) == -ENOTSUP);
+    printf("test_af_xdp (fail-closed): PASS\n");
+    return 0;
+#else
     assert(xsk != NULL);
 
     /* TX packet burst — copies into UMEM ring, advances TX cursor */
@@ -43,4 +47,5 @@ main(void)
     csilk_xdp_socket_free(xsk);
     printf("test_af_xdp: PASS\n");
     return 0;
+#endif
 }
