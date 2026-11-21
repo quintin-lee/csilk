@@ -163,6 +163,7 @@ set(CSILK_DB_SOURCES
     src/drivers/db/migration/migration_checksum.c
     src/drivers/db/migration/migration_engine.c
     src/drivers/db/migration/migration_lock.c
+    src/plugins/db/db_plugin.c
 )
 
 # ── Protocol Module (WebSocket, OpenAPI, Swagger and MCP) ────────────────
@@ -252,6 +253,7 @@ set(CSILK_MQ_SOURCES
     src/messaging/raft_consensus.c
     src/messaging/raft_rpc.c
     src/messaging/raft_snapshot.c
+    src/plugins/mq/mq_plugin.c
 )
 
 # ── Workflow & MCP Module (Agent scheduler, DSL, MCP protocols) ──────────
