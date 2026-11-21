@@ -12,6 +12,11 @@
  *     prefix wildcard "prefix:*".
  *   - The role is resolved from the request context (either a "role" key
  *     or the "jwt_payload" JSON object's "role" field).
+ *   - All table state is guarded by a single process-lifetime static mutex
+ *     (s_rules_mutex). The mutex is created lazily on first use via
+ *     csilk_once(), so it is safe for csilk_perm_simple_clear() to reset
+ *     the rule table without destroying it (the driver is a process-lifetime
+ *     singleton; destroying a mutex still potentially in use is UB).
  *
  * @copyright MIT License
  */
@@ -34,11 +39,31 @@ enum { MAX_RULES = 128 };
 static csilk_perm_rule_t rules[MAX_RULES];
 /** @brief Current number of rules loaded. */
 static int rule_count = 0;
-/** @brief Read-write style mutex guarding the rule table.
- * A plain mutex is used (csilk has no rwlock primitive) — the critical
- * section is short (a handful of pointer stores) so the overhead of a
- * write-lock is negligible compared to the O(n) scan in simple_check(). */
+/** @brief Lazily-initialized process-lifetime mutex guarding the rule table.
+ * Created via csilk_once() (pthread_once / uv_once) on first access, so every
+ * entry point (init / allow / check / clear) can lock it without an external
+ * init call. A plain mutex is used (csilk has no rwlock primitive) — the
+ * critical section is short (a handful of pointer stores) so the overhead of
+ * a write-lock is negligible compared to the O(n) scan in simple_check().
+ * NOTE: must never be destroyed while the driver is registered; it lives
+ * for the entire process. */
 static csilk_mutex_t s_rules_mutex;
+static csilk_once_t  s_rules_mutex_once;
+
+/** @brief Create s_rules_mutex exactly once (thread-safe via csilk_once). */
+static void
+s_rules_mutex_init_once(void)
+{
+    csilk_mutex_init(&s_rules_mutex);
+}
+
+/** @brief Acquire the rule-table mutex, creating it on first use. */
+static void
+s_rules_mutex_lock(void)
+{
+    csilk_once(&s_rules_mutex_once, s_rules_mutex_init_once);
+    csilk_mutex_lock(&s_rules_mutex);
+}
 
 /**
  * @brief Match a pattern string against a value.
@@ -124,7 +149,7 @@ simple_check(csilk_ctx_t* c, const char* permission, const char* resource)
         return -1;
     }
 
-    csilk_mutex_lock(&s_rules_mutex);
+    s_rules_mutex_lock();
     int n = rule_count;
     for (int i = 0; i < n; i++) {
         if (match_pattern(rules[i].role, role) && match_pattern(rules[i].permission, permission) &&
@@ -147,13 +172,15 @@ csilk_perm_driver_t csilk_perm_simple_driver = {
 /**
  * @brief Initialise and register the simple permission driver.
  * Clears any existing rules and makes "simple" available to the permission
- * subsystem.
+ * subsystem. The driver registry is idempotent — registering the same
+ * driver name twice keeps the original entry, so repeated calls are safe
+ * (e.g. re-init after csilk_perm_simple_clear()). The underlying rule-table
+ * mutex is created lazily and process-lifetime; it is never destroyed here.
  */
 void
 csilk_perm_simple_init(void)
 {
-    csilk_mutex_init(&s_rules_mutex);
-    csilk_mutex_lock(&s_rules_mutex);
+    s_rules_mutex_lock();
     rule_count = 0;
     csilk_mutex_unlock(&s_rules_mutex);
     csilk_perm_register_driver("simple", &csilk_perm_simple_driver);
@@ -173,7 +200,7 @@ csilk_perm_simple_allow(const char* role, const char* permission, const char* re
     if (!role || !permission || !resource) {
         return -1;
     }
-    csilk_mutex_lock(&s_rules_mutex);
+    s_rules_mutex_lock();
     if (rule_count >= MAX_RULES) {
         csilk_mutex_unlock(&s_rules_mutex);
         return -1;
@@ -188,13 +215,17 @@ csilk_perm_simple_allow(const char* role, const char* permission, const char* re
 
 /** @brief Remove all permission rules.
  * Resets the table so that all subsequent checks will be denied.
- * Also destroys the rule-table mutex (the simple driver is a process-lifetime
- * singleton; call csilk_perm_simple_init() again to re-initialize). */
+ * The rule-table mutex is process-lifetime and intentionally NOT destroyed
+ * here — destroying it while request threads may still be using the driver
+ * is undefined behaviour and is what caused SIGABRT in multi-app test
+ * suites (Python integration tests create/destroy several csilk apps in
+ * one process). Callers that need a fresh driver must re-run
+ * csilk_perm_simple_init(), which simply clears the table and re-registers
+ * the driver vtable. */
 void
 csilk_perm_simple_clear(void)
 {
-    csilk_mutex_lock(&s_rules_mutex);
+    s_rules_mutex_lock();
     rule_count = 0;
     csilk_mutex_unlock(&s_rules_mutex);
-    csilk_mutex_destroy(&s_rules_mutex);
 }
