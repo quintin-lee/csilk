@@ -1,6 +1,6 @@
 # RCU 热重载机制深度解析
 
-> **Version**: 1.1.1 | **Last updated**: 2026-11-18
+> **Version**: 1.2.0 | **Last updated**: 2026-11-22
 
 csilk 的 RCU (Read-Copy-Update) 热重载机制允许在运行时替换路由器而不中断现有请求。
 

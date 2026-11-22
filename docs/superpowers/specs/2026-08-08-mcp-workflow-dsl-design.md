@@ -93,7 +93,7 @@ Workflows can be fully defined in JSON or YAML format:
 ```json
 {
   "name": "support_pipeline",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Automated customer support routing pipeline",
   "budget": {
     "max_tokens": 8192,

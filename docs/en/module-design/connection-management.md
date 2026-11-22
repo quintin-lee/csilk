@@ -1,6 +1,6 @@
 # Connection Management Deep Dive
 
-> **Version**: 1.1.1 | **Last updated**: 2026-11-18
+> **Version**: 1.2.0 | **Last updated**: 2026-11-22
 
 The csilk connection management subsystem is responsible for TCP connection acceptance, lifecycle state transitions, keep-alive reuse, backpressure flow control, and clean asynchronous teardown.
 
