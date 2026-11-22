@@ -7,6 +7,26 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **模块化动态插件架构**（`include/csilk/core/plugin.h`、`include/csilk/core/service_locator.h`、`src/core/plugin/loader.c`、`CSILK_BUILD_PLUGIN_*` 选项）：运行时 `dlopen()` 插件加载器，支持 `CSILK_PLUGIN_ABI_VERSION` 校验、路径安全检查、按 `csilk_server_t` 隔离的插件与服务注册表、`csilk_app_new()` 通过 `CSILK_PLUGIN_PATHS` 自动加载，以及 `ai`、`mq`、`db`、`vector`、`workflow`、`protocol`、`wasm`、`bypass` 8 个独立 `.so` 插件。
+- **Agent Skill Linux seccomp / 命名空间微沙箱**（`CSILK_ENABLE_SECCOMP_SANDBOX`、`src/workflow/skill.c`）。
+- **HTTP/3 数据面与 `io_uring` 增强**：HTTP/3 流控与 0-RTT 支持、`io_uring` 固定注册缓冲区、直接 FD 表及 `recvmsg_multishot` UDP 接收。
+- **驱动与异步能力**：嵌入式 `llama.cpp` 原生驱动绑定（`src/drivers/ai/llama.c`）、HNSW 零拷贝 mmap 冷启动、MCP WebSocket 传输、`csilk_db_pool_acquire_timeout()` 与 `csilk_db_query_async()`。
+
+### 变更
+
+- 将 app、权限与 WASM 中间件状态从进程全局表迁移为按实例管理，将向量驱动虚表（`milvus_driver`、`qdrant_driver`）局部化，在 sanitizer/coverage 构建下禁用 IPO（`cmake/targets.cmake`），并在 CI 中新增 `Modular Plugins` 全量插件验证任务。
+
+### 修复
+
+- **SSE 关闭与服务端销毁句柄排空**（`src/middleware/sse.c`、`src/core/server/`）：移除 `csilk_sse_close()` 中提前写入 `CSILK_CONN_CLOSING` 的逻辑，使 `on_close()` 正常关闭连接定时器并移出活跃列表，同时在 `csilk_server_free()` 及异常退出路径排空 MQ 与残留客户端句柄，消除跨请求循环导致的服务端析构堆破坏。
+- **全仓库安全与稳定性加固**：修复 `io_uring` 拒收 TCP 句柄生命周期、连接引用计数与异步租约（含 Python asyncio token）、HTTP/2 请求体限制、Raft 传输重绑与 WAL 压缩原子性、bcrypt/会话/WAF/JWT/OTLP 边界校验、MySQL/Redis/HNSW/预处理语句/llama/workflow/MCP 防护及 ASan/TSan/`clang-tidy` 问题。
+
+### 测试
+
+- 新增 `test_plugin`（`tests/core/test_plugin.c`），覆盖插件 ABI 校验、路径穿越拦截、`CSILK_PLUGIN_PATHS` 自动加载、并发服务定位器及全部 8 个真实插件 `.so` 的加载与卸载验证。
+
 ## [1.1.1] - 2026-11-18
 
 ### 新增
