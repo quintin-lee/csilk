@@ -268,6 +268,7 @@ mcp_ws_roundtrip(csilk_mcp_client_t* client, const char* req_json, char** out_bo
         return -1;
     }
 
+#ifdef CURLWS_TEXT
     CURL* curl = curl_easy_init();
     if (!curl) {
         return -1;
@@ -344,6 +345,7 @@ mcp_ws_roundtrip(csilk_mcp_client_t* client, const char* req_json, char** out_bo
         }
     }
     curl_easy_cleanup(curl);
+#endif
 
     /* If direct WebSocket frame transfer is unsupported or fails, fall back to HTTP */
     return mcp_http_roundtrip(client, req_json, out_body);
