@@ -588,3 +588,63 @@ jobs:
       run: |
         ctest --test-dir build -R "test_db|test_mongodb" --timeout 60 --output-on-failure
 
+  plugins:
+    name: Modular Plugins (All 8 .so + test_plugin)
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Cache dependencies
+      uses: actions/cache@v5
+      with:
+        path: build_plugins/_deps
+        key: ${{ runner.os }}-plugins-deps-${{ hashFiles('**/CMakeLists.txt', 'cmake/*.cmake') }}
+        restore-keys: |
+          ${{ runner.os }}-plugins-deps-
+
+    - name: Install dependencies
+      run: |
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+        sudo apt-get update -o Acquire::Retries=3
+        sudo apt-get install -y -o Acquire::Retries=3 \
+          cmake clang \
+          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+          libpq-dev libsqlite3-dev libuv1-dev \
+          default-libmysqlclient-dev libhiredis-dev
+
+    - name: Configure
+      run: |
+        cmake -B build_plugins -S . \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_C_COMPILER=clang \
+          -DUSE_ASAN=ON \
+          -DCSILK_BUILD_SHARED=ON \
+          -DCSILK_BUILD_PLUGIN_AI=ON \
+          -DCSILK_BUILD_PLUGIN_MQ=ON \
+          -DCSILK_BUILD_PLUGIN_DB=ON \
+          -DCSILK_BUILD_PLUGIN_VECTOR=ON \
+          -DCSILK_BUILD_PLUGIN_WORKFLOW=ON \
+          -DCSILK_BUILD_PLUGIN_PROTOCOL=ON \
+          -DCSILK_BUILD_PLUGIN_WASM=ON \
+          -DCSILK_BUILD_PLUGIN_BYPASS=ON
+
+    - name: Build plugins and test_plugin
+      run: |
+        cmake --build build_plugins --target \
+          csilk_shared \
+          csilk_plugin_ai \
+          csilk_plugin_mq \
+          csilk_plugin_db \
+          csilk_plugin_vector \
+          csilk_plugin_workflow \
+          csilk_plugin_protocol \
+          csilk_plugin_wasm \
+          csilk_plugin_bypass \
+          test_plugin -j$(nproc)
+
+    - name: Run plugin regression test suite
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
+      run: ctest --test-dir build_plugins -R '^test_plugin$' --timeout 30 --output-on-failure --verbose
+
