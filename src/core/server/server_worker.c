@@ -401,16 +401,9 @@ worker_thread(void* arg)
      * so in-flight callbacks never dereference destroyed client pointers. */
     _csilk_worker_drain_dispatch(wp);
     /* Ensure any active client whose handle close did not complete inside
-     * the drain window is unlinked and returned to the worker pool before
+     * the drain window is closed and returned to the worker pool before
      * the loop closes and csilk_server_free() releases pool entries. */
-    while (wp->active_clients) {
-        csilk_client_t* leftover = wp->active_clients;
-        if (leftover->state != CSILK_CONN_CLOSING) {
-            leftover->state = CSILK_CONN_CLOSING;
-        }
-        client_list_remove(server, leftover);
-        client_destroy(leftover);
-    }
+    _csilk_worker_cleanup_leftover_clients(server, wp, loop_ptr);
     _csilk_worker_drain_dispatch(wp);
     csilk_arena_flush_free_list();
     csilk_body_pool_cleanup();

@@ -437,3 +437,85 @@ on_close(csilk_io_handle_t* handle)
     /* Release base connection reference held since on_new_connection */
     csilk_client_unref(client);
 }
+
+CSILK_INTERNAL void
+_csilk_worker_cleanup_leftover_clients(csilk_server_t*  server,
+                                       worker_pool_t*   wp,
+                                       csilk_io_loop_t* loop)
+{
+    if (!server || !wp || !wp->active_clients) {
+        return;
+    }
+
+    size_t cap = 0;
+    for (csilk_client_t* cur = wp->active_clients; cur; cur = cur->next) {
+        cap++;
+    }
+
+    csilk_client_t*  stack_items[CSILK_CLIENT_POOL_SIZE];
+    csilk_client_t** items = stack_items;
+    if (cap > CSILK_CLIENT_POOL_SIZE) {
+        items = malloc(cap * sizeof(csilk_client_t*));
+        if (!items) {
+            while (wp->active_clients) {
+                csilk_client_t* leftover = wp->active_clients;
+                if (leftover->state != CSILK_CONN_CLOSING) {
+                    leftover->state = CSILK_CONN_CLOSING;
+                }
+                client_list_remove(server, leftover);
+                client_destroy(leftover);
+            }
+            return;
+        }
+    }
+
+    /* Detach leftover clients and hold a temporary reference across the
+     * closing drain so async close callbacks cannot recycle a client while
+     * its handles are still being detached from the event loop. */
+    size_t count = 0;
+    bool   need_drain = false;
+    while (wp->active_clients && count < cap) {
+        csilk_client_t* cur = wp->active_clients;
+        items[count++] = cur;
+        csilk_client_ref(cur);
+        client_list_remove(server, cur);
+        if (cur->state != CSILK_CONN_CLOSING) {
+            cur->state = CSILK_CONN_CLOSING;
+        }
+        if (cur->handle.loop != NULL && !csilk_io_is_closing((csilk_io_handle_t*)&cur->handle)) {
+            cur->handle.data = cur;
+            csilk_io_close((csilk_io_handle_t*)&cur->handle, NULL);
+            need_drain = true;
+        }
+        csilk_io_handle_t* timers[] = {(csilk_io_handle_t*)&cur->timer,
+                                       (csilk_io_handle_t*)&cur->read_timer,
+                                       (csilk_io_handle_t*)&cur->write_timer,
+                                       (csilk_io_handle_t*)&cur->request_timer};
+        for (int t = 0; t < 4; t++) {
+            if (timers[t]->loop != NULL && !csilk_io_is_closing(timers[t])) {
+                need_drain = true;
+            }
+        }
+        _csilk_client_stop_timers(cur);
+    }
+
+    if (need_drain && loop) {
+        for (int i = 0; i < 64 && csilk_io_loop_alive(loop); i++) {
+            csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
+        }
+    }
+
+    for (size_t i = 0; i < count; i++) {
+        csilk_client_t* leftover = items[i];
+        atomic_store_explicit(&leftover->pending_io, 0, memory_order_relaxed);
+        atomic_store_explicit(&leftover->ref_count, 0, memory_order_relaxed);
+        if (leftover->state != CSILK_CONN_CLOSED) {
+            leftover->state = CSILK_CONN_CLOSING;
+            client_destroy(leftover);
+        }
+    }
+
+    if (items != stack_items) {
+        free(items);
+    }
+}
