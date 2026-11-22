@@ -292,6 +292,11 @@ csilk_server_free(csilk_server_t* server)
     if (mq) {
         _csilk_mq_free(mq);
         atomic_store_explicit(&server->mq, NULL, memory_order_release);
+        if (server->loop) {
+            for (int i = 0; i < 64 && csilk_io_loop_alive(server->loop); i++) {
+                csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
+            }
+        }
     }
 
     free(server->spa_doc_root);
@@ -663,16 +668,7 @@ csilk_server_run(csilk_server_t* server, int port)
     if (server->worker_pools && server->worker_pool_count > 0) {
         worker_pool_t* wp0 = &server->worker_pools[0];
         _csilk_worker_drain_dispatch(wp0);
-        /* Force-teardown any client that remained on active_clients because
-         * the loop exited early or its handle never finished closing. */
-        while (wp0->active_clients) {
-            csilk_client_t* leftover = wp0->active_clients;
-            if (leftover->state != CSILK_CONN_CLOSING) {
-                leftover->state = CSILK_CONN_CLOSING;
-            }
-            client_list_remove(server, leftover);
-            client_destroy(leftover);
-        }
+        _csilk_worker_cleanup_leftover_clients(server, wp0, server->loop);
         _csilk_worker_drain_dispatch(wp0);
     }
     return ret;
