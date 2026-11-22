@@ -338,6 +338,7 @@ csilk_server_free(csilk_server_t* server)
     csilk_mutex_destroy(&server->config_mutex);
 
     csilk_dev_hot_reload_stop(server);
+    _csilk_plugin_cleanup_server(server);
     csilk_server_wait_grace_period(server);
     _csilk_reload_mgr_free(server);
     _csilk_dispatch_pool_cleanup();

@@ -10,6 +10,8 @@
 
 #include "csilk/core/plugin.h"
 
+#ifdef CSILK_PLUGIN_BUILD
+
 static int
 vector_plugin_init(const csilk_plugin_ctx_t* ctx)
 {
@@ -22,7 +24,6 @@ vector_plugin_cleanup(void)
 {
 }
 
-#ifdef CSILK_PLUGIN_BUILD
 CSILK_INTERNAL int
 csilk_plugin_entry(const csilk_plugin_ctx_t* ctx)
 {
@@ -39,4 +40,5 @@ csilk_plugin_entry(const csilk_plugin_ctx_t* ctx)
     };
     return csilk_core_register_plugin(ctx->server, &plugin);
 }
+
 #endif

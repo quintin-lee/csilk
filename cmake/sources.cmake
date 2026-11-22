@@ -153,7 +153,6 @@ set(CSILK_VECTOR_SOURCES
     src/drivers/vector/vector_simd.c
     src/drivers/vector/milvus.c
     src/drivers/vector/qdrant.c
-    src/plugins/vector/vector_plugin.c
 )
 
 # ── Database Module ───────────────────────────────────────────────────────
@@ -164,7 +163,6 @@ set(CSILK_DB_SOURCES
     src/drivers/db/migration/migration_checksum.c
     src/drivers/db/migration/migration_engine.c
     src/drivers/db/migration/migration_lock.c
-    src/plugins/db/db_plugin.c
 )
 
 # ── Protocol Module (WebSocket, OpenAPI, Swagger and MCP) ────────────────
@@ -238,7 +236,6 @@ set(CSILK_AI_SOURCES
     src/drivers/ai/anthropic.c
     src/drivers/ai/llama.c
     src/drivers/ai/tool_registry.c
-    src/plugins/ai/ai_plugin.c
 )
 
 # ── MQ Module (Message queue & Raft consensus) ───────────────────────────
@@ -254,7 +251,6 @@ set(CSILK_MQ_SOURCES
     src/messaging/raft_consensus.c
     src/messaging/raft_rpc.c
     src/messaging/raft_snapshot.c
-    src/plugins/mq/mq_plugin.c
 )
 
 # ── Workflow & MCP Module (Agent scheduler, DSL, MCP protocols) ──────────
@@ -281,7 +277,6 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/workflow_manager.c
     src/workflow/workflow_debug.c
     src/workflow/wf_cluster_sm.c
-    src/plugins/workflow/workflow_plugin.c
 )
 
 # ── Combined Full Source List (Monolithic fallback & shared library) ──────

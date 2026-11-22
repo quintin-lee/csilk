@@ -12,6 +12,8 @@
 #include "csilk/core/plugin.h"
 #include "csilk/core/service_locator.h"
 
+#ifdef CSILK_PLUGIN_BUILD
+
 static int
 workflow_plugin_init(const csilk_plugin_ctx_t* ctx)
 {
@@ -19,7 +21,6 @@ workflow_plugin_init(const csilk_plugin_ctx_t* ctx)
      * degrades gracefully if AI or MQ are unavailable. */
     (void)csilk_core_service_get(ctx->server, "ai_engine");
     (void)csilk_core_service_get(ctx->server, "mq_bus");
-    (void)ctx;
     return 0;
 }
 
@@ -28,7 +29,6 @@ workflow_plugin_cleanup(void)
 {
 }
 
-#ifdef CSILK_PLUGIN_BUILD
 CSILK_INTERNAL int
 csilk_plugin_entry(const csilk_plugin_ctx_t* ctx)
 {
@@ -45,4 +45,5 @@ csilk_plugin_entry(const csilk_plugin_ctx_t* ctx)
     };
     return csilk_core_register_plugin(ctx->server, &plugin);
 }
+
 #endif

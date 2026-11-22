@@ -450,6 +450,59 @@ foreach(_name _dir IN ZIP_LISTS CSILK_CORE_TESTS CSILK_CORE_TEST_DIRS)
 endforeach()
 
 # Standalone core tests registered outside the ZIP_LISTS loop
+add_library(csilk_test_plugin SHARED tests/core/test_plugin_mod.c)
+set_target_properties(csilk_test_plugin PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    POSITION_INDEPENDENT_CODE ON)
+csilk_target_setup(csilk_test_plugin PRIVATE SHARED)
+
+add_library(csilk_test_plugin_bad_abi SHARED tests/core/test_plugin_bad_abi.c)
+set_target_properties(csilk_test_plugin_bad_abi PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
+    POSITION_INDEPENDENT_CODE ON)
+csilk_target_setup(csilk_test_plugin_bad_abi PRIVATE SHARED)
+
+add_csilk_test(test_plugin "${CMAKE_CURRENT_SOURCE_DIR}/tests/core/test_plugin.c")
+set_target_properties(test_plugin PROPERTIES ENABLE_EXPORTS TRUE)
+add_dependencies(test_plugin csilk_test_plugin csilk_test_plugin_bad_abi)
+target_compile_definitions(test_plugin PRIVATE
+    CSILK_TEST_PLUGIN_PATH="$<TARGET_FILE:csilk_test_plugin>"
+    CSILK_TEST_BAD_ABI_PLUGIN_PATH="$<TARGET_FILE:csilk_test_plugin_bad_abi>"
+)
+if(TARGET csilk_plugin_ai)
+  add_dependencies(test_plugin csilk_plugin_ai)
+  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_AI="$<TARGET_FILE:csilk_plugin_ai>")
+endif()
+if(TARGET csilk_plugin_mq)
+  add_dependencies(test_plugin csilk_plugin_mq)
+  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_MQ="$<TARGET_FILE:csilk_plugin_mq>")
+endif()
+if(TARGET csilk_plugin_db)
+  add_dependencies(test_plugin csilk_plugin_db)
+  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_DB="$<TARGET_FILE:csilk_plugin_db>")
+endif()
+if(TARGET csilk_plugin_vector)
+  add_dependencies(test_plugin csilk_plugin_vector)
+  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_VECTOR="$<TARGET_FILE:csilk_plugin_vector>")
+endif()
+if(TARGET csilk_plugin_workflow)
+  add_dependencies(test_plugin csilk_plugin_workflow)
+  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_WORKFLOW="$<TARGET_FILE:csilk_plugin_workflow>")
+endif()
+if(TARGET csilk_plugin_protocol)
+  add_dependencies(test_plugin csilk_plugin_protocol)
+  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_PROTOCOL="$<TARGET_FILE:csilk_plugin_protocol>")
+endif()
+if(TARGET csilk_plugin_wasm)
+  add_dependencies(test_plugin csilk_plugin_wasm)
+  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_WASM="$<TARGET_FILE:csilk_plugin_wasm>")
+endif()
+if(TARGET csilk_plugin_bypass)
+  add_dependencies(test_plugin csilk_plugin_bypass)
+  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_BYPASS="$<TARGET_FILE:csilk_plugin_bypass>")
+endif()
+list(APPEND CSILK_ALL_TEST_NAMES test_plugin)
+
 add_csilk_test(test_wasm_real "${CMAKE_CURRENT_SOURCE_DIR}/tests/core/test_wasm_real.c")
 add_csilk_test(test_ratelimit_distributed "${CMAKE_CURRENT_SOURCE_DIR}/tests/middleware/test_ratelimit_distributed.c")
 add_csilk_test(test_http3_skeleton "${CMAKE_CURRENT_SOURCE_DIR}/tests/protocols/test_http3_skeleton.c")
