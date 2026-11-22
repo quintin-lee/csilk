@@ -1,6 +1,6 @@
 # Arena 分配器实用指南
 
-> **Version**: 1.1.1 | **Last updated**: 2026-11-18
+> **Version**: 1.2.0 | **Last updated**: 2026-11-22
 
 csilk 的 Arena 分配器是一个**线性碰撞分配器**（Bump Allocator），每次分配约 3 条 CPU 指令，重置开销 ≤ 5ns。在 csilk 中，每个 HTTP 请求绑定一个 Arena，请求结束时一次性释放所有内存——无需逐次 `free`。
 

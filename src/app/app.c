@@ -18,7 +18,7 @@
  *   6. Register built-in endpoints: /openapi.json, /docs, /csilk-docs/.
  *
  * @copyright MIT License
- * @version 1.1.1
+ * @version 1.2.0
  */
 
 #include "csilk/app/app.h"

@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-22
+
 ### 新增
 
 - **模块化动态插件架构**（`include/csilk/core/plugin.h`、`include/csilk/core/service_locator.h`、`src/core/plugin/loader.c`、`CSILK_BUILD_PLUGIN_*` 选项）：运行时 `dlopen()` 插件加载器，支持 `CSILK_PLUGIN_ABI_VERSION` 校验、路径安全检查、按 `csilk_server_t` 隔离的插件与服务注册表、`csilk_app_new()` 通过 `CSILK_PLUGIN_PATHS` 自动加载，以及 `ai`、`mq`、`db`、`vector`、`workflow`、`protocol`、`wasm`、`bypass` 8 个独立 `.so` 插件。

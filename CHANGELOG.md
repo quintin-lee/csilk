@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-22
+
 ### Added
 
 - **Modular shared-library plugin architecture** (`include/csilk/core/plugin.h`, `include/csilk/core/service_locator.h`, `src/core/plugin/loader.c`, `CSILK_BUILD_PLUGIN_*` options): runtime `dlopen()` loader enforcing `CSILK_PLUGIN_ABI_VERSION`, safe path validation, server-scoped plugin/service registries, `CSILK_PLUGIN_PATHS` auto-loading in `csilk_app_new()`, and standalone shared plugins for `ai`, `mq`, `db`, `vector`, `workflow`, `protocol`, `wasm`, and `bypass`.
