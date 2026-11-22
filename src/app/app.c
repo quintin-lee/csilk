@@ -311,7 +311,9 @@ csilk_app_new(const char* config_path)
     }
     app->server->app = app; /* back-reference so handlers can recover the app */
 
-    csilk_app_load_plugins_from_env(app);
+    if (csilk_app_load_plugins_from_env(app) != 0) {
+        CSILK_LOG_W("App: one or more plugins from CSILK_PLUGIN_PATHS failed to load");
+    }
 
     csilk_server_set_config(app->server, &app->config.server);
     csilk_server_use(app->server, csilk_recovery_handler);
