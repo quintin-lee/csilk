@@ -34,6 +34,7 @@
 #include <unistd.h>
 #endif
 
+#include "csilk/core/plugin.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 #include "core/internal/srv_internal.h"
@@ -310,6 +311,8 @@ csilk_app_new(const char* config_path)
     }
     app->server->app = app; /* back-reference so handlers can recover the app */
 
+    csilk_app_load_plugins_from_env(app);
+
     csilk_server_set_config(app->server, &app->config.server);
     csilk_server_use(app->server, csilk_recovery_handler);
     csilk_server_use(app->server, csilk_logger_handler);
@@ -387,6 +390,52 @@ csilk_app_free(csilk_app_t* app)
     extern void csilk_openapi_cache_invalidate(void);
     csilk_openapi_cache_invalidate();
     free(app);
+}
+
+/** @brief Load a plugin shared library into the app's server. */
+int
+csilk_app_load_plugin(csilk_app_t* app, const char* path)
+{
+    if (!app || !app->server || !path) {
+        return -1;
+    }
+    return csilk_core_load_plugin(app->server, path);
+}
+
+/** @brief Load plugins from CSILK_PLUGIN_PATHS environment variable. */
+int
+csilk_app_load_plugins_from_env(csilk_app_t* app)
+{
+    if (!app || !app->server) {
+        return -1;
+    }
+
+    const char* env = getenv("CSILK_PLUGIN_PATHS");
+    if (!env || !*env) {
+        return 0;
+    }
+
+    /* Copy the env string since strtok modifies it. */
+    size_t len = strlen(env);
+    char*  buf = malloc(len + 1);
+    if (!buf) {
+        return -1;
+    }
+    memcpy(buf, env, len + 1);
+
+    int   rc = 0;
+    char* saveptr = NULL;
+    char* token = strtok_r(buf, ":", &saveptr);
+    while (token != NULL) {
+        if (csilk_core_load_plugin(app->server, token) != 0) {
+            CSILK_LOG_W("Failed to load plugin: %s", token);
+            rc = -1;
+        }
+        token = strtok_r(NULL, ":", &saveptr);
+    }
+
+    free(buf);
+    return rc;
 }
 
 /* ---- logger ---- */
