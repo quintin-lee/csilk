@@ -64,6 +64,29 @@ csilk_app_t* csilk_app_new(const char* config_path);
  * @param app Application handle (may be NULL). */
 void csilk_app_free(csilk_app_t* app);
 
+/* ---- Plugin loading ---- */
+
+/** @brief Load a plugin shared library into the app's server.
+ *
+ * Wraps csilk_core_load_plugin() for the app's server instance.  Plugins
+ * are loaded after csilk_app_new() returns, allowing the application to
+ * selectively enable optional modules (ai, mq, db, workflow, vector, ...).
+ *
+ * @param app Application handle.
+ * @param path Filesystem path to the plugin .so (or .dylib).
+ * @return 0 on success, -1 on failure. */
+int csilk_app_load_plugin(csilk_app_t* app, const char* path);
+
+/** @brief Load plugins listed in the CSILK_PLUGIN_PATHS environment variable.
+ *
+ * The environment variable contains colon-separated plugin paths (e.g.
+ * "./plugins/csilk_ai.so:./plugins/csilk_mq.so").  Called automatically
+ * by csilk_app_new() if the variable is set.
+ *
+ * @param app Application handle.
+ * @return 0 on success, -1 if any plugin failed to load. */
+int csilk_app_load_plugins_from_env(csilk_app_t* app);
+
 /* ---- Logger ---- */
 
 /** @brief Set the minimum log level.
