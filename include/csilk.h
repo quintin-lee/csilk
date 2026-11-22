@@ -32,3 +32,4 @@
 #include "csilk/app/admin.h"
 #include "csilk/core/server/hot_reload.h"
 #include "csilk/core/plugin.h"
+#include "csilk/core/service_locator.h"

@@ -15,6 +15,7 @@
 #include <string.h>
 
 #include "csilk/core/plugin.h"
+#include "csilk/core/service_locator.h"
 #include "csilk/core/server/server.h"
 
 /** @brief Maximum number of concurrently loaded plugins. */
@@ -27,9 +28,21 @@ typedef struct {
     int                   slot;   /**< Registry slot index (-1 = empty). */
 } csilk_plugin_registry_entry_t;
 
+/** @brief Registry entry for a named service. */
+typedef struct {
+    const char* name;    /**< Service name (e.g. "ai_engine"). */
+    void*       service; /**< Opaque service handle pointer. */
+    int         slot;    /**< Registry slot index (-1 = empty). */
+} csilk_service_registry_entry_t;
+
 /** @brief Global plugin registry (one per process). */
 static csilk_plugin_registry_entry_t g_plugin_registry[CSILK_MAX_PLUGINS];
 static int                           g_plugin_count = 0;
+
+/** @brief Global service registry (one per process). */
+enum { CSILK_MAX_SERVICES = 64 };
+static csilk_service_registry_entry_t g_service_registry[CSILK_MAX_SERVICES];
+static int                            g_service_count = 0;
 
 /** @brief Find an empty slot in the registry.
  * @return Slot index, or -1 if full. */
@@ -71,7 +84,13 @@ plugin_registry_init(void)
         g_plugin_registry[i].plugin = NULL;
         g_plugin_registry[i].handle = NULL;
     }
+    for (int i = 0; i < CSILK_MAX_SERVICES; i++) {
+        g_service_registry[i].slot = -1;
+        g_service_registry[i].name = NULL;
+        g_service_registry[i].service = NULL;
+    }
     g_plugin_count = 0;
+    g_service_count = 0;
 }
 
 /* Ensure the registry is initialized before first use. */
@@ -193,4 +212,74 @@ csilk_core_find_plugin(csilk_server_t* server, const char* name)
         return NULL;
     }
     return entry->plugin;
+}
+
+/** @brief Find an empty slot in the service registry.
+ * @return Slot index, or -1 if full. */
+static int
+service_find_empty_slot(void)
+{
+    for (int i = 0; i < CSILK_MAX_SERVICES; i++) {
+        if (g_service_registry[i].slot < 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/** @brief Find a service by name.
+ * @param name Service name to look up.
+ * @return Pointer to registry entry, or NULL if not found. */
+static csilk_service_registry_entry_t*
+service_find_by_name(const char* name)
+{
+    for (int i = 0; i < CSILK_MAX_SERVICES; i++) {
+        if (g_service_registry[i].slot >= 0 && g_service_registry[i].name != NULL &&
+            strcmp(g_service_registry[i].name, name) == 0) {
+            return &g_service_registry[i];
+        }
+    }
+    return NULL;
+}
+
+int
+csilk_core_service_register(csilk_server_t* server, const char* name, void* service)
+{
+    (void)server;
+
+    if (!g_registry_initialized || !name || !service) {
+        return -1;
+    }
+
+    if (service_find_by_name(name) != NULL) {
+        return -1;
+    }
+
+    int slot = service_find_empty_slot();
+    if (slot < 0) {
+        return -1;
+    }
+
+    g_service_registry[slot].slot = slot;
+    g_service_registry[slot].name = name;
+    g_service_registry[slot].service = service;
+    g_service_count++;
+
+    return 0;
+}
+
+void*
+csilk_core_service_get(csilk_server_t* server, const char* name)
+{
+    (void)server;
+
+    if (!g_registry_initialized || !name) {
+        return NULL;
+    }
+
+    csilk_service_registry_entry_t* entry = service_find_by_name(name);
+    if (!entry) {
+        return NULL;
+    }
+    return entry->service;
 }

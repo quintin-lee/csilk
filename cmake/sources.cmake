@@ -153,6 +153,7 @@ set(CSILK_VECTOR_SOURCES
     src/drivers/vector/vector_simd.c
     src/drivers/vector/milvus.c
     src/drivers/vector/qdrant.c
+    src/plugins/vector/vector_plugin.c
 )
 
 # ── Database Module ───────────────────────────────────────────────────────
@@ -280,6 +281,7 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/workflow_manager.c
     src/workflow/workflow_debug.c
     src/workflow/wf_cluster_sm.c
+    src/plugins/workflow/workflow_plugin.c
 )
 
 # ── Combined Full Source List (Monolithic fallback & shared library) ──────
