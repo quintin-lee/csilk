@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Modular shared-library plugin architecture** (`include/csilk/core/plugin.h`, `include/csilk/core/service_locator.h`, `src/core/plugin/loader.c`, `CSILK_BUILD_PLUGIN_*` options): runtime `dlopen()` loader enforcing `CSILK_PLUGIN_ABI_VERSION`, safe path validation, server-scoped plugin/service registries, `CSILK_PLUGIN_PATHS` auto-loading in `csilk_app_new()`, and standalone shared plugins for `ai`, `mq`, `db`, `vector`, `workflow`, `protocol`, `wasm`, and `bypass`.
+- **Linux seccomp & namespace micro-sandbox** (`CSILK_ENABLE_SECCOMP_SANDBOX`, `src/workflow/skill.c`) for local Agent Skill execution.
+- **HTTP/3 data plane & `io_uring` zero-copy enhancements**: HTTP/3 flow control and 0-RTT support, `io_uring` registered fixed buffers, direct FD table, and `recvmsg_multishot` UDP receive.
+- **Drivers & bindings**: embedded `llama.cpp` native AI driver binding (`src/drivers/ai/llama.c`), HNSW zero-copy mmap snapshot cold start, MCP WebSocket transport, `csilk_db_pool_acquire_timeout()`, and `csilk_db_query_async()`.
+
+### Changed
+
+- Moved app, permission, and WASM middleware registries out of process-global tables to per-instance contexts, localized vector driver vtables (`milvus_driver`, `qdrant_driver`), disabled IPO under sanitizers/coverage (`cmake/targets.cmake`), and added the `Modular Plugins` job to CI.
+
+### Fixed
+
+- **SSE close & server shutdown handle drain** (`src/middleware/sse.c`, `src/core/server/`): removed premature `CSILK_CONN_CLOSING` pre-marking in `csilk_sse_close()` so `on_close()` tears down connection timers cleanly, and drained pending MQ and leftover client handles before `csilk_server_free()` returns.
+- **Security & stability hardening across all modules**: fixed rejected TCP handle lifetime in `io_uring`, connection refcounting and async leases (including Python asyncio tokens), HTTP/2 body-size limits, Raft transport rebind and WAL compaction atomicity, bcrypt/session/WAF/JWT/OTLP bounds, MySQL/Redis/HNSW/stmt/llama/workflow/MCP guards, and all ASan/TSan/`clang-tidy` findings.
+
+### Tests
+
+- Added `test_plugin` (`tests/core/test_plugin.c`) verifying plugin ABI checks, path-traversal rejection, `CSILK_PLUGIN_PATHS` autoload, concurrent service locator access, and all 8 real plugin shared libraries.
+
 ## [1.1.1] - 2026-11-18
 
 ### Added
