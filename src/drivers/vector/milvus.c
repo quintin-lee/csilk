@@ -320,12 +320,6 @@ milvus_search(void*                           state_ptr,
     return 0;
 }
 
-const csilk_vector_db_driver_t milvus_driver = {.name = "milvus",
-                                                .init = milvus_init,
-                                                .upsert = milvus_upsert,
-                                                .search = milvus_search,
-                                                .free = milvus_free};
-
 /**
  * @brief Register the Milvus vector-DB driver with the subsystem.
  *
@@ -337,6 +331,11 @@ const csilk_vector_db_driver_t milvus_driver = {.name = "milvus",
 void
 csilk_vector_milvus_init(void)
 {
+    static const csilk_vector_db_driver_t milvus_driver = {.name = "milvus",
+                                                           .init = milvus_init,
+                                                           .upsert = milvus_upsert,
+                                                           .search = milvus_search,
+                                                           .free = milvus_free};
     void csilk_vector_db_register_driver(const csilk_vector_db_driver_t* driver);
     csilk_vector_db_register_driver(&milvus_driver);
 }

@@ -295,20 +295,6 @@ qdrant_search(void*                           state_ptr,
     return 0;
 }
 
-const csilk_vector_db_driver_t qdrant_driver = {.name = "qdrant",
-                                                .init = qdrant_init,
-                                                .upsert = qdrant_upsert,
-                                                .search = qdrant_search,
-                                                .free = qdrant_free};
-
-/**
- * @brief Register the Qdrant vector-DB driver with the subsystem.
- *
- * Adds the qdrant_driver vtable to the global vector driver registry so it can
- * be selected by name from csilk_vector_db_new().
- *
- * @note Idempotency is not enforced here; registering twice would add a
- *       second entry. */
 /**
  * @brief Register the Qdrant vector-DB driver with the subsystem.
  *
@@ -320,6 +306,11 @@ const csilk_vector_db_driver_t qdrant_driver = {.name = "qdrant",
 void
 csilk_vector_qdrant_init(void)
 {
+    static const csilk_vector_db_driver_t qdrant_driver = {.name = "qdrant",
+                                                           .init = qdrant_init,
+                                                           .upsert = qdrant_upsert,
+                                                           .search = qdrant_search,
+                                                           .free = qdrant_free};
     void csilk_vector_db_register_driver(const csilk_vector_db_driver_t* driver);
     csilk_vector_db_register_driver(&qdrant_driver);
 }
