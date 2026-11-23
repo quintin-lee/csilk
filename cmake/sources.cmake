@@ -11,6 +11,7 @@ set(CSILK_BASE_SOURCES
     src/core/primitives/header_map.c
     src/core/primitives/query.c
     src/core/primitives/url.c
+    src/core/primitives/ssrf.c
 )
 
 # ── Crypto and cipher implementations ────────────────────────────────────

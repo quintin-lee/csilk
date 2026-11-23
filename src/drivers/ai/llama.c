@@ -358,7 +358,8 @@ llama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_re
         if (req->stream && req->on_chunk && res->content) {
             char* copy = strdup(res->content);
             if (copy) {
-                char* token = strtok(copy, " ");
+                char* saveptr = nullptr;
+                char* token = strtok_r(copy, " ", &saveptr);
                 bool  first = true;
                 while (token) {
                     if (!first) {
@@ -366,7 +367,7 @@ llama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_re
                     }
                     req->on_chunk(token, req->user_data);
                     first = false;
-                    token = strtok(nullptr, " ");
+                    token = strtok_r(nullptr, " ", &saveptr);
                 }
                 free(copy);
             }
