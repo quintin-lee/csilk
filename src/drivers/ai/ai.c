@@ -20,6 +20,7 @@
  */
 
 #include "csilk/drivers/ai.h"
+#include "csilk/middleware/otlp_trace.h"
 
 #include <ctype.h>
 #include <stdatomic.h>
@@ -561,6 +562,38 @@ csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_
     return status;
 }
 
+int
+csilk_ai_chat_ctx(csilk_ai_t*                    ai,
+                  csilk_ctx_t*                   ctx,
+                  const csilk_ai_chat_request_t* req,
+                  csilk_ai_chat_response_t*      res)
+{
+    if (!ai || !req || !res) {
+        return -1;
+    }
+    uint64_t t0 = csilk_io_hrtime();
+    int      rc = csilk_ai_chat(ai, req, res);
+    uint64_t t1 = csilk_io_hrtime();
+    uint64_t latency_ms = (t1 > t0) ? (t1 - t0) / 1000000ULL : 0;
+
+    if (ctx) {
+        csilk_ai_trace_t* trace = csilk_ai_trace_new(0, 0);
+        if (trace) {
+            csilk_ai_trace_set_provider(
+                trace, ai->driver ? ai->driver->name : "ai", req->model ? req->model : "default");
+            trace->latency_ms = (double)latency_ms;
+            if (rc == 0) {
+                trace->prompt_tokens = res->prompt_tokens;
+                trace->completion_tokens = res->completion_tokens;
+                trace->total_tokens = res->total_tokens;
+            }
+            csilk_otlp_ctx_attach_ai_trace(ctx, trace);
+            csilk_ctx_defer(ctx, (void (*)(void*))csilk_ai_trace_free, trace);
+        }
+    }
+    return rc;
+}
+
 /** @brief Per-async-chat-request context passed between the work callback
  *  (on a thread-pool thread) and the after-work callback (on the main loop
  *  thread). Keeps the response and request copy on the heap so it survives across threads
@@ -893,7 +926,9 @@ csilk_ai_free(csilk_ai_t* ai)
         return;
     }
     CSILK_LOG_D("Freeing AI engine instance and driver state for driver '%s'", ai->driver->name);
-    ai->driver->free(ai->driver_state);
+    if (ai->driver->free) {
+        ai->driver->free(ai->driver_state);
+    }
     free(ai);
 }
 

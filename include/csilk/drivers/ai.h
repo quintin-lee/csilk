@@ -29,6 +29,9 @@
 #include <time.h>
 #include "csilk/core/json/json.h"
 
+struct csilk_ctx_s;
+typedef struct csilk_ctx_s csilk_ctx_t;
+
 /** @brief Maximum number of AI driver backends that can be registered. */
 enum { MAX_DRIVERS = 16 };
 
@@ -229,6 +232,21 @@ csilk_ai_t* csilk_ai_new(const char* driver_name, const char* api_key, const cha
  * @return 0 on success, -1 on failure. */
 int
 csilk_ai_chat(csilk_ai_t* ai, const csilk_ai_chat_request_t* req, csilk_ai_chat_response_t* res);
+
+/**
+ * @brief Perform a chat completion in the context of an HTTP request, automatically
+ *        binding AI metrics and tool spans to the request's OpenTelemetry trace.
+ *
+ * @param ai  AI handle.
+ * @param ctx HTTP request context (may be NULL for uninstrumented call).
+ * @param req Chat request parameters.
+ * @param res [out] Chat response to populate.
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_ai_chat_ctx(csilk_ai_t*                    ai,
+                      csilk_ctx_t*                   ctx,
+                      const csilk_ai_chat_request_t* req,
+                      csilk_ai_chat_response_t*      res);
 
 /** @brief Perform an asynchronous chat completion.
  * @note Uses the framework's internal thread pool. The callback is invoked on

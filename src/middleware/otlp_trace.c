@@ -682,11 +682,21 @@ csilk_otlp_ctx_attach_ai_trace(csilk_ctx_t* ctx, const struct csilk_ai_trace_s* 
     if (!ctx || !trace) {
         return -1;
     }
+    csilk_set(ctx, "ai_trace", (void*)trace);
     csilk_otlp_span_t* span = (csilk_otlp_span_t*)csilk_get(ctx, "otlp_span");
     if (!span) {
-        return -1;
+        return 0;
     }
     return csilk_otlp_span_bind_ai_trace(span, trace);
+}
+
+const struct csilk_ai_trace_s*
+csilk_otlp_ctx_get_ai_trace(csilk_ctx_t* ctx)
+{
+    if (!ctx) {
+        return NULL;
+    }
+    return (const struct csilk_ai_trace_s*)csilk_get(ctx, "ai_trace");
 }
 
 int

@@ -120,6 +120,14 @@ int csilk_otlp_span_bind_ai_trace(csilk_otlp_span_t* span, const struct csilk_ai
 int csilk_otlp_ctx_attach_ai_trace(csilk_ctx_t* ctx, const struct csilk_ai_trace_s* trace);
 
 /**
+ * @brief Retrieve the AI trace container attached to the request context.
+ *
+ * @param ctx HTTP request context.
+ * @return Attached trace pointer, or NULL if none attached.
+ */
+const struct csilk_ai_trace_s* csilk_otlp_ctx_get_ai_trace(csilk_ctx_t* ctx);
+
+/**
  * @brief Export a single OTLP span and its sidecar attributes to JSON format.
  *
  * @param span Span handle.
