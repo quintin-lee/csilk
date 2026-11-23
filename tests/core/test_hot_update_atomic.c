@@ -40,6 +40,7 @@ test_hot_update_invalid_args(void)
     assert(csilk_hot_update(server, &bundle) == -1);
 
     csilk_server_free(server);
+    csilk_router_free(r);
     printf("  csilk_hot_update parameter validation passed!\n");
 }
 
@@ -100,6 +101,7 @@ test_hot_update_router_and_config(void)
 
     csilk_server_wait_grace_period(server);
     csilk_server_free(server);
+    csilk_router_free(r2);
     printf("  csilk_hot_update atomic router & config update passed!\n");
 }
 

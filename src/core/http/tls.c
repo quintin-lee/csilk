@@ -225,13 +225,19 @@ process_tls_read(csilk_client_t* client)
     }
 
     while (1) {
-        char  stack_buf[4096];
-        char* buf = NULL;
+        char stack_buf[4096];
+        n = SSL_read(client->ssl, stack_buf, sizeof(stack_buf));
+        if (n <= 0) {
+            break;
+        }
+
+        char* buf = stack_buf;
         int   is_long_lived = (client->ctx.is_websocket || client->protocol == CSILK_PROTO_HTTP2);
-        if (is_long_lived) {
-            buf = stack_buf;
-        } else {
-            buf = csilk_arena_alloc(client->ctx.arena, 4096);
+        if (!is_long_lived) {
+            if (!client->ctx.arena && client->owner_pool) {
+                client->ctx.arena = pool_get_arena(client->owner_pool);
+            }
+            buf = csilk_arena_alloc(client->ctx.arena, (size_t)n);
             if (!buf) {
                 CSILK_LOG_E("TLS: Failed to allocate read buffer in arena");
                 if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
@@ -239,10 +245,7 @@ process_tls_read(csilk_client_t* client)
                 }
                 break;
             }
-        }
-        n = SSL_read(client->ssl, buf, 4096);
-        if (n <= 0) {
-            break;
+            memcpy(buf, stack_buf, (size_t)n);
         }
 
         if (client->ctx.is_websocket) {

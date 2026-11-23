@@ -28,7 +28,20 @@ mock_server(csilk_io_loop_t* loop)
 static void
 free_mock_server(csilk_server_t* s)
 {
-    free(s->worker_pools);
+    if (s && s->worker_pools) {
+        for (int w = 0; w < s->worker_pool_count; w++) {
+            worker_pool_t* wp = &s->worker_pools[w];
+            int client_cnt = atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
+            for (int i = 0; i < client_cnt; i++) {
+                free(wp->client_pool[i]);
+            }
+            int arena_cnt = atomic_load_explicit(&wp->arena_pool_count, memory_order_relaxed);
+            for (int i = 0; i < arena_cnt; i++) {
+                csilk_arena_free(wp->arena_pool[i]);
+            }
+        }
+        free(s->worker_pools);
+    }
     free(s);
 }
 
@@ -87,6 +100,19 @@ test_lazy_arena_lifecycle(void)
     /* 5. Clean up client */
     _csilk_handle_post_response(client, 1);
     assert(client->ctx.arena == nullptr);
+
+    csilk_io_timer_stop(&client->timer);
+    csilk_io_timer_stop(&client->read_timer);
+    csilk_io_timer_stop(&client->write_timer);
+    csilk_io_timer_stop(&client->request_timer);
+
+    csilk_io_close((csilk_io_handle_t*)&client->timer, NULL);
+    csilk_io_close((csilk_io_handle_t*)&client->read_timer, NULL);
+    csilk_io_close((csilk_io_handle_t*)&client->write_timer, NULL);
+    csilk_io_close((csilk_io_handle_t*)&client->request_timer, NULL);
+
+    csilk_io_run(&loop, CSILK_IO_RUN_DEFAULT);
+    csilk_io_loop_close(&loop);
 
     pool_put(wp, client);
     free_mock_server(server);
