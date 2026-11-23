@@ -1,0 +1,62 @@
+name: Setup APT dependencies
+description: Configure resilient APT timeouts and mirrors and install Ubuntu packages
+inputs:
+  packages:
+    description: Space-separated list of APT packages to install
+    required: true
+  arm64_ports:
+    description: Enable Ubuntu Ports arm64 multi-arch sources before updating
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Install APT packages
+      shell: bash
+      env:
+        APT_PACKAGES: ${{ inputs.packages }}
+        ENABLE_ARM64_PORTS: ${{ inputs.arm64_ports }}
+      run: |
+        set -euo pipefail
+
+        # Prevent hung TCP sockets and slow IPv6 stalls without discarding local fast mirrors.
+        sudo tee /etc/apt/apt.conf.d/99csilk-ci >/dev/null <<'EOF'
+        Acquire::Retries "3";
+        Acquire::http::Timeout "15";
+        Acquire::https::Timeout "15";
+        Acquire::ForceIPv4 "true";
+        EOF
+
+        if [ "${ENABLE_ARM64_PORTS}" = "true" ]; then
+          # Restrict default sources to amd64 to avoid 404s on arm64 package lists
+          sudo sed -i 's/Types: deb/Types: deb\nArchitectures: amd64/g' /etc/apt/sources.list.d/ubuntu.sources
+
+          # Add ports repository for arm64 architecture
+          printf "%s\n" \
+            "Types: deb" \
+            "URIs: http://ports.ubuntu.com/ubuntu-ports/" \
+            "Suites: noble noble-updates noble-backports noble-security" \
+            "Components: main restricted universe multiverse" \
+            "Architectures: arm64" \
+            "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" | sudo tee /etc/apt/sources.list.d/ports.sources >/dev/null
+
+          sudo dpkg --add-architecture arm64
+        fi
+
+        fallback_to_archive() {
+          echo "::warning::Default apt mirror failed or timed out; falling back to archive.ubuntu.com"
+          sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
+          sudo timeout 120 apt-get update
+        }
+
+        if ! sudo timeout 60 apt-get update; then
+          fallback_to_archive
+        fi
+
+        # shellcheck disable=SC2086
+        if ! sudo timeout 180 apt-get install -y ${APT_PACKAGES}; then
+          fallback_to_archive
+          # shellcheck disable=SC2086
+          sudo timeout 240 apt-get install -y --fix-missing ${APT_PACKAGES}
+        fi

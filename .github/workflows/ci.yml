@@ -45,13 +45,11 @@ jobs:
 
     - name: Install dependencies (Linux)
       if: runner.os == 'Linux'
-      run: |
-        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-        sudo apt-get update -o Acquire::Retries=3
-        sudo apt-get install -y -o Acquire::Retries=3 \
-          cmake clang clang-tidy ccache \
-          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev libuv1-dev \
+      uses: ./.github/actions/setup-apt
+      with:
+        packages: >-
+          cmake clang clang-tidy ccache libyaml-dev zlib1g-dev
+          libcurl4-openssl-dev libpq-dev libsqlite3-dev libuv1-dev
           default-libmysqlclient-dev libhiredis-dev
 
     - name: Install dependencies (macOS)
@@ -155,13 +153,11 @@ jobs:
           ${{ runner.os }}-lint-deps-
 
     - name: Install dependencies
-      run: |
-        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-        sudo apt-get update -o Acquire::Retries=3
-        sudo apt-get install -y -o Acquire::Retries=3 \
-          cmake clang clang-format clang-tidy \
-          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev libuv1-dev
+      uses: ./.github/actions/setup-apt
+      with:
+        packages: >-
+          cmake clang clang-format clang-tidy libyaml-dev zlib1g-dev
+          libcurl4-openssl-dev libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Validate Mermaid diagrams
       run: python3 scripts/check_mermaid.py .
@@ -204,12 +200,10 @@ jobs:
           ${{ runner.os }}-fuzz-deps-
 
     - name: Install dependencies
-      run: |
-        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-        sudo apt-get update -o Acquire::Retries=3
-        sudo apt-get install -y -o Acquire::Retries=3 \
-          cmake clang-19 \
-          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+      uses: ./.github/actions/setup-apt
+      with:
+        packages: >-
+          cmake clang-19 libyaml-dev zlib1g-dev libcurl4-openssl-dev
           libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Configure
@@ -258,25 +252,12 @@ jobs:
     - uses: actions/checkout@v5
 
     - name: Install cross-compilation toolchain
-      run: |
-        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-        # Restrict default sources to amd64 to avoid 404s on arm64 package lists
-        sudo sed -i 's/Types: deb/Types: deb\nArchitectures: amd64/g' /etc/apt/sources.list.d/ubuntu.sources
-        
-        # Add ports repository for arm64 architecture
-        printf "%s\n" \
-          "Types: deb" \
-          "URIs: http://ports.ubuntu.com/ubuntu-ports/" \
-          "Suites: noble noble-updates noble-backports noble-security" \
-          "Components: main restricted universe multiverse" \
-          "Architectures: arm64" \
-          "Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg" | sudo tee /etc/apt/sources.list.d/ports.sources
-        
-        sudo dpkg --add-architecture arm64
-        sudo apt-get update -o Acquire::Retries=3
-        sudo apt-get install -y -o Acquire::Retries=3 \
-          cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-          libyaml-dev:arm64 zlib1g-dev:arm64 libcurl4-openssl-dev:arm64 \
+      uses: ./.github/actions/setup-apt
+      with:
+        arm64_ports: 'true'
+        packages: >-
+          cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          libyaml-dev:arm64 zlib1g-dev:arm64 libcurl4-openssl-dev:arm64
           libpq-dev:arm64 libsqlite3-dev:arm64 libuv1-dev:arm64
 
     - name: Configure (ARM64 cross-compile)
@@ -318,12 +299,10 @@ jobs:
           ${{ runner.os }}-uring-deps-
 
     - name: Install dependencies
-      run: |
-        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-        sudo apt-get update -o Acquire::Retries=3
-        sudo apt-get install -y -o Acquire::Retries=3 \
-          cmake clang \
-          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+      uses: ./.github/actions/setup-apt
+      with:
+        packages: >-
+          cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev
           libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Configure (libuv + io_uring)
@@ -373,12 +352,10 @@ jobs:
           ${{ runner.os }}-tsan-deps-
 
     - name: Install dependencies
-      run: |
-        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-        sudo apt-get update -o Acquire::Retries=3
-        sudo apt-get install -y -o Acquire::Retries=3 \
-          cmake clang \
-          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+      uses: ./.github/actions/setup-apt
+      with:
+        packages: >-
+          cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev
           libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Configure
@@ -410,12 +387,10 @@ jobs:
           ${{ runner.os }}-bench-deps-
 
     - name: Install dependencies
-      run: |
-        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-        sudo apt-get update -o Acquire::Retries=3
-        sudo apt-get install -y -o Acquire::Retries=3 \
-          cmake clang \
-          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+      uses: ./.github/actions/setup-apt
+      with:
+        packages: >-
+          cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev
           libpq-dev libsqlite3-dev libuv1-dev wrk
 
     - name: Run benchmarks (save)
@@ -450,12 +425,10 @@ jobs:
           ${{ runner.os }}-examples-deps-
 
     - name: Install dependencies
-      run: |
-        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-        sudo apt-get update -o Acquire::Retries=3
-        sudo apt-get install -y -o Acquire::Retries=3 \
-          cmake clang \
-          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
+      uses: ./.github/actions/setup-apt
+      with:
+        packages: >-
+          cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev
           libpq-dev libsqlite3-dev curl libuv1-dev
 
     - name: Configure
@@ -544,13 +517,12 @@ jobs:
           ${{ runner.os }}-db-deps-
 
     - name: Install dependencies
-      run: |
-        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-        sudo apt-get update -o Acquire::Retries=3
-        sudo apt-get install -y -o Acquire::Retries=3 \
-          cmake clang \
-          libyaml-dev zlib1g-dev libcurl4-openssl-dev libuv1-dev \
-          libsqlite3-dev libpq-dev default-libmysqlclient-dev libhiredis-dev libmongoc-dev libbson-dev
+      uses: ./.github/actions/setup-apt
+      with:
+        packages: >-
+          cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev libuv1-dev
+          libsqlite3-dev libpq-dev default-libmysqlclient-dev libhiredis-dev
+          libmongoc-dev libbson-dev
 
     - name: Wait for database services
       run: |
@@ -603,13 +575,11 @@ jobs:
           ${{ runner.os }}-plugins-deps-
 
     - name: Install dependencies
-      run: |
-        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-        sudo apt-get update -o Acquire::Retries=3
-        sudo apt-get install -y -o Acquire::Retries=3 \
-          cmake clang \
-          libyaml-dev zlib1g-dev libcurl4-openssl-dev \
-          libpq-dev libsqlite3-dev libuv1-dev \
+      uses: ./.github/actions/setup-apt
+      with:
+        packages: >-
+          cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev
+          libpq-dev libsqlite3-dev libuv1-dev
           default-libmysqlclient-dev libhiredis-dev
 
     - name: Configure

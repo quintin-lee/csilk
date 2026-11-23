@@ -21,14 +21,11 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install dependencies
-        run: |
-          sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-          sudo apt-get update -o Acquire::Retries=3
-          sudo apt-get install -y -o Acquire::Retries=3 \
-            cmake build-essential curl \
-            doxygen graphviz \
-            libyaml-dev zlib1g-dev \
-            libcurl4-openssl-dev \
+        uses: ./.github/actions/setup-apt
+        with:
+          packages: >-
+            cmake build-essential curl doxygen graphviz
+            libyaml-dev zlib1g-dev libcurl4-openssl-dev
             libpq-dev libsqlite3-dev libuv1-dev
 
       - name: Validate Mermaid diagrams
