@@ -21,6 +21,8 @@ mock_server(csilk_io_loop_t* loop)
     s->loop = loop;
     s->worker_pools = calloc(1, sizeof(worker_pool_t));
     _csilk_worker_pool_atomics_init(&s->worker_pools[0], s, 0);
+    s->worker_pools[0].loop_ptr = loop;
+    _csilk_worker_set_current_pool(&s->worker_pools[0]);
     s->worker_pool_count = 1;
     return s;
 }
@@ -28,6 +30,7 @@ mock_server(csilk_io_loop_t* loop)
 static void
 free_mock_server(csilk_server_t* s)
 {
+    _csilk_worker_set_current_pool(NULL);
     if (s && s->worker_pools) {
         for (int w = 0; w < s->worker_pool_count; w++) {
             worker_pool_t* wp = &s->worker_pools[w];
@@ -63,6 +66,7 @@ test_lazy_arena_lifecycle(void)
     assert(client != nullptr);
     client->server = server;
     client->owner_pool = wp;
+    client->handle.loop = &loop;
 
     csilk_io_timer_init(&loop, &client->timer);
     csilk_io_timer_init(&loop, &client->read_timer);
@@ -116,6 +120,9 @@ test_lazy_arena_lifecycle(void)
 
     pool_put(wp, client);
     free_mock_server(server);
+#if defined(CSILK_USE_URING) && CSILK_USE_URING
+    csilk_io_loop_close(csilk_io_default_loop());
+#endif
     printf("  Lazy arena lifecycle passed!\n");
 }
 

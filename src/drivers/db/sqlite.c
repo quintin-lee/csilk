@@ -53,6 +53,9 @@ sqlite_connect(csilk_db_pool_t* pool, const char* dsn)
     int rc = sqlite3_open_v2(dsn, &conn->db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, NULL);
     if (rc != SQLITE_OK) {
         CSILK_LOG_E("csilk_db_sqlite: cannot open '%s': %s", dsn, sqlite3_errmsg(conn->db));
+        if (conn->db) {
+            sqlite3_close(conn->db);
+        }
         free(conn);
         return -1;
     }
