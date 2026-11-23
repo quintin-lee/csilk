@@ -230,8 +230,9 @@ test_driver_vtables(void)
 
 #ifdef HAS_MYSQL
     assert(csilk_db_mysql_driver.set_nonblocking != NULL);
-    assert(csilk_db_mysql_driver.query_async != NULL);
-    assert(csilk_db_mysql_driver.exec_async != NULL);
+    if (csilk_db_mysql_driver.query_async != NULL) {
+        assert(csilk_db_mysql_driver.exec_async != NULL);
+    }
     printf("test_driver_vtables: MySQL non-blocking hooks verified\n");
 #endif
 

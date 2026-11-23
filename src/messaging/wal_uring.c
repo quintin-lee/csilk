@@ -246,7 +246,7 @@ csilk_wal_ring_submit_writev(
         sqe->fd = fd;
         sqe->addr = (uint64_t)(uintptr_t)iov;
         sqe->len = (uint32_t)iovcnt;
-        sqe->off = (offset >= 0) ? (uint64_t)offset : 0;
+        sqe->off = (offset >= 0) ? (uint64_t)offset : (uint64_t)-1LL;
         sqe->user_data = 1;
 
         ring->sq_array[idx] = idx;
@@ -336,7 +336,7 @@ csilk_wal_ring_submit_writev_fsync(csilk_wal_ring_t*   ring,
         sqe1->fd = fd;
         sqe1->addr = (uint64_t)(uintptr_t)iov;
         sqe1->len = (uint32_t)iovcnt;
-        sqe1->off = (offset >= 0) ? (uint64_t)offset : 0;
+        sqe1->off = (offset >= 0) ? (uint64_t)offset : (uint64_t)-1LL;
         sqe1->user_data = 1;
         ring->sq_array[idx1] = idx1;
         ring->sq_tail++;

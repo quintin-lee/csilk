@@ -53,8 +53,13 @@ raft_pick_election_timeout(csilk_raft_node_t* node)
 }
 
 static int
-raft_write_wal_record_fd(
-    csilk_wal_ring_t* ring, int fd, uint64_t index, uint64_t term, const uint8_t* data, size_t len)
+raft_write_wal_record_fd(csilk_wal_ring_t* ring,
+                         int               fd,
+                         uint64_t          index,
+                         uint64_t          term,
+                         const uint8_t*    data,
+                         size_t            len,
+                         off_t             offset)
 {
     if (len > CSILK_RAFT_MAX_FRAME_DATA) {
         return -1;
@@ -87,12 +92,15 @@ raft_write_wal_record_fd(
     iovcnt++;
 
     if (ring) {
-        if (csilk_wal_ring_submit_writev(ring, fd, iov, iovcnt, -1) != 0) {
+        if (csilk_wal_ring_submit_writev(ring, fd, iov, iovcnt, offset) != 0) {
             return -1;
         }
         return (csilk_wal_ring_flush(ring, 1) >= 0) ? 0 : -1;
     }
 
+    if (offset >= 0 && lseek(fd, offset, SEEK_SET) < 0) {
+        return -1;
+    }
     return _csilk_wal_writev_all(fd, iov, iovcnt);
 }
 
@@ -374,7 +382,8 @@ _raft_wal_append_locked(
     uint64_t wal_offset = node->wal_file_size;
 
     if (node->wal_fd >= 0) {
-        if (raft_write_wal_record_fd(node->wal_ring, node->wal_fd, next_index, term, data, len) !=
+        if (raft_write_wal_record_fd(
+                node->wal_ring, node->wal_fd, next_index, term, data, len, (off_t)wal_offset) !=
             0) {
             (void)ftruncate(node->wal_fd, (off_t)wal_offset);
             (void)lseek(node->wal_fd, (off_t)wal_offset, SEEK_SET);
@@ -523,8 +532,13 @@ _raft_wal_compact_prefix_locked(csilk_raft_node_t* node,
         uint64_t offset = 0;
         for (size_t i = 0; i < remain; i++) {
             const csilk_raft_log_entry_t* ent = &node->entries[drop_count + i];
-            if (raft_write_wal_record_fd(
-                    node->wal_ring, tmp_fd, ent->index, ent->term, ent->data, ent->len) != 0) {
+            if (raft_write_wal_record_fd(node->wal_ring,
+                                         tmp_fd,
+                                         ent->index,
+                                         ent->term,
+                                         ent->data,
+                                         ent->len,
+                                         (off_t)offset) != 0) {
                 close(tmp_fd);
                 unlink(tmp_path);
                 free(tmp_path);

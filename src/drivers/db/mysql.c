@@ -848,6 +848,18 @@ mysql_drv_last_error(csilk_db_pool_t* pool, csilk_db_err_t* out_err)
     return 0;
 }
 
+static int
+mysql_drv_set_nonblocking(csilk_db_pool_t* pool, int enable)
+{
+    (void)pool;
+#ifdef MYSQL_WAIT_READ
+    (void)enable;
+    return 0;
+#else
+    return enable ? -1 : 0;
+#endif
+}
+
 #ifdef MYSQL_WAIT_READ
 static csilk_json_t*
 mysql_res_to_json(MYSQL_RES* res)
@@ -878,14 +890,6 @@ mysql_res_to_json(MYSQL_RES* res)
         csilk_json_array_append(array, obj);
     }
     return array;
-}
-
-static int
-mysql_drv_set_nonblocking(csilk_db_pool_t* pool, int enable)
-{
-    (void)pool;
-    (void)enable;
-    return 0;
 }
 
 static int
@@ -1038,8 +1042,8 @@ csilk_db_driver_t csilk_db_mysql_driver = {
     .stmt_close = mysql_drv_stmt_close,
     .free_result = mysql_free_csilk_result,
     .last_error = mysql_drv_last_error,
-#ifdef MYSQL_WAIT_READ
     .set_nonblocking = mysql_drv_set_nonblocking,
+#ifdef MYSQL_WAIT_READ
     .query_async = mysql_drv_query_async,
     .exec_async = mysql_drv_exec_async,
 #endif

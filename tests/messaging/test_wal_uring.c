@@ -50,7 +50,8 @@ test_wal_uring_batch_writev_and_fsync(void)
     iov1[0].iov_len = strlen(chunk1_hdr);
     iov1[1].iov_base = chunk1_body;
     iov1[1].iov_len = strlen(chunk1_body);
-    assert(csilk_wal_ring_submit_writev(ring, fd, iov1, 2, -1) == 0);
+    size_t len1 = iov1[0].iov_len + iov1[1].iov_len;
+    assert(csilk_wal_ring_submit_writev(ring, fd, iov1, 2, 0) == 0);
 
     char         chunk2_hdr[] = "HDR2:";
     char         chunk2_body[] = "second_payload_2\n";
@@ -59,7 +60,7 @@ test_wal_uring_batch_writev_and_fsync(void)
     iov2[0].iov_len = strlen(chunk2_hdr);
     iov2[1].iov_base = chunk2_body;
     iov2[1].iov_len = strlen(chunk2_body);
-    assert(csilk_wal_ring_submit_writev(ring, fd, iov2, 2, -1) == 0);
+    assert(csilk_wal_ring_submit_writev(ring, fd, iov2, 2, (off_t)len1) == 0);
 
     /* Submit fsync */
     assert(csilk_wal_ring_submit_fsync(ring, fd, 1) == 0);
