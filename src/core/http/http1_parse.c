@@ -64,6 +64,11 @@ on_message_begin(llhttp_t* p)
     client->current_header_value.data = NULL;
     client->current_header_value.len = 0;
 
+    if (!client->ctx.arena && client->owner_pool) {
+        extern csilk_arena_t* pool_get_arena(worker_pool_t * wp);
+        client->ctx.arena = pool_get_arena(client->owner_pool);
+    }
+
     unsigned int req_timeout = _csilk_server_get_request_timeout_ms(client->server);
     if (req_timeout > 0) {
         csilk_io_timer_stop(&client->request_timer);

@@ -123,8 +123,7 @@ on_new_connection(csilk_io_stream_t* server_stream, int status)
     client->handle.data = client;
 
     _csilk_ctx_init(&client->ctx, server, client);
-    extern csilk_arena_t* pool_get_arena(worker_pool_t * wp);
-    client->ctx.arena = pool_get_arena(wp);
+    client->ctx.arena = NULL; /* Lazy arena: deferred until request bytes arrive */
 
     extern void client_list_add(csilk_server_t * server, csilk_client_t * client);
     client_list_add(server, client);
@@ -259,6 +258,10 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
         csilk_io_timer_start(&client->read_timer, on_read_timeout, read_timeout, 0);
     }
     if (nread > 0) {
+        if (!client->ctx.arena && wp) {
+            extern csilk_arena_t* pool_get_arena(worker_pool_t * wp);
+            client->ctx.arena = pool_get_arena(wp);
+        }
         if (client->ssl) {
             BIO_write(client->read_bio, base, (int)nread);
             extern void process_tls_read(csilk_client_t * client);

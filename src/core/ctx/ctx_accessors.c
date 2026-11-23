@@ -328,7 +328,17 @@ csilk_get_request_id(csilk_ctx_t* c)
 csilk_arena_t*
 csilk_get_arena(csilk_ctx_t* c)
 {
-    return c ? c->arena : NULL;
+    if (!c) {
+        return NULL;
+    }
+    if (!c->arena && c->_internal_client) {
+        csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+        if (client->owner_pool) {
+            extern csilk_arena_t* pool_get_arena(worker_pool_t * wp);
+            c->arena = pool_get_arena(client->owner_pool);
+        }
+    }
+    return c->arena;
 }
 
 /**

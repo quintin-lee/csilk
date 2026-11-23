@@ -54,6 +54,13 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
         return;
     }
 
+    /* Idle keep-alive arena recycling: release arena back to pool while idling */
+    if (keep_alive && client->ctx.arena && client->owner_pool) {
+        extern void pool_put_arena(worker_pool_t * wp, csilk_arena_t * arena);
+        pool_put_arena(client->owner_pool, client->ctx.arena);
+        client->ctx.arena = NULL;
+    }
+
     CSILK_LOG_I("_csilk_handle_post_response called, keep_alive=%d", keep_alive);
     if (keep_alive) {
         /* If the server is shutting down and this handle was already queued
