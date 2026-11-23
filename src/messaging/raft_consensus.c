@@ -234,6 +234,13 @@ _raft_apply_committed_locked(csilk_raft_node_t* node)
             break;
         }
         node->last_applied = next_idx;
+        if (ent->data && ent->len >= sizeof(csilk_raft_conf_entry_hdr_t)) {
+            const csilk_raft_conf_entry_hdr_t* chdr = (const csilk_raft_conf_entry_hdr_t*)ent->data;
+            if (chdr->magic == CSILK_RAFT_CONF_MAGIC) {
+                /* Internal configuration entry, skip user apply callback */
+                continue;
+            }
+        }
         if (node->apply_cb) {
             /* Defer the user callback: record the pending flag so the
              * caller can invoke apply_cb AFTER releasing node->mutex.
@@ -327,20 +334,14 @@ _raft_flush_apply_callbacks(csilk_raft_node_t* node)
 static void
 raft_advance_leader_commit_locked(csilk_raft_node_t* node)
 {
-    size_t majority = raft_cluster_majority_locked(node);
     for (uint64_t n = node->last_log_index; n > node->commit_index; n--) {
         if (_raft_log_term_at_locked(node, n) != node->current_term) {
             continue;
         }
-        size_t ack = 1;
-        for (size_t i = 0; i < node->peer_count; i++) {
-            if (node->peers[i].match_index >= n) {
-                ack++;
-            }
-        }
-        if (ack >= majority) {
+        if (_raft_membership_is_log_committed_locked(node, n)) {
             node->commit_index = n;
             _raft_apply_committed_locked(node);
+            _raft_membership_on_commit_locked(node);
             csilk_cond_broadcast(&node->commit_cond);
             break;
         }
@@ -508,8 +509,7 @@ raft_start_election_locked(csilk_raft_node_t* node, uint64_t now_ms)
     node->last_heartbeat_time = now_ms;
     node->election_timeout_ms = raft_pick_timeout_locked(node);
 
-    size_t majority = raft_cluster_majority_locked(node);
-    if (majority <= 1) {
+    if (_raft_membership_is_election_won_locked(node)) {
         raft_become_leader_locked(node);
         return;
     }
@@ -651,14 +651,7 @@ raft_handle_rv_resp_locked(csilk_raft_node_t*        node,
         peer->vote_granted = 1;
     }
 
-    size_t votes = 1;
-    for (size_t i = 0; i < node->peer_count; i++) {
-        if (node->peers[i].vote_granted) {
-            votes++;
-        }
-    }
-
-    if (votes >= raft_cluster_majority_locked(node)) {
+    if (_raft_membership_is_election_won_locked(node)) {
         raft_become_leader_locked(node);
     }
 }
@@ -741,6 +734,7 @@ raft_handle_ae_req_locked(csilk_raft_node_t* node,
             0) {
             goto send_reply;
         }
+        _raft_membership_apply_entry_locked(node, idx, entries[i].data, entries[i].len);
     }
 
     uint64_t match_up_to = req.prev_log_index + (uint64_t)entry_count;
@@ -753,6 +747,7 @@ raft_handle_ae_req_locked(csilk_raft_node_t* node,
         if (new_commit > node->commit_index) {
             node->commit_index = new_commit;
             _raft_apply_committed_locked(node);
+            _raft_membership_on_commit_locked(node);
             csilk_cond_broadcast(&node->commit_cond);
         }
     }
@@ -1113,6 +1108,17 @@ csilk_raft_node_add_peer(csilk_raft_node_t* node, const char* peer_id, const cha
         if (strcmp(node->peers[i].peer_id, peer_id) == 0) {
             snprintf(node->peers[i].peer_addr, sizeof(node->peers[i].peer_addr), "%s", peer_addr);
             node->peers[i].addr_resolved = 0;
+            if (node->membership.state == CSILK_RAFT_CONF_STABLE) {
+                for (size_t m = 0; m < node->membership.old_count; m++) {
+                    if (strcmp(node->membership.old_nodes[m].id, peer_id) == 0) {
+                        snprintf(node->membership.old_nodes[m].addr,
+                                 sizeof(node->membership.old_nodes[m].addr),
+                                 "%s",
+                                 peer_addr);
+                        break;
+                    }
+                }
+            }
             csilk_mutex_unlock(&node->mutex);
             return 0;
         }
@@ -1129,6 +1135,27 @@ csilk_raft_node_add_peer(csilk_raft_node_t* node, const char* peer_id, const cha
     snprintf(peer->peer_addr, sizeof(peer->peer_addr), "%s", peer_addr);
     peer->next_index = node->last_log_index + 1ULL;
     peer->match_index = 0;
+
+    if (node->membership.state == CSILK_RAFT_CONF_STABLE) {
+        int found = 0;
+        for (size_t m = 0; m < node->membership.old_count; m++) {
+            if (strcmp(node->membership.old_nodes[m].id, peer_id) == 0) {
+                found = 1;
+                break;
+            }
+        }
+        if (!found && node->membership.old_count < CSILK_RAFT_MAX_MEMBERS) {
+            snprintf(node->membership.old_nodes[node->membership.old_count].id,
+                     sizeof(node->membership.old_nodes[node->membership.old_count].id),
+                     "%s",
+                     peer_id);
+            snprintf(node->membership.old_nodes[node->membership.old_count].addr,
+                     sizeof(node->membership.old_nodes[node->membership.old_count].addr),
+                     "%s",
+                     peer_addr);
+            node->membership.old_count++;
+        }
+    }
 
     csilk_mutex_unlock(&node->mutex);
     return 0;
@@ -1338,11 +1365,11 @@ csilk_raft_replicate_wait(csilk_raft_node_t* node,
         return -1;
     }
 
-    size_t majority = raft_cluster_majority_locked(node);
-    if (majority <= 1) {
+    if (_raft_membership_is_log_committed_locked(node, target_idx)) {
         if (node->commit_index < target_idx) {
             node->commit_index = target_idx;
             _raft_apply_committed_locked(node);
+            _raft_membership_on_commit_locked(node);
             csilk_cond_broadcast(&node->commit_cond);
         }
         if (out_index) {

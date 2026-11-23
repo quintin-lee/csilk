@@ -13,15 +13,28 @@
 #include "csilk/core/sync.h"
 #include "csilk/messaging/raft.h"
 
-#define CSILK_RAFT_MAGIC 0x52414654      /* "RAFT" RPC Magic Header */
-#define CSILK_RAFT_META_MAGIC 0x524D4554 /* "RMET" Metadata Magic */
-#define CSILK_RAFT_LOG_MAGIC 0x524C4F47  /* "RLOG" Log Record Magic */
-#define CSILK_RAFT_SNAP_MAGIC 0x52534E50 /* "RSNP" Snapshot Magic */
+#define CSILK_RAFT_MAGIC 0x52414654       /* "RAFT" RPC Magic Header */
+#define CSILK_RAFT_META_MAGIC 0x524D4554  /* "RMET" Metadata Magic */
+#define CSILK_RAFT_LOG_MAGIC 0x524C4F47   /* "RLOG" Log Record Magic */
+#define CSILK_RAFT_SNAP_MAGIC 0x52534E50  /* "RSNP" Snapshot Magic */
+#define CSILK_RAFT_CONF_MAGIC 0x43464731U /* "CFG1" Membership Config Log Magic */
 #define CSILK_RAFT_FORMAT_VERSION 1U
 #define CSILK_RAFT_MAX_PEERS 16
 #define CSILK_RAFT_MAX_FRAME_DATA (64U * 1024U * 1024U)
 #define CSILK_RAFT_SNAPSHOT_CHUNK_SIZE 8192U
 #define CSILK_RAFT_RPC_MAX_PACKET 65507U
+
+typedef enum {
+    CSILK_RAFT_CONF_OP_JOINT = 1, /* C_old,new */
+    CSILK_RAFT_CONF_OP_FINAL = 2  /* C_new */
+} csilk_raft_conf_op_t;
+
+typedef struct __attribute__((packed)) {
+    uint32_t magic; /**< CSILK_RAFT_CONF_MAGIC */
+    uint8_t  op;    /**< csilk_raft_conf_op_t */
+    uint16_t old_count;
+    uint16_t new_count;
+} csilk_raft_conf_entry_hdr_t;
 
 typedef enum {
     CSILK_RAFT_MSG_REQUEST_VOTE_REQ = 0x01,
@@ -178,8 +191,9 @@ struct csilk_raft_node_s {
     uint64_t last_log_index;
     uint64_t last_applied;
 
-    csilk_raft_peer_t peers[CSILK_RAFT_MAX_PEERS];
-    size_t            peer_count;
+    csilk_raft_peer_t       peers[CSILK_RAFT_MAX_PEERS];
+    size_t                  peer_count;
+    csilk_raft_membership_t membership;
 
     uint64_t election_timeout_ms;
     uint64_t last_heartbeat_time;
@@ -287,5 +301,16 @@ int  _raft_handle_rpc_packet(csilk_raft_node_t*        node,
                              size_t                    out_cap,
                              size_t*                   out_reply_len);
 void _raft_broadcast_append_entries_locked(csilk_raft_node_t* node);
+
+/* --- Raft Membership & Joint Consensus (raft_membership.c) --- */
+void _raft_membership_init_locked(csilk_raft_node_t* node);
+int  _raft_membership_is_log_committed_locked(const csilk_raft_node_t* node, uint64_t index);
+int  _raft_membership_is_election_won_locked(const csilk_raft_node_t* node);
+int  _raft_membership_apply_entry_locked(csilk_raft_node_t* node,
+                                         uint64_t           index,
+                                         const uint8_t*     data,
+                                         size_t             len);
+void _raft_membership_on_commit_locked(csilk_raft_node_t* node);
+void _raft_membership_on_truncate_locked(csilk_raft_node_t* node, uint64_t from_index);
 
 #endif /* CSILK_RAFT_INTERNAL_H */

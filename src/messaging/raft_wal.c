@@ -433,6 +433,8 @@ _raft_wal_truncate_from_locked(csilk_raft_node_t* node, uint64_t from_index)
         node->commit_index = node->last_log_index;
     }
 
+    _raft_membership_on_truncate_locked(node, from_index);
+
     if (node->wal_fd >= 0) {
         if (ftruncate(node->wal_fd, (off_t)new_wal_size) != 0) {
             return -1;
@@ -677,6 +679,8 @@ csilk_raft_node_new(const csilk_raft_config_t* config)
             return NULL;
         }
     }
+
+    _raft_membership_init_locked(node);
 
     return node;
 }

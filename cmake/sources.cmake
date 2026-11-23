@@ -251,6 +251,7 @@ set(CSILK_MQ_SOURCES
     src/messaging/raft_consensus.c
     src/messaging/raft_rpc.c
     src/messaging/raft_snapshot.c
+    src/messaging/raft_membership.c
 )
 
 # ── Workflow & MCP Module (Agent scheduler, DSL, MCP protocols) ──────────

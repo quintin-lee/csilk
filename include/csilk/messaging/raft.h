@@ -29,6 +29,40 @@ typedef void (*csilk_raft_snapshot_apply_cb_t)(
     uint64_t last_index, uint64_t last_term, const uint8_t* data, size_t len, void* user_data);
 
 /**
+ * @brief Maximum supported cluster members (peers + self).
+ */
+#define CSILK_RAFT_MAX_MEMBERS 17
+
+/**
+ * @brief Configuration membership transition state.
+ */
+typedef enum {
+    CSILK_RAFT_CONF_STABLE = 0, /**< Standard stable single-configuration mode */
+    CSILK_RAFT_CONF_JOINT = 1   /**< In 2-phase Joint Consensus reconfiguration (C_old,new) */
+} csilk_raft_conf_state_t;
+
+/**
+ * @brief Node descriptor in cluster configuration.
+ */
+typedef struct {
+    char id[64];
+    char addr[128];
+} csilk_raft_node_info_t;
+
+/**
+ * @brief Snapshot of active cluster membership configuration.
+ */
+typedef struct {
+    csilk_raft_conf_state_t state;
+    csilk_raft_node_info_t  old_nodes[CSILK_RAFT_MAX_MEMBERS];
+    size_t                  old_count;
+    csilk_raft_node_info_t  new_nodes[CSILK_RAFT_MAX_MEMBERS];
+    size_t                  new_count;
+    uint64_t                joint_index; /**< Log index of C_old,new entry (0 if stable) */
+    uint64_t                new_index; /**< Log index of C_new entry (0 if not started/committed) */
+} csilk_raft_membership_t;
+
+/**
  * @brief Registers a peer node into the cluster topology.
  * @param node Local node instance.
  * @param peer_id Peer node ID string.
@@ -36,6 +70,46 @@ typedef void (*csilk_raft_snapshot_apply_cb_t)(
  * @return 0 on success, negative value on failure.
  */
 int csilk_raft_node_add_peer(csilk_raft_node_t* node, const char* peer_id, const char* peer_addr);
+
+/**
+ * @brief Initiates dynamic membership change to add a node to the cluster via Joint Consensus.
+ * @param node Leader Raft node.
+ * @param peer_id New peer ID string.
+ * @param peer_addr New peer address ("host:port").
+ * @return 0 on success, negative value on invalid args, not leader, or reconfiguration in progress.
+ */
+int csilk_raft_add_node(csilk_raft_node_t* node, const char* peer_id, const char* peer_addr);
+
+/**
+ * @brief Initiates dynamic membership change to remove a node from the cluster via Joint Consensus.
+ * @param node Leader Raft node.
+ * @param peer_id Peer ID string to remove.
+ * @return 0 on success, negative value on invalid args, not leader, or reconfiguration in progress.
+ */
+int csilk_raft_remove_node(csilk_raft_node_t* node, const char* peer_id);
+
+/**
+ * @brief Initiates membership change and waits for full 2-phase Joint Consensus transition.
+ * @param node Leader Raft node.
+ * @param peer_id Peer ID to add or remove.
+ * @param peer_addr Peer address (NULL or empty string when removing).
+ * @param is_add 1 to add, 0 to remove.
+ * @param timeout_ms Maximum wait time in milliseconds.
+ * @return 0 on full transition commit, negative value on timeout or failure.
+ */
+int csilk_raft_change_membership_wait(csilk_raft_node_t* node,
+                                      const char*        peer_id,
+                                      const char*        peer_addr,
+                                      int                is_add,
+                                      uint32_t           timeout_ms);
+
+/**
+ * @brief Retrieves a copy of the current membership configuration.
+ * @param node Raft node.
+ * @param out_membership Output structure.
+ * @return 0 on success, negative value on NULL args.
+ */
+int csilk_raft_get_membership(csilk_raft_node_t* node, csilk_raft_membership_t* out_membership);
 
 /**
  * @brief Binds a UDP consensus RPC socket on @p bind_addr ("host:port", ":0" or "127.0.0.1:0").
