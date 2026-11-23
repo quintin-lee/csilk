@@ -158,7 +158,9 @@ CSILK_INTERNAL uint32_t mq_wal_checksum(const char* topic,
                                         uint32_t    topic_len,
                                         const void* payload,
                                         uint32_t    payload_len);
-int                     _csilk_wal_write_all(int fd, const void* buf, size_t len);
-int                     _csilk_wal_fsync_fd(int fd);
+struct iovec;
+int _csilk_wal_write_all(int fd, const void* buf, size_t len);
+int _csilk_wal_writev_all(int fd, const struct iovec* iov, int iovcnt);
+int _csilk_wal_fsync_fd(int fd);
 
 #endif /* CSILK_MQ_TYPES_H */

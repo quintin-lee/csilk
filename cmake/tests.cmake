@@ -401,10 +401,11 @@ set(CSILK_MESSAGING_TESTS
     test_raft_failover
     test_raft_snapshot
     test_raft_membership
+    test_wal_uring
 )
 set(CSILK_MESSAGING_TEST_DIRS
     mq;mq;mq;mq;mq;mq;mq;mq;mq;messaging
-    messaging;messaging;messaging;messaging
+    messaging;messaging;messaging;messaging;messaging
 )
 
 # -- Extra / integration tests --

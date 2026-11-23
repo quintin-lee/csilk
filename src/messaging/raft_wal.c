@@ -53,7 +53,8 @@ raft_pick_election_timeout(csilk_raft_node_t* node)
 }
 
 static int
-raft_write_wal_record_fd(int fd, uint64_t index, uint64_t term, const uint8_t* data, size_t len)
+raft_write_wal_record_fd(
+    csilk_wal_ring_t* ring, int fd, uint64_t index, uint64_t term, const uint8_t* data, size_t len)
 {
     if (len > CSILK_RAFT_MAX_FRAME_DATA) {
         return -1;
@@ -69,16 +70,30 @@ raft_write_wal_record_fd(int fd, uint64_t index, uint64_t term, const uint8_t* d
 
     uint32_t payload_crc = _csilk_wal_crc32(0, data, len);
 
-    if (_csilk_wal_write_all(fd, &hdr, sizeof(hdr)) != 0) {
-        return -1;
+    struct iovec iov[3];
+    int          iovcnt = 0;
+    iov[iovcnt].iov_base = &hdr;
+    iov[iovcnt].iov_len = sizeof(hdr);
+    iovcnt++;
+
+    if (len > 0) {
+        iov[iovcnt].iov_base = (void*)data;
+        iov[iovcnt].iov_len = len;
+        iovcnt++;
     }
-    if (len > 0 && _csilk_wal_write_all(fd, data, len) != 0) {
-        return -1;
+
+    iov[iovcnt].iov_base = &payload_crc;
+    iov[iovcnt].iov_len = sizeof(payload_crc);
+    iovcnt++;
+
+    if (ring) {
+        if (csilk_wal_ring_submit_writev(ring, fd, iov, iovcnt, -1) != 0) {
+            return -1;
+        }
+        return (csilk_wal_ring_flush(ring, 1) >= 0) ? 0 : -1;
     }
-    if (_csilk_wal_write_all(fd, &payload_crc, sizeof(payload_crc)) != 0) {
-        return -1;
-    }
-    return 0;
+
+    return _csilk_wal_writev_all(fd, iov, iovcnt);
 }
 
 static int
@@ -298,6 +313,7 @@ _raft_wal_open_and_recover(csilk_raft_node_t* node)
         return -1;
     }
     node->wal_file_size = valid_offset;
+    node->wal_ring = csilk_wal_ring_create(128);
     return 0;
 }
 
@@ -306,6 +322,10 @@ _raft_wal_close(csilk_raft_node_t* node)
 {
     if (!node) {
         return;
+    }
+    if (node->wal_ring) {
+        csilk_wal_ring_destroy(node->wal_ring);
+        node->wal_ring = NULL;
     }
     if (node->wal_fd >= 0) {
         close(node->wal_fd);
@@ -326,8 +346,15 @@ _raft_wal_flush_locked(csilk_raft_node_t* node)
     if (node->pending_sync_entries == 0) {
         return 0;
     }
-    if (_csilk_wal_fsync_fd(node->wal_fd) != 0) {
-        return -1;
+    if (node->wal_ring) {
+        if (csilk_wal_ring_submit_fsync(node->wal_ring, node->wal_fd, 1) != 0 ||
+            csilk_wal_ring_flush(node->wal_ring, 1) < 0) {
+            return -1;
+        }
+    } else {
+        if (_csilk_wal_fsync_fd(node->wal_fd) != 0) {
+            return -1;
+        }
     }
     node->sync_count++;
     node->pending_sync_entries = 0;
@@ -347,7 +374,8 @@ _raft_wal_append_locked(
     uint64_t wal_offset = node->wal_file_size;
 
     if (node->wal_fd >= 0) {
-        if (raft_write_wal_record_fd(node->wal_fd, next_index, term, data, len) != 0) {
+        if (raft_write_wal_record_fd(node->wal_ring, node->wal_fd, next_index, term, data, len) !=
+            0) {
             (void)ftruncate(node->wal_fd, (off_t)wal_offset);
             (void)lseek(node->wal_fd, (off_t)wal_offset, SEEK_SET);
             return -1;
@@ -495,7 +523,8 @@ _raft_wal_compact_prefix_locked(csilk_raft_node_t* node,
         uint64_t offset = 0;
         for (size_t i = 0; i < remain; i++) {
             const csilk_raft_log_entry_t* ent = &node->entries[drop_count + i];
-            if (raft_write_wal_record_fd(tmp_fd, ent->index, ent->term, ent->data, ent->len) != 0) {
+            if (raft_write_wal_record_fd(
+                    node->wal_ring, tmp_fd, ent->index, ent->term, ent->data, ent->len) != 0) {
                 close(tmp_fd);
                 unlink(tmp_path);
                 free(tmp_path);
@@ -901,4 +930,56 @@ csilk_raft_get_log_entry(const csilk_raft_node_t* node,
     }
     csilk_mutex_unlock(&mutable_node->mutex);
     return 0;
+}
+
+int
+csilk_raft_wal_is_uring_active(const csilk_raft_node_t* node)
+{
+    if (!node || !node->wal_ring) {
+        return 0;
+    }
+    return csilk_wal_ring_is_real_uring(node->wal_ring);
+}
+
+size_t
+csilk_raft_append_log_batch(csilk_raft_node_t*    node,
+                            const uint8_t* const* data_array,
+                            const size_t*         len_array,
+                            size_t                count,
+                            uint64_t*             out_first_index)
+{
+    if (!node || !data_array || !len_array || count == 0) {
+        return 0;
+    }
+
+    csilk_mutex_lock(&node->mutex);
+    if (node->role != CSILK_RAFT_ROLE_LEADER) {
+        csilk_mutex_unlock(&node->mutex);
+        return 0;
+    }
+
+    uint64_t first_idx = node->last_log_index + 1ULL;
+    size_t   appended = 0;
+
+    for (size_t i = 0; i < count; i++) {
+        const uint8_t* data = data_array[i];
+        size_t         len = len_array[i];
+        uint64_t       assigned_idx = 0;
+
+        if (_raft_wal_append_locked(node, node->current_term, data, len, &assigned_idx) != 0) {
+            break;
+        }
+        appended++;
+    }
+
+    if (node->wal_ring && node->wal_fd >= 0 && appended > 0) {
+        (void)csilk_wal_ring_flush(node->wal_ring, 0);
+    }
+
+    if (appended > 0 && out_first_index) {
+        *out_first_index = first_idx;
+    }
+
+    csilk_mutex_unlock(&node->mutex);
+    return appended;
 }

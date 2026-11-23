@@ -12,6 +12,7 @@
 
 #include "csilk/core/sync.h"
 #include "csilk/messaging/raft.h"
+#include "csilk/messaging/wal_uring.h"
 
 #define CSILK_RAFT_MAGIC 0x52414654       /* "RAFT" RPC Magic Header */
 #define CSILK_RAFT_META_MAGIC 0x524D4554  /* "RMET" Metadata Magic */
@@ -158,15 +159,16 @@ struct csilk_raft_node_s {
     void*    wal;
 
     /* Persistence paths and WAL file state */
-    char*    wal_dir;
-    char*    meta_path;
-    char*    wal_path;
-    char*    snap_path;
-    int      wal_fd;
-    uint64_t wal_file_size;
-    size_t   pending_sync_entries;
-    uint64_t last_sync_ms;
-    uint64_t sync_count;
+    char*             wal_dir;
+    char*             meta_path;
+    char*             wal_path;
+    char*             snap_path;
+    int               wal_fd;
+    uint64_t          wal_file_size;
+    size_t            pending_sync_entries;
+    uint64_t          last_sync_ms;
+    uint64_t          sync_count;
+    csilk_wal_ring_t* wal_ring;
 
     /* In-memory log suffix (indices > log_base_index) */
     csilk_raft_log_entry_t* entries;
@@ -224,6 +226,7 @@ struct csilk_raft_node_s {
 /* --- Shared WAL durability helpers (wal_common.c) --- */
 uint32_t _csilk_wal_crc32(uint32_t crc, const void* data, size_t len);
 int      _csilk_wal_write_all(int fd, const void* buf, size_t len);
+int      _csilk_wal_writev_all(int fd, const struct iovec* iov, int iovcnt);
 int      _csilk_wal_read_all(int fd, void* buf, size_t len);
 int      _csilk_wal_fsync_fd(int fd);
 int      _csilk_wal_fsync_dir(const char* file_path);

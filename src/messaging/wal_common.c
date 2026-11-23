@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -80,6 +81,70 @@ _csilk_wal_write_all(int fd, const void* buf, size_t len)
             return -1;
         }
         written += (size_t)n;
+    }
+    return 0;
+}
+
+int
+_csilk_wal_writev_all(int fd, const struct iovec* iov, int iovcnt)
+{
+    if (fd < 0 || !iov || iovcnt <= 0) {
+        return -1;
+    }
+
+    size_t total = 0;
+    for (int i = 0; i < iovcnt; i++) {
+        total += iov[i].iov_len;
+    }
+    if (total == 0) {
+        return 0;
+    }
+
+    struct iovec  copy[8];
+    struct iovec* v = copy;
+    if (iovcnt > 8) {
+        v = malloc(sizeof(struct iovec) * (size_t)iovcnt);
+        if (!v) {
+            return -1;
+        }
+    }
+    memcpy(v, iov, sizeof(struct iovec) * (size_t)iovcnt);
+
+    int           cur_cnt = iovcnt;
+    struct iovec* cur_iov = v;
+
+    while (cur_cnt > 0) {
+        ssize_t n = writev(fd, cur_iov, cur_cnt);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            if (v != copy) {
+                free(v);
+            }
+            return -1;
+        }
+        if (n == 0) {
+            if (v != copy) {
+                free(v);
+            }
+            return -1;
+        }
+
+        size_t rem = (size_t)n;
+        while (cur_cnt > 0 && rem >= cur_iov->iov_len) {
+            rem -= cur_iov->iov_len;
+            cur_iov++;
+            cur_cnt--;
+        }
+        if (cur_cnt > 0 && rem > 0) {
+            cur_iov->iov_base = (char*)cur_iov->iov_base + rem;
+            cur_iov->iov_len -= rem;
+        }
+    }
+
+    if (v != copy) {
+        free(v);
     }
     return 0;
 }

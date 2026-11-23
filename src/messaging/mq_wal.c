@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/uio.h>
 #include <unistd.h>
 #include "mq_internal.h"
 #include "csilk/csilk.h"
@@ -118,14 +119,32 @@ mq_wal_writer_thread(void* arg)
             uint32_t payload_len = (uint32_t)task->len;
             uint32_t checksum = mq_wal_checksum(task->topic, topic_len, task->payload, payload_len);
 
-            /* Write frame */
-            if (_csilk_wal_write_all(task->fd, &topic_len, 4) == 0 &&
-                _csilk_wal_write_all(task->fd, task->topic, topic_len) == 0 &&
-                _csilk_wal_write_all(task->fd, &payload_len, 4) == 0 &&
-                (payload_len == 0 || !task->payload ||
-                 _csilk_wal_write_all(task->fd, task->payload, payload_len) == 0)) {
-                (void)_csilk_wal_write_all(task->fd, &checksum, 4);
+            /* Vectorized write frame */
+            struct iovec iov[5];
+            int          iovcnt = 0;
+            iov[iovcnt].iov_base = &topic_len;
+            iov[iovcnt].iov_len = 4;
+            iovcnt++;
+
+            iov[iovcnt].iov_base = task->topic;
+            iov[iovcnt].iov_len = topic_len;
+            iovcnt++;
+
+            iov[iovcnt].iov_base = &payload_len;
+            iov[iovcnt].iov_len = 4;
+            iovcnt++;
+
+            if (payload_len > 0 && task->payload) {
+                iov[iovcnt].iov_base = task->payload;
+                iov[iovcnt].iov_len = payload_len;
+                iovcnt++;
             }
+
+            iov[iovcnt].iov_base = &checksum;
+            iov[iovcnt].iov_len = 4;
+            iovcnt++;
+
+            (void)_csilk_wal_writev_all(task->fd, iov, iovcnt);
 
             if (task->fd >= 0) {
                 bool fd_seen = false;

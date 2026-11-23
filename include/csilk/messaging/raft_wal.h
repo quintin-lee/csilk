@@ -94,6 +94,29 @@ int csilk_raft_wal_flush(csilk_raft_node_t* node);
 uint64_t csilk_raft_wal_sync_count(const csilk_raft_node_t* node);
 
 /**
+ * @brief Checks whether the Linux io_uring asynchronous WAL backend is active.
+ * @param node Raft node instance.
+ * @return 1 if io_uring WAL backend is active, 0 if using synchronous fallback.
+ */
+int csilk_raft_wal_is_uring_active(const csilk_raft_node_t* node);
+
+/**
+ * @brief Appends a batch of log entries to the Raft WAL engine (Leader only).
+ *        Uses vectorized io_uring batch submission when active.
+ * @param node Raft node instance.
+ * @param data_array Array of log entry data pointers.
+ * @param len_array Array of log entry lengths.
+ * @param count Number of entries in batch.
+ * @param out_first_index Optional output for first assigned log index.
+ * @return Number of entries successfully appended, or 0 on failure/not leader.
+ */
+size_t csilk_raft_append_log_batch(csilk_raft_node_t*    node,
+                                   const uint8_t* const* data_array,
+                                   const size_t*         len_array,
+                                   size_t                count,
+                                   uint64_t*             out_first_index);
+
+/**
  * @brief Get current role of Raft node.
  * @param node Raft node instance.
  * @return Node role enum.
