@@ -322,6 +322,20 @@ csilk_wf_node_t* csilk_wf_add_agent_reflexion(csilk_wf_t*                       
  */
 int csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_filepath);
 
+/**
+ * @brief Register a preloaded WebAssembly plugin instance as a workflow DAG node.
+ *
+ * @param wf Workflow handle.
+ * @param node_id Unique node ID.
+ * @param plugin Preloaded WASM plugin instance (lifecycle owned by caller).
+ * @param entry_func Name of exported function to execute.
+ * @return 0 on success, negative value on failure.
+ */
+int csilk_wf_add_wasm_plugin_node(csilk_wf_t*          wf,
+                                  const char*          node_id,
+                                  csilk_wasm_plugin_t* plugin,
+                                  const char*          entry_func);
+
 /* --- Agent Long-Term Memory Store --- */
 
 /** @brief Opaque handle for Agent Long-Term Memory Store. */

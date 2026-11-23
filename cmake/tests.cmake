@@ -198,9 +198,10 @@ set(CSILK_APP_TESTS
     test_hooks
     test_hooks_rcu
     test_jsonrpc_frames
+    test_app_wasm
 )
 set(CSILK_APP_TEST_DIRS
-    app;app;app;app;app;app;app;app;app;app;app
+    app;app;app;app;app;app;app;app;app;app;app;app
 )
 
 # -- Workflow tests --

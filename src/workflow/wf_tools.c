@@ -61,6 +61,61 @@ csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_fil
     return node != NULL ? 0 : -1;
 }
 
+typedef struct {
+    csilk_wasm_plugin_t* plugin;
+    char                 entry_func[64];
+} csilk_wf_wasm_plugin_node_data_t;
+
+static csilk_data_t*
+csilk_wasm_plugin_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
+{
+    if (!ctx || !user_data) {
+        return NULL;
+    }
+    csilk_wf_wasm_plugin_node_data_t* nd = (csilk_wf_wasm_plugin_node_data_t*)user_data;
+    const char* json_input = (input && input->value) ? (const char*)input->value : "{}";
+    char        err_buf[128] = {0};
+    char*       output =
+        csilk_wasm_plugin_exec(nd->plugin, nd->entry_func, json_input, err_buf, sizeof(err_buf));
+    csilk_data_t* res_data = NULL;
+    if (output) {
+        res_data = csilk_wf_alloc(ctx, sizeof(csilk_data_t));
+        if (res_data) {
+            res_data->type = csilk_wf_strdup(ctx, "application/json");
+            res_data->value = csilk_wf_strdup(ctx, output);
+            res_data->free_fn = NULL;
+            res_data->meta = NULL;
+        }
+        free(output);
+    }
+    return res_data;
+}
+
+int
+csilk_wf_add_wasm_plugin_node(csilk_wf_t*          wf,
+                              const char*          node_id,
+                              csilk_wasm_plugin_t* plugin,
+                              const char*          entry_func)
+{
+    if (!wf || !node_id || !plugin || !entry_func) {
+        return -1;
+    }
+    csilk_wf_wasm_plugin_node_data_t* nd = malloc(sizeof(csilk_wf_wasm_plugin_node_data_t));
+    if (!nd) {
+        return -1;
+    }
+    nd->plugin = plugin;
+    snprintf(nd->entry_func, sizeof(nd->entry_func), "%s", entry_func);
+
+    csilk_wf_node_t* node = csilk_wf_add(wf, node_id, csilk_wasm_plugin_node_handler, nd);
+    if (!node) {
+        free(nd);
+        return -1;
+    }
+    csilk_wf_node_set_free(node, free);
+    return 0;
+}
+
 /**
  * @brief Registers a static tool (function) callable by AI workflow nodes.
  *

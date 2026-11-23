@@ -117,6 +117,19 @@ void csilk_app_log_json(csilk_app_t* app, int enable);
  * @param h Middleware handler function. */
 void csilk_app_use(csilk_app_t* app, csilk_handler_t h);
 
+struct csilk_wasm_plugin_s;
+typedef struct csilk_wasm_plugin_s csilk_wasm_plugin_t;
+
+/**
+ * @brief Register a WebAssembly plugin exported function as application middleware.
+ *
+ * @param app Application handle.
+ * @param plugin Loaded WASM plugin handle.
+ * @param func_name Exported function name (e.g. "on_request").
+ * @return 0 on success, -1 on failure or exhausted middleware slots.
+ */
+int csilk_app_use_wasm(csilk_app_t* app, csilk_wasm_plugin_t* plugin, const char* func_name);
+
 /** @brief Register a dual-parameter middleware with a config pointer (csilk#9c).
  *
  * Unlike csilk_app_use(), which only accepts a csilk_handler_t (no way to
