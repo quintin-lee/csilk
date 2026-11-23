@@ -58,15 +58,18 @@ v1.2.0 focuses on **protocol completeness** (HTTP/3, gRPC), **session abstractio
 | 4.3 Hot update (3-component atomic) | ✅ Plan documented (`docs/en/meta/HOT-UPDATE-PLAN.md`) |
 | 4.4 Security audit | ✅ `docs/en/meta/SECURITY-AUDIT-v1.2.md` |
 
-### Phase 6: Strategic Convergence (v1.2.0-GA) — ✅ Complete
+### Phase 6: Strategic Convergence & Bottom-Up Hardening (v1.2.0-GA) — ✅ Complete
 
 | Task | Status |
 |---|---|
 | 6.1 OpenTelemetry 2.0 AI Trace ↔ HTTP W3C Spans & Context-Aware LLM Inference (`csilk_ai_chat_ctx`) | ✅ `src/middleware/otlp_trace.c`, `src/drivers/ai/ai.c`, `include/csilk/drivers/ai.h` |
 | 6.2 Multi-Agent Work-Stealing Grid ↔ Workflow Integration (`csilk_wf_set_grid`, `csilk_wf_submit_grid_task`) | ✅ `src/workflow/wf_grid.c`, `include/csilk/app/workflow.h` |
 | 6.3 WebAssembly (WAMR) Fuel Metering, App Middleware (`csilk_app_use_wasm`) & Workflow Node (`csilk_wf_add_wasm_plugin_node`) | ✅ `src/core/plugin/wasm_plugin.c`, `src/app/app.c`, `src/workflow/wf_tools.c` |
-| 6.4 Full ABI SOVERSION 1 Compatibility Gate (960 pure exports, 100% `csilk_*`) | ✅ `scripts/check_abi_compatibility.sh` |
-| 6.5 Full Test Regression Suite (276 unit tests 100% green) | ✅ `ctest` |
+| 6.4 Eliminate Non-Threadsafe `strtok` & Implement SSRF Protection Engine (`csilk_security_*`) | ✅ `src/core/primitives/ssrf.c`, `include/csilk/core/security.h`, `src/drivers/ai/llama.c` |
+| 6.5 Triple-Component Atomic Hot Update Engine (`csilk_hot_update`) | ✅ `src/core/server/server_rcu.c`, `include/csilk/core/server/hot_reload.h` |
+| 6.6 Keep-Alive Idle Connection Lazy Arena Allocation & On-Demand Recycling | ✅ `src/core/server/connection_io.c`, `src/core/http/http1_pipeline.c` |
+| 6.7 Full ABI SOVERSION 1 Compatibility Gate (964 pure exports, 100% `csilk_*`) | ✅ `scripts/check_abi_compatibility.sh` |
+| 6.8 Full Test Regression Suite (279 unit tests 100% green) | ✅ `ctest` |
 
 ### Phase 7: Windows — ⚠️ Out of Scope
 
@@ -81,15 +84,16 @@ v1.2.0 focuses on **protocol completeness** (HTTP/3, gRPC), **session abstractio
 ## Remaining Items (v1.3 candidates)
 
 - [ ] 1.3 TLS 1.3 + QUIC (requires OpenSSL ≥ 3.2)
-- [ ] 4.2 P0: SSL context sharing + lazy arena allocation
-- [ ] 4.3 P0: Three-component atomic hot update implementation
-- [ ] Security: `strtok` → `strtok_r` in mysql.c/redis.c
-- [ ] SSRF protection (internal IP blacklist)
+- [ ] 4.2 SSL context sharing (TLS 1.3 Session Ticket reuse)
+- [x] 4.2 P0: Lazy arena allocation and idle recycling (delivered in v1.2.0-GA)
+- [x] 4.3 P0: Three-component atomic hot update implementation (`csilk_hot_update` delivered in v1.2.0-GA)
+- [x] Security: `strtok` → `strtok_r` thread safety (delivered in v1.2.0-GA)
+- [x] SSRF protection (internal IP and cloud metadata filter delivered in v1.2.0-GA)
 
 ## Test Coverage
 
-- **Total tests**: 276+ (unit test suite 100% passed)
-- **New tests in v1.2.0**: test_h3, test_session_store, test_grpc, test_otlp_ai, test_wf_grid, test_wasm_fuel, test_wf_grid_integration, test_app_wasm, test_ai_ctx_trace
+- **Total tests**: 279+ (unit test suite 100% passed)
+- **New tests in v1.2.0**: test_h3, test_session_store, test_grpc, test_otlp_ai, test_wf_grid, test_wasm_fuel, test_wf_grid_integration, test_app_wasm, test_ai_ctx_trace, test_ssrf, test_hot_update_atomic, test_lazy_arena
 - **Fuzz targets**: 9 harnesses (including fuzz_h2, fuzz_websocket, fuzz_mcp)
 
 ## File Inventory
