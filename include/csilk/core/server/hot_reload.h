@@ -6,7 +6,28 @@
  * @copyright MIT License
  */
 
-typedef struct csilk_server_s csilk_server_t;
+typedef struct csilk_server_s        csilk_server_t;
+typedef struct csilk_router_s        csilk_router_t;
+typedef struct csilk_server_config_s csilk_server_config_t;
+
+/**
+ * @brief Triple-component atomic hot update bundle.
+ */
+typedef struct {
+    csilk_router_t* router;        /**< New router, or NULL to keep current. */
+    void*           wasm_handle;   /**< New WASM/dl handle, or NULL to keep current. */
+    const char*     tmp_wasm_path; /**< Temp file path to unlink after grace period, or NULL. */
+    const csilk_server_config_t* config; /**< New server configuration, or NULL to keep current. */
+} csilk_hot_update_bundle_t;
+
+/**
+ * @brief Atomically hot-swap router, WASM handle, and server config in a single monotonic epoch.
+ *
+ * @param server The server instance.
+ * @param bundle The hot update bundle containing non-NULL components to update.
+ * @return 0 on success, -1 on invalid argument or failure.
+ */
+int csilk_hot_update(csilk_server_t* server, const csilk_hot_update_bundle_t* bundle);
 
 /**
  * @brief Initialize and start watching a shared library for hot-reloading.

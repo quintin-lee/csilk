@@ -493,6 +493,89 @@ csilk_server_set_router(csilk_server_t* server, csilk_router_t* router)
     csilk_server_set_router_full(server, router, NULL, NULL);
 }
 
+int
+csilk_hot_update(csilk_server_t* server, const csilk_hot_update_bundle_t* bundle)
+{
+    if (!server || !bundle) {
+        return -1;
+    }
+
+    if (!bundle->router && !bundle->wasm_handle && !bundle->config) {
+        return -1;
+    }
+
+    if (bundle->router && server->middleware_count > 0) {
+        csilk_router_compile(bundle->router, server->middlewares, (size_t)server->middleware_count);
+    }
+
+    csilk_reload_mgr_t* mgr = &server->reload_mgr;
+
+    csilk_mutex_lock(&server->config_mutex);
+
+    csilk_router_t* old_router = NULL;
+    if (bundle->router) {
+        old_router =
+            atomic_exchange_explicit(&server->router, bundle->router, memory_order_acq_rel);
+    }
+
+    if (bundle->config) {
+        server->config = *bundle->config;
+        if (server->config.idle_timeout_ms > 0) {
+            atomic_store_explicit(&server->runtime_config.idle_timeout_ms,
+                                  server->config.idle_timeout_ms,
+                                  memory_order_relaxed);
+        }
+        if (server->config.read_timeout_ms > 0) {
+            atomic_store_explicit(&server->runtime_config.read_timeout_ms,
+                                  server->config.read_timeout_ms,
+                                  memory_order_relaxed);
+        }
+        if (server->config.write_timeout_ms > 0) {
+            atomic_store_explicit(&server->runtime_config.write_timeout_ms,
+                                  server->config.write_timeout_ms,
+                                  memory_order_relaxed);
+        }
+        if (server->config.request_timeout_ms > 0) {
+            atomic_store_explicit(&server->runtime_config.request_timeout_ms,
+                                  server->config.request_timeout_ms,
+                                  memory_order_relaxed);
+        }
+        if (server->config.max_connections > 0) {
+            atomic_store_explicit(
+                &server->max_connections, server->config.max_connections, memory_order_relaxed);
+        }
+    }
+
+    /* Monotonically advance global reload epoch */
+    uint64_t retired_epoch = atomic_fetch_add_explicit(&mgr->global_epoch, 1, memory_order_acq_rel);
+
+    if (old_router || bundle->wasm_handle || bundle->tmp_wasm_path) {
+        csilk_retired_router_t* rec = calloc(1, sizeof(csilk_retired_router_t));
+        if (rec) {
+            rec->router = old_router;
+            rec->dl_handle = bundle->wasm_handle;
+            rec->tmp_path = bundle->tmp_wasm_path ? strdup(bundle->tmp_wasm_path) : NULL;
+            rec->retired_epoch = retired_epoch;
+            atomic_init(&rec->retired_next, NULL);
+
+            csilk_retired_router_t* old_head =
+                atomic_load_explicit(&mgr->retired_head, memory_order_relaxed);
+            do {
+                atomic_store_explicit(&rec->retired_next, old_head, memory_order_relaxed);
+            } while (!atomic_compare_exchange_weak_explicit(
+                &mgr->retired_head, &old_head, rec, memory_order_release, memory_order_relaxed));
+
+            atomic_fetch_add_explicit(&mgr->retired_count, 1, memory_order_relaxed);
+        }
+    }
+
+    /* Opportunistic non-blocking reclamation */
+    _csilk_reload_try_reclaim(server);
+
+    csilk_mutex_unlock(&server->config_mutex);
+    return 0;
+}
+
 void
 csilk_server_wait_grace_period(csilk_server_t* server)
 {

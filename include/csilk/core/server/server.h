@@ -109,6 +109,15 @@ int csilk_server_check_backpressure(csilk_server_t* server);
 void csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* config);
 
 /**
+ * @brief Retrieve current server configuration options.
+ *
+ * @param server Server instance.
+ * @param out Output buffer to copy configuration into.
+ * @return 0 on success, -1 on NULL server or output pointer.
+ */
+int csilk_server_get_config(const csilk_server_t* server, csilk_server_config_t* out);
+
+/**
  * @brief Set the maximum number of concurrent connections and return the
  * previous limit.
  *

@@ -466,6 +466,18 @@ csilk_server_set_config(csilk_server_t* server, const csilk_server_config_t* con
     csilk_mutex_unlock(&server->config_mutex);
 }
 
+int
+csilk_server_get_config(const csilk_server_t* server, csilk_server_config_t* out)
+{
+    if (!server || !out) {
+        return -1;
+    }
+    csilk_mutex_lock((csilk_mutex_t*)&server->config_mutex);
+    *out = server->config;
+    csilk_mutex_unlock((csilk_mutex_t*)&server->config_mutex);
+    return 0;
+}
+
 /**
  * @brief Report whether the server is over its backpressure connection limit.
  * @param[in] server Server to query (validated non-NULL).
