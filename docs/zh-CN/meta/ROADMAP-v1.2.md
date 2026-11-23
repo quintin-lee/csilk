@@ -62,11 +62,11 @@ v1.2.0 聚焦于**协议完整性**（HTTP/3、gRPC）、**会话抽象**（可�
 
 | 任务 | 状态 |
 |---|---|
-| 6.1 OpenTelemetry 2.0 AI Trace ↔ HTTP W3C Spans | ✅ `src/middleware/otlp_trace.c`、`include/csilk/middleware/otlp_trace.h` |
-| 6.2 去中心化 Multi-Agent 任务工作窃取网格 | ✅ `src/workflow/wf_grid.c`、`include/csilk/app/wf_grid.h` |
-| 6.3 WebAssembly (WAMR) 沙箱 Fuel 计量与 Guest SDK | ✅ `src/core/plugin/wasm_plugin.c`、`include/csilk/plugin/wasm_sdk.h` |
-| 6.4 全量 ABI SOVERSION 1 兼容性验证（952 纯净导出） | ✅ `scripts/check_abi_compatibility.sh` |
-| 6.5 全量测试回归套件（273 单测 100% 绿色） | ✅ `ctest` |
+| 6.1 OpenTelemetry 2.0 AI Trace ↔ HTTP W3C Spans & 上下文自动埋点 (`csilk_ai_chat_ctx`) | ✅ `src/middleware/otlp_trace.c`、`src/drivers/ai/ai.c`、`include/csilk/drivers/ai.h` |
+| 6.2 去中心化 Multi-Agent 任务网格 ↔ Workflow 引擎深度融合 (`csilk_wf_set_grid`, `csilk_wf_submit_grid_task`) | ✅ `src/workflow/wf_grid.c`、`include/csilk/app/workflow.h` |
+| 6.3 WebAssembly (WAMR) 沙箱 Fuel 计量、App 中间件 (`csilk_app_use_wasm`) 与 Workflow 节点 (`csilk_wf_add_wasm_plugin_node`) | ✅ `src/core/plugin/wasm_plugin.c`、`src/app/app.c`、`src/workflow/wf_tools.c` |
+| 6.4 全量 ABI SOVERSION 1 兼容性验证（960 纯净导出，100% `csilk_*`） | ✅ `scripts/check_abi_compatibility.sh` |
+| 6.5 全量测试回归套件（276 单测 100% 绿色） | ✅ `ctest` |
 
 ### 阶段 7：Windows — ⚠️ 不在范围内
 
@@ -82,8 +82,8 @@ v1.2.0 聚焦于**协议完整性**（HTTP/3、gRPC）、**会话抽象**（可�
 
 ## 测试覆盖
 
-- **总测试数**：273+（单元测试 100% 通过）
-- **v1.2.0 新增**：test_h3, test_session_store, test_grpc, test_otlp_ai, test_wf_grid, test_wasm_fuel
+- **总测试数**：276+（单元测试 100% 通过）
+- **v1.2.0 新增**：test_h3, test_session_store, test_grpc, test_otlp_ai, test_wf_grid, test_wasm_fuel, test_wf_grid_integration, test_app_wasm, test_ai_ctx_trace
 - **Fuzz 目标**：9 个 harness
 
 ## 文件清单
