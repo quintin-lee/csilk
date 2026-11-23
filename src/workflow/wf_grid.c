@@ -9,6 +9,7 @@
 #include "csilk/csilk.h"
 #include "csilk/messaging/mq.h"
 #include "csilk/messaging/raft.h"
+#include "workflow_internal.h"
 
 #include <errno.h>
 #include <stdbool.h>
@@ -364,4 +365,58 @@ csilk_wf_grid_task_count(const csilk_wf_grid_t* grid)
     size_t cnt = g->count;
     csilk_mutex_unlock(&g->mutex);
     return cnt;
+}
+
+int
+csilk_wf_set_grid(csilk_wf_t* wf, csilk_wf_grid_t* grid)
+{
+    if (!wf) {
+        return -1;
+    }
+    csilk_mutex_lock(&wf->ctx_mutex);
+    wf->grid = grid;
+    csilk_mutex_unlock(&wf->ctx_mutex);
+    return 0;
+}
+
+csilk_wf_grid_t*
+csilk_wf_get_grid(const csilk_wf_t* wf)
+{
+    if (!wf) {
+        return NULL;
+    }
+    csilk_wf_t* w = (csilk_wf_t*)wf;
+    csilk_mutex_lock(&w->ctx_mutex);
+    csilk_wf_grid_t* grid = w->grid;
+    csilk_mutex_unlock(&w->ctx_mutex);
+    return grid;
+}
+
+int
+csilk_wf_submit_grid_task(csilk_wf_t* wf,
+                          const char* task_id,
+                          const char* payload,
+                          size_t      payload_len)
+{
+    if (!wf || !task_id) {
+        return -1;
+    }
+    csilk_wf_grid_t* grid = csilk_wf_get_grid(wf);
+    if (!grid) {
+        return -1;
+    }
+    return csilk_wf_grid_push_task(grid, task_id, payload, payload_len);
+}
+
+int
+csilk_wf_poll_grid_task(csilk_wf_t* wf, char* out_task_id, size_t max_id_len)
+{
+    if (!wf || !out_task_id || max_id_len == 0) {
+        return -1;
+    }
+    csilk_wf_grid_t* grid = csilk_wf_get_grid(wf);
+    if (!grid) {
+        return -1;
+    }
+    return csilk_wf_grid_pop_task(grid, out_task_id, max_id_len);
 }

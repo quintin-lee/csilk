@@ -239,11 +239,13 @@ set(CSILK_WORKFLOW_TESTS
     test_agent_memory
     test_wf_tools_monitor
     test_wf_grid
+    test_wf_grid_integration
 )
 set(CSILK_WORKFLOW_TEST_DIRS
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
+    workflow
     workflow
     workflow
     workflow

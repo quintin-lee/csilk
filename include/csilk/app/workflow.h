@@ -756,3 +756,42 @@ void csilk_wf_unregister_monitor(csilk_wf_t* wf, csilk_ctx_t* c);
  * @param max_tokens Maximum total tokens (prompt + completion) allowed.
  */
 void csilk_wf_set_budget(csilk_wf_t* wf, int max_tokens);
+
+/* --- Grid Coordination --- */
+
+/**
+ * @brief Attach a decentralized multi-agent work-stealing grid to a workflow instance.
+ * @param wf Workflow handle.
+ * @param grid Grid handle (lifecycle managed independently).
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_wf_set_grid(csilk_wf_t* wf, csilk_wf_grid_t* grid);
+
+/**
+ * @brief Get the attached multi-agent work-stealing grid.
+ * @param wf Workflow handle.
+ * @return Attached grid pointer, or NULL if none attached.
+ */
+csilk_wf_grid_t* csilk_wf_get_grid(const csilk_wf_t* wf);
+
+/**
+ * @brief Submit a task slice to the workflow's attached grid.
+ * @param wf Workflow handle.
+ * @param task_id Unique task slice ID.
+ * @param payload Task payload buffer.
+ * @param payload_len Payload length in bytes.
+ * @return 0 on success, -1 if wf has no grid or push fails.
+ */
+int csilk_wf_submit_grid_task(csilk_wf_t* wf,
+                              const char* task_id,
+                              const char* payload,
+                              size_t      payload_len);
+
+/**
+ * @brief Poll a ready task slice from the workflow's attached grid.
+ * @param wf Workflow handle.
+ * @param out_task_id Output buffer for task slice ID.
+ * @param max_id_len Capacity of output buffer.
+ * @return 0 on success, -1 if wf has no grid or queue is empty.
+ */
+int csilk_wf_poll_grid_task(csilk_wf_t* wf, char* out_task_id, size_t max_id_len);

@@ -97,6 +97,7 @@ struct csilk_wf_s {
     size_t                     active_context_count;
     size_t                     active_context_capacity;
     csilk_mutex_t              ctx_mutex;
+    csilk_wf_grid_t*           grid;
     /* Number of after_worker_cb completion blocks in flight on the loop
      * thread. csilk_wf_free() waits for this to reach 0 before destroying
      * the workflow, otherwise a completion triggered by a user callback
