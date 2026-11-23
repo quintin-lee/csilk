@@ -1058,6 +1058,34 @@ csilk_db_pool_on_open(csilk_db_pool_t* pool, csilk_db_on_open_fn cb, void* ctx)
     }
 }
 
+int
+csilk_db_is_nonblocking(const csilk_db_pool_t* pool)
+{
+    if (!pool) {
+        return 0;
+    }
+    return pool->is_nonblocking ? 1 : 0;
+}
+
+int
+csilk_db_set_nonblocking(csilk_db_pool_t* pool, int enable)
+{
+    if (!pool || !pool->driver) {
+        return -1;
+    }
+    if (pool->driver->set_nonblocking) {
+        int rc = pool->driver->set_nonblocking(pool, enable);
+        if (rc != 0) {
+            return rc;
+        }
+    } else if (enable) {
+        /* Driver does not support non-blocking socket mode */
+        return -1;
+    }
+    pool->is_nonblocking = (enable != 0);
+    return 0;
+}
+
 /** @brief Get the most recent database error category (csilk#8). */
 csilk_db_err_t
 csilk_db_last_error(csilk_db_pool_t* pool)
@@ -1299,6 +1327,26 @@ db_async_after_work_cb(csilk_io_work_t* req, int status)
     db_async_free_ctx(ctx);
 }
 
+typedef struct {
+    csilk_db_async_cb cb;
+    void*             user_data;
+} db_async_cb_bridge_t;
+
+static void
+db_async_query_bridge_cb(csilk_json_t* result, csilk_db_err_t err, void* user_data)
+{
+    (void)err;
+    db_async_cb_bridge_t* b = (db_async_cb_bridge_t*)user_data;
+    if (b) {
+        if (b->cb) {
+            b->cb(result, b->user_data);
+        } else if (result) {
+            csilk_json_free(result);
+        }
+        free(b);
+    }
+}
+
 static int
 db_async_submit_ex(db_async_op_t           op,
                    csilk_db_pool_t*        pool,
@@ -1321,6 +1369,32 @@ db_async_submit_ex(db_async_op_t           op,
     }
     if ((op == DB_ASYNC_EXEC || op == DB_ASYNC_EXEC_PARAM) && !exec_cb) {
         return -1;
+    }
+
+    if (pool->is_nonblocking) {
+        if (op == DB_ASYNC_QUERY_EX && pool->driver && pool->driver->query_async) {
+            return pool->driver->query_async(
+                pool, sql, params, target_loop, query_ex_cb, user_data);
+        }
+        if ((op == DB_ASYNC_QUERY || op == DB_ASYNC_QUERY_PARAM) && pool->driver &&
+            pool->driver->query_async) {
+            db_async_cb_bridge_t* b = malloc(sizeof(db_async_cb_bridge_t));
+            if (!b) {
+                return -1;
+            }
+            b->cb = query_cb;
+            b->user_data = user_data;
+            int rc = pool->driver->query_async(
+                pool, sql, params, target_loop, db_async_query_bridge_cb, b);
+            if (rc != 0) {
+                free(b);
+            }
+            return rc;
+        }
+        if ((op == DB_ASYNC_EXEC || op == DB_ASYNC_EXEC_PARAM) && pool->driver &&
+            pool->driver->exec_async) {
+            return pool->driver->exec_async(pool, sql, params, target_loop, exec_cb, user_data);
+        }
     }
 
     db_async_work_ctx_t* ctx = calloc(1, sizeof(db_async_work_ctx_t));

@@ -125,7 +125,15 @@ test_postgres_real_connection(void)
     assert(csilk_json_array_size(ghost_res) == 0);
     csilk_json_free(ghost_res);
 
-    /* 7. Clean up */
+    /* 7. Non-blocking mode check */
+    rc = csilk_db_set_nonblocking(pool, 1);
+    assert(rc == 0);
+    assert(csilk_db_is_nonblocking(pool) == 1);
+    rc = csilk_db_set_nonblocking(pool, 0);
+    assert(rc == 0);
+    assert(csilk_db_is_nonblocking(pool) == 0);
+
+    /* 8. Clean up */
     csilk_db_exec(pool, "DROP TABLE test_pg_items");
     csilk_db_pool_free(pool);
     printf("test_db_postgres: PASS\n");

@@ -18,6 +18,7 @@
  */
 
 #include <libpq-fe.h>
+#include <poll.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -720,6 +721,208 @@ postgres_set_pragma(csilk_db_pool_t* pool, int kind, const char* value)
     }
 }
 
+static int
+postgres_set_nonblocking(csilk_db_pool_t* pool, int enable)
+{
+    if (!pool) {
+        return -1;
+    }
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
+    for (int i = 0; i < n; i++) {
+        if (pool->connections[i]) {
+            pg_conn_t* conn = (pg_conn_t*)pool->connections[i];
+            if (conn->db) {
+                PQsetnonblocking(conn->db, enable ? 1 : 0);
+            }
+        }
+    }
+    return 0;
+}
+
+static int
+postgres_query_async(csilk_db_pool_t*        pool,
+                     const char*             sql,
+                     const char**            params,
+                     csilk_io_loop_t*        loop,
+                     csilk_db_query_async_cb cb,
+                     void*                   user_data)
+{
+    (void)loop;
+    if (!pool || !sql || !cb) {
+        return -1;
+    }
+
+    void* raw_conn = NULL;
+    if (csilk_db_pool_acquire(pool, &raw_conn) != 0 || !raw_conn) {
+        cb(NULL, CSILK_DB_ERR_CONN, user_data);
+        return -1;
+    }
+
+    pg_conn_t* conn = (pg_conn_t*)raw_conn;
+    PQsetnonblocking(conn->db, 1);
+
+    int ok = 0;
+    if (params && params[0]) {
+        int   pcount = 0;
+        char* rw = pg_rewrite_placeholders(sql, &pcount);
+        if (!rw) {
+            csilk_db_pool_put(pool, raw_conn);
+            cb(NULL, CSILK_DB_ERR_OOM, user_data);
+            return -1;
+        }
+        ok = PQsendQueryParams(conn->db, rw, pcount, NULL, params, NULL, NULL, 0);
+        free(rw);
+    } else {
+        ok = PQsendQuery(conn->db, sql);
+    }
+
+    if (!ok) {
+        csilk_db_pool_put(pool, raw_conn);
+        cb(NULL, CSILK_DB_ERR_SQL, user_data);
+        return -1;
+    }
+
+    int sock = PQsocket(conn->db);
+    while (1) {
+        int flush_rc = PQflush(conn->db);
+        if (flush_rc <= 0) {
+            break;
+        }
+        struct pollfd pfd = {.fd = sock, .events = POLLOUT};
+        (void)poll(&pfd, 1, 100);
+    }
+
+    while (PQisBusy(conn->db)) {
+        struct pollfd pfd = {.fd = sock, .events = POLLIN};
+        int           pr = poll(&pfd, 1, 100);
+        if (pr > 0 && (pfd.revents & POLLIN)) {
+            if (PQconsumeInput(conn->db) == 0) {
+                break;
+            }
+        }
+    }
+
+    PGresult* last_res = NULL;
+    while (1) {
+        PGresult* r = PQgetResult(conn->db);
+        if (!r) {
+            break;
+        }
+        if (last_res) {
+            PQclear(last_res);
+        }
+        last_res = r;
+    }
+
+    csilk_json_t*  json = NULL;
+    csilk_db_err_t err = CSILK_DB_OK;
+
+    if (last_res) {
+        ExecStatusType st = PQresultStatus(last_res);
+        if (st == PGRES_TUPLES_OK) {
+            json = pg_result_to_json(last_res);
+        } else if (st != PGRES_COMMAND_OK) {
+            err = CSILK_DB_ERR_SQL;
+        }
+        PQclear(last_res);
+    } else {
+        err = CSILK_DB_ERR_CONN;
+    }
+
+    csilk_db_pool_put(pool, raw_conn);
+    cb(json, err, user_data);
+    return 0;
+}
+
+static int
+postgres_exec_async(csilk_db_pool_t*       pool,
+                    const char*            sql,
+                    const char**           params,
+                    csilk_io_loop_t*       loop,
+                    csilk_db_exec_async_cb cb,
+                    void*                  user_data)
+{
+    (void)loop;
+    if (!pool || !sql || !cb) {
+        return -1;
+    }
+
+    void* raw_conn = NULL;
+    if (csilk_db_pool_acquire(pool, &raw_conn) != 0 || !raw_conn) {
+        cb(-1, user_data);
+        return -1;
+    }
+
+    pg_conn_t* conn = (pg_conn_t*)raw_conn;
+    PQsetnonblocking(conn->db, 1);
+
+    int ok = 0;
+    if (params && params[0]) {
+        int   pcount = 0;
+        char* rw = pg_rewrite_placeholders(sql, &pcount);
+        if (!rw) {
+            csilk_db_pool_put(pool, raw_conn);
+            cb(-1, user_data);
+            return -1;
+        }
+        ok = PQsendQueryParams(conn->db, rw, pcount, NULL, params, NULL, NULL, 0);
+        free(rw);
+    } else {
+        ok = PQsendQuery(conn->db, sql);
+    }
+
+    if (!ok) {
+        csilk_db_pool_put(pool, raw_conn);
+        cb(-1, user_data);
+        return -1;
+    }
+
+    int sock = PQsocket(conn->db);
+    while (1) {
+        int flush_rc = PQflush(conn->db);
+        if (flush_rc <= 0) {
+            break;
+        }
+        struct pollfd pfd = {.fd = sock, .events = POLLOUT};
+        (void)poll(&pfd, 1, 100);
+    }
+
+    while (PQisBusy(conn->db)) {
+        struct pollfd pfd = {.fd = sock, .events = POLLIN};
+        int           pr = poll(&pfd, 1, 100);
+        if (pr > 0 && (pfd.revents & POLLIN)) {
+            if (PQconsumeInput(conn->db) == 0) {
+                break;
+            }
+        }
+    }
+
+    int       rc = -1;
+    PGresult* last_res = NULL;
+    while (1) {
+        PGresult* r = PQgetResult(conn->db);
+        if (!r) {
+            break;
+        }
+        if (last_res) {
+            PQclear(last_res);
+        }
+        last_res = r;
+    }
+
+    if (last_res) {
+        ExecStatusType st = PQresultStatus(last_res);
+        if (st == PGRES_COMMAND_OK || st == PGRES_TUPLES_OK) {
+            rc = 0;
+        }
+        PQclear(last_res);
+    }
+
+    csilk_db_pool_put(pool, raw_conn);
+    cb(rc, user_data);
+    return 0;
+}
+
 /* -----------------------------------------------------------------------
  * Driver vtable
  * ----------------------------------------------------------------------- */
@@ -746,6 +949,9 @@ csilk_db_driver_t csilk_db_postgres_driver = {
     .stmt_close = postgres_stmt_close,
     .last_error = postgres_last_error, /* csilk#8 */
     .set_pragma = postgres_set_pragma, /* csilk#4 */
+    .set_nonblocking = postgres_set_nonblocking,
+    .query_async = postgres_query_async,
+    .exec_async = postgres_exec_async,
 };
 
 /**

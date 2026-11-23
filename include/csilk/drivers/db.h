@@ -263,6 +263,15 @@ typedef struct {
                        row's @p values). */
 } csilk_db_result_t;
 
+/** @brief Callback type for async database query execution. */
+typedef void (*csilk_db_async_cb)(csilk_json_t* result, void* user_data);
+
+/** @brief Callback type for async database non-query (DML/DDL) execution. */
+typedef void (*csilk_db_exec_async_cb)(int rc, void* user_data);
+
+/** @brief Callback type for csilk_db_query_async() with error category. */
+typedef void (*csilk_db_query_async_cb)(csilk_json_t* result, csilk_db_err_t err, void* user_data);
+
 /**
  * @brief Virtual function table implemented by each database driver.
  *
@@ -355,6 +364,25 @@ struct csilk_db_driver_s {
    *  (e.g. "WAL" for journal_mode, 5000 for busy_timeout).
    *  @return 0 on success or no-op, -1 on unsupported dialect. */
     int (*set_pragma)(csilk_db_pool_t* pool, int kind, const char* value);
+
+    /** @brief Configure non-blocking socket mode on connection pool (optional). */
+    int (*set_nonblocking)(csilk_db_pool_t* pool, int enable);
+
+    /** @brief Non-blocking async query hook on worker event loop (optional). */
+    int (*query_async)(csilk_db_pool_t*        pool,
+                       const char*             sql,
+                       const char**            params,
+                       csilk_io_loop_t*        loop,
+                       csilk_db_query_async_cb cb,
+                       void*                   user_data);
+
+    /** @brief Non-blocking async statement execution hook on worker event loop (optional). */
+    int (*exec_async)(csilk_db_pool_t*       pool,
+                      const char*            sql,
+                      const char**           params,
+                      csilk_io_loop_t*       loop,
+                      csilk_db_exec_async_cb cb,
+                      void*                  user_data);
 };
 
 /**
@@ -588,11 +616,21 @@ void csilk_db_pool_free(csilk_db_pool_t* pool);
  */
 csilk_json_t* csilk_db_query_json(csilk_db_pool_t* pool, const char* sql);
 
-/** @brief Callback type for async database query execution. */
-typedef void (*csilk_db_async_cb)(csilk_json_t* result, void* user_data);
+/**
+ * @brief Checks whether a database connection pool is using non-blocking asynchronous socket I/O.
+ * @param pool Database pool.
+ * @return 1 if non-blocking socket mode is enabled/active, 0 if using thread pool offload.
+ */
+int csilk_db_is_nonblocking(const csilk_db_pool_t* pool);
 
-/** @brief Callback type for async database non-query (DML/DDL) execution. */
-typedef void (*csilk_db_exec_async_cb)(int rc, void* user_data);
+/**
+ * @brief Enables or disables non-blocking socket mode on the database connection pool.
+ *        Supported by PostgreSQL (libpq) and MySQL protocol drivers.
+ * @param pool Database pool.
+ * @param enable 1 to enable non-blocking socket mode, 0 to disable.
+ * @return 0 on success, negative value if unsupported by the driver.
+ */
+int csilk_db_set_nonblocking(csilk_db_pool_t* pool, int enable);
 
 /**
  * @brief Execute a SQL query asynchronously without blocking the event loop.
@@ -675,16 +713,6 @@ int csilk_db_exec_param_async(csilk_db_pool_t*       pool,
                               const char**           params,
                               csilk_db_exec_async_cb cb,
                               void*                  user_data);
-
-/**
- * @brief Callback type for csilk_db_query_async() with error category.
- *
- * @param result    JSON array of row objects (caller owns and must csilk_json_free),
- *                  or NULL on failure.
- * @param err       Error category (CSILK_DB_OK on success).
- * @param user_data Opaque user data pointer passed to csilk_db_query_async().
- */
-typedef void (*csilk_db_query_async_cb)(csilk_json_t* result, csilk_db_err_t err, void* user_data);
 
 /**
  * @brief Execute a slow SQL query asynchronously on the I/O thread pool.

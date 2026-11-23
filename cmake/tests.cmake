@@ -349,9 +349,10 @@ set(CSILK_DATA_TESTS
     test_db_mysql
     test_db_redis
     test_db_abstraction
+    test_db_nonblocking
 )
 set(CSILK_DATA_TEST_DIRS
-    drivers;drivers;drivers/db;drivers/db;drivers/db;drivers;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db
+    drivers;drivers;drivers/db;drivers/db;drivers/db;drivers;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db
 )
 
 # -- AI / driver tests --

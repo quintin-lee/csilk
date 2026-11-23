@@ -19,18 +19,19 @@
 #include <mysql.h>
 #endif
 #include <errno.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "csilk/csilk.h"
+#include "csilk/drivers/db.h"
+#include "db_internal.h"
 
 /* MySQL 8.0+ removed `my_bool` in favour of standard C `bool`, while MariaDB
  * Connector/C still defines `my_bool` as `char`.  Infer the exact indicator
  * pointee type directly from MYSQL_BIND::is_null using C23 `typeof` so
  * mysql.c builds warning-free on both MySQL 8.0+ and MariaDB. */
 typedef typeof(*((MYSQL_BIND*)0)->is_null) csilk_mysql_bool_t;
-
-#include "csilk/csilk.h"
-#include "csilk/drivers/db.h"
-#include "db_internal.h"
 
 /* strndup is POSIX.1-2008 but may not be visible on musl-based systems
  * (Alpine Linux) without the correct feature test macros. We always
@@ -847,6 +848,175 @@ mysql_drv_last_error(csilk_db_pool_t* pool, csilk_db_err_t* out_err)
     return 0;
 }
 
+#ifdef MYSQL_WAIT_READ
+static csilk_json_t*
+mysql_res_to_json(MYSQL_RES* res)
+{
+    if (!res) {
+        return csilk_json_array();
+    }
+    csilk_json_t* array = csilk_json_array();
+    if (!array) {
+        return NULL;
+    }
+    MYSQL_FIELD* fields = mysql_fetch_fields(res);
+    unsigned int num_fields = mysql_num_fields(res);
+    MYSQL_ROW    row;
+    while ((row = mysql_fetch_row(res))) {
+        csilk_json_t* obj = csilk_json_object();
+        if (!obj) {
+            csilk_json_free(array);
+            return NULL;
+        }
+        for (unsigned int i = 0; i < num_fields; i++) {
+            const char* key = fields[i].name ? fields[i].name : "col";
+            const char* val = row[i];
+            if (val) {
+                csilk_json_add_object(obj, key, csilk_json_string_new(val));
+            }
+        }
+        csilk_json_array_append(array, obj);
+    }
+    return array;
+}
+
+static int
+mysql_drv_set_nonblocking(csilk_db_pool_t* pool, int enable)
+{
+    (void)pool;
+    (void)enable;
+    return 0;
+}
+
+static int
+mysql_drv_wait_for_status(MYSQL* mysql, int wait_status, int timeout_ms)
+{
+    if (!mysql || wait_status == 0) {
+        return 0;
+    }
+    int sock = (int)mysql_get_socket(mysql);
+    if (sock < 0) {
+        return 0;
+    }
+    short events = 0;
+    if (wait_status & MYSQL_WAIT_READ) {
+        events |= POLLIN;
+    }
+    if (wait_status & MYSQL_WAIT_WRITE) {
+        events |= POLLOUT;
+    }
+    if (wait_status & MYSQL_WAIT_EXCEPT) {
+        events |= POLLPRI;
+    }
+
+    struct pollfd pfd = {.fd = sock, .events = events, .revents = 0};
+    int           r = poll(&pfd, 1, timeout_ms > 0 ? timeout_ms : 100);
+    int           status = 0;
+    if (r > 0) {
+        if (pfd.revents & (POLLIN | POLLHUP | POLLERR)) {
+            status |= MYSQL_WAIT_READ;
+        }
+        if (pfd.revents & POLLOUT) {
+            status |= MYSQL_WAIT_WRITE;
+        }
+    } else if (r == 0) {
+        status |= MYSQL_WAIT_TIMEOUT;
+    }
+    return status;
+}
+
+static int
+mysql_drv_query_async(csilk_db_pool_t*        pool,
+                      const char*             sql,
+                      const char**            params,
+                      csilk_io_loop_t*        loop,
+                      csilk_db_query_async_cb cb,
+                      void*                   user_data)
+{
+    (void)loop;
+    (void)params;
+    if (!pool || !sql || !cb) {
+        return -1;
+    }
+
+    void* raw_conn = NULL;
+    if (csilk_db_pool_acquire(pool, &raw_conn) != 0 || !raw_conn) {
+        cb(NULL, CSILK_DB_ERR_CONN, user_data);
+        return -1;
+    }
+
+    mysql_conn_t* conn = (mysql_conn_t*)raw_conn;
+    int           ret = 0;
+    int wait_status = mysql_real_query_start(&ret, conn->db, sql, (unsigned long)strlen(sql));
+    while (wait_status != 0) {
+        int status = mysql_drv_wait_for_status(conn->db, wait_status, 100);
+        wait_status = mysql_real_query_cont(&ret, conn->db, status);
+    }
+
+    if (ret != 0) {
+        csilk_db_pool_put(pool, raw_conn);
+        cb(NULL, CSILK_DB_ERR_SQL, user_data);
+        return -1;
+    }
+
+    MYSQL_RES* res = NULL;
+    wait_status = mysql_store_result_start(&res, conn->db);
+    while (wait_status != 0) {
+        int status = mysql_drv_wait_for_status(conn->db, wait_status, 100);
+        wait_status = mysql_store_result_cont(&res, conn->db, status);
+    }
+
+    csilk_json_t*  json = NULL;
+    csilk_db_err_t err = CSILK_DB_OK;
+    if (res) {
+        json = mysql_res_to_json(res);
+        mysql_free_result(res);
+    } else if (mysql_field_count(conn->db) > 0) {
+        err = CSILK_DB_ERR_SQL;
+    } else {
+        json = csilk_json_array();
+    }
+
+    csilk_db_pool_put(pool, raw_conn);
+    cb(json, err, user_data);
+    return 0;
+}
+
+static int
+mysql_drv_exec_async(csilk_db_pool_t*       pool,
+                     const char*            sql,
+                     const char**           params,
+                     csilk_io_loop_t*       loop,
+                     csilk_db_exec_async_cb cb,
+                     void*                  user_data)
+{
+    (void)loop;
+    (void)params;
+    if (!pool || !sql || !cb) {
+        return -1;
+    }
+
+    void* raw_conn = NULL;
+    if (csilk_db_pool_acquire(pool, &raw_conn) != 0 || !raw_conn) {
+        cb(-1, user_data);
+        return -1;
+    }
+
+    mysql_conn_t* conn = (mysql_conn_t*)raw_conn;
+    int           ret = 0;
+    int wait_status = mysql_real_query_start(&ret, conn->db, sql, (unsigned long)strlen(sql));
+    while (wait_status != 0) {
+        int status = mysql_drv_wait_for_status(conn->db, wait_status, 100);
+        wait_status = mysql_real_query_cont(&ret, conn->db, status);
+    }
+
+    int rc = (ret == 0) ? 0 : -1;
+    csilk_db_pool_put(pool, raw_conn);
+    cb(rc, user_data);
+    return 0;
+}
+#endif
+
 /** @brief Pre-built driver vtable for MySQL. */
 csilk_db_driver_t csilk_db_mysql_driver = {
     .name = "mysql",
@@ -868,6 +1038,11 @@ csilk_db_driver_t csilk_db_mysql_driver = {
     .stmt_close = mysql_drv_stmt_close,
     .free_result = mysql_free_csilk_result,
     .last_error = mysql_drv_last_error,
+#ifdef MYSQL_WAIT_READ
+    .set_nonblocking = mysql_drv_set_nonblocking,
+    .query_async = mysql_drv_query_async,
+    .exec_async = mysql_drv_exec_async,
+#endif
 };
 
 /**

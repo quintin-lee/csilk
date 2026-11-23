@@ -57,6 +57,7 @@ struct csilk_db_pool_s {
      */
     void (*on_open_cb)(csilk_db_pool_t* pool, void* ctx);
     void* on_open_ctx;
+    bool  is_nonblocking;
 };
 
 struct csilk_stmt_s {
