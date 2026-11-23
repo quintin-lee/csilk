@@ -35,6 +35,7 @@
  */
 
 #include "csilk/app/app.h"
+#include "csilk/app/wf_grid.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/drivers/ai/tool_registry.h"
 #include "csilk/drivers/vector.h"

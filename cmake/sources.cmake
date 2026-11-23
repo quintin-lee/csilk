@@ -259,6 +259,7 @@ set(CSILK_MQ_SOURCES
 set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_graph.c
     src/workflow/wf_distributed.c
+    src/workflow/wf_grid.c
     src/workflow/wf_monitor.c
     src/workflow/wf_ai_utils.c
     src/workflow/wf_ai_nodes.c
