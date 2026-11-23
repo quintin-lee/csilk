@@ -58,7 +58,17 @@ v1.2.0 聚焦于**协议完整性**（HTTP/3、gRPC）、**会话抽象**（可�
 | 4.3 热更新（三组件原子） | ✅ 方案文档（`docs/en/meta/HOT-UPDATE-PLAN.md`） |
 | 4.4 安全审计 | ✅ `docs/en/meta/SECURITY-AUDIT-v1.2.md` |
 
-### 阶段 5：Windows — ⚠️ 不在范围内
+### 阶段 6：战略功能收敛 (v1.2.0-GA) — ✅ 完成
+
+| 任务 | 状态 |
+|---|---|
+| 6.1 OpenTelemetry 2.0 AI Trace ↔ HTTP W3C Spans | ✅ `src/middleware/otlp_trace.c`、`include/csilk/middleware/otlp_trace.h` |
+| 6.2 去中心化 Multi-Agent 任务工作窃取网格 | ✅ `src/workflow/wf_grid.c`、`include/csilk/app/wf_grid.h` |
+| 6.3 WebAssembly (WAMR) 沙箱 Fuel 计量与 Guest SDK | ✅ `src/core/plugin/wasm_plugin.c`、`include/csilk/plugin/wasm_sdk.h` |
+| 6.4 全量 ABI SOVERSION 1 兼容性验证（952 纯净导出） | ✅ `scripts/check_abi_compatibility.sh` |
+| 6.5 全量测试回归套件（273 单测 100% 绿色） | ✅ `ctest` |
+
+### 阶段 7：Windows — ⚠️ 不在范围内
 
 **决策**：Windows 需要 IOCP（替代 io_uring）、NDIS/WFP（替代 AF_XDP）、pthread_barrier shim。估算 8 周工作量。不在 v1.2.0 范围内。
 
@@ -72,8 +82,8 @@ v1.2.0 聚焦于**协议完整性**（HTTP/3、gRPC）、**会话抽象**（可�
 
 ## 测试覆盖
 
-- **总测试数**：255+（单元 + 集成）
-- **v1.2.0 新增**：test_h3 (3), test_session_store (7), test_grpc (6)
+- **总测试数**：273+（单元测试 100% 通过）
+- **v1.2.0 新增**：test_h3, test_session_store, test_grpc, test_otlp_ai, test_wf_grid, test_wasm_fuel
 - **Fuzz 目标**：9 个 harness
 
 ## 文件清单

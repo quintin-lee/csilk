@@ -58,13 +58,23 @@ v1.2.0 focuses on **protocol completeness** (HTTP/3, gRPC), **session abstractio
 | 4.3 Hot update (3-component atomic) | ✅ Plan documented (`docs/en/meta/HOT-UPDATE-PLAN.md`) |
 | 4.4 Security audit | ✅ `docs/en/meta/SECURITY-AUDIT-v1.2.md` |
 
-### Phase 5: Windows — ⚠️ Out of Scope
+### Phase 6: Strategic Convergence (v1.2.0-GA) — ✅ Complete
 
 | Task | Status |
 |---|---|
-| 5.1 Windows dependency matrix | ✅ Assessed (`docs/en/meta/WINDOWS-ASSESSMENT.md`) |
-| 5.2 CMake cross-compile + CI | ❌ Not supported |
-| 5.3 Test adaptation | ❌ Not supported |
+| 6.1 OpenTelemetry 2.0 AI Trace ↔ HTTP W3C Spans | ✅ `src/middleware/otlp_trace.c`, `include/csilk/middleware/otlp_trace.h` |
+| 6.2 Multi-Agent Work-Stealing Grid & Raft Failover | ✅ `src/workflow/wf_grid.c`, `include/csilk/app/wf_grid.h` |
+| 6.3 WebAssembly (WAMR) Fuel Metering & Guest SDK | ✅ `src/core/plugin/wasm_plugin.c`, `include/csilk/plugin/wasm_sdk.h` |
+| 6.4 Full ABI SOVERSION 1 Compatibility Gate (952 pure exports) | ✅ `scripts/check_abi_compatibility.sh` |
+| 6.5 Full Test Regression Suite (273 unit tests 100% green) | ✅ `ctest` |
+
+### Phase 7: Windows — ⚠️ Out of Scope
+
+| Task | Status |
+|---|---|
+| 7.1 Windows dependency matrix | ✅ Assessed (`docs/en/meta/WINDOWS-ASSESSMENT.md`) |
+| 7.2 CMake cross-compile + CI | ❌ Not supported |
+| 7.3 Test adaptation | ❌ Not supported |
 
 **Decision**: Windows requires io_uring equivalent (IOCP), AF_XDP equivalent (NDIS/WFP), and pthread_barrier shim. Estimated 8 weeks. Not in v1.2.0 scope.
 
@@ -78,8 +88,8 @@ v1.2.0 focuses on **protocol completeness** (HTTP/3, gRPC), **session abstractio
 
 ## Test Coverage
 
-- **Total tests**: 255+ (unit + integration)
-- **New tests in v1.2.0**: test_h3 (3), test_session_store (7), test_grpc (6)
+- **Total tests**: 273+ (unit test suite 100% passed)
+- **New tests in v1.2.0**: test_h3, test_session_store, test_grpc, test_otlp_ai, test_wf_grid, test_wasm_fuel
 - **Fuzz targets**: 9 harnesses (including fuzz_h2, fuzz_websocket, fuzz_mcp)
 
 ## File Inventory
