@@ -245,7 +245,7 @@ csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const c
             csilk_set_header(ctx, "X-WASM-Error", "TRAP_FUEL_EXHAUSTED");
             csilk_abort(ctx);
         }
-        return -1;
+        return CSILK_WASM_ERR_OUT_OF_FUEL;
     }
 
     /* Deduct simulated instruction fuel; resets to configured limit each call */
@@ -260,6 +260,42 @@ csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const c
 
     csilk_mutex_unlock(&plugin->mutex);
     return 0;
+}
+
+int
+csilk_wasm_plugin_set_fuel(csilk_wasm_plugin_t* plugin, uint32_t fuel_limit)
+{
+    if (!plugin) {
+        return -1;
+    }
+    csilk_mutex_lock(&plugin->mutex);
+    plugin->config.fuel_limit = fuel_limit;
+#ifdef HAS_WAMR
+    if (plugin->use_wamr && plugin->wasm_instance) {
+        wasm_runtime_set_module_inst_fuel((wasm_module_inst_t)(uintptr_t)plugin->wasm_instance,
+                                          fuel_limit);
+    }
+#endif
+    csilk_mutex_unlock(&plugin->mutex);
+    return 0;
+}
+
+uint32_t
+csilk_wasm_plugin_get_fuel(const csilk_wasm_plugin_t* plugin)
+{
+    if (!plugin) {
+        return 0;
+    }
+    csilk_mutex_lock((csilk_mutex_t*)&plugin->mutex);
+    uint32_t fuel = (uint32_t)plugin->config.fuel_limit;
+#ifdef HAS_WAMR
+    if (plugin->use_wamr && plugin->wasm_instance) {
+        fuel =
+            wasm_runtime_get_module_inst_fuel((wasm_module_inst_t)(uintptr_t)plugin->wasm_instance);
+    }
+#endif
+    csilk_mutex_unlock((csilk_mutex_t*)&plugin->mutex);
+    return fuel;
 }
 
 /**

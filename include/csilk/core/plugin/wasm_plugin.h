@@ -19,8 +19,28 @@
 extern "C" {
 #endif
 
+/** @brief Error code returned when plugin execution runs out of fuel. */
+#define CSILK_WASM_ERR_OUT_OF_FUEL (-2)
+
 /** @brief Opaque handle for WebAssembly Plugin instance. */
 typedef struct csilk_wasm_plugin_s csilk_wasm_plugin_t;
+
+/**
+ * @brief Set the maximum instruction fuel limit for a WASM plugin instance.
+ *
+ * @param plugin Loaded WASM plugin handle.
+ * @param fuel_limit Maximum fuel units allowed per execution invocation.
+ * @return 0 on success, -1 on invalid plugin handle.
+ */
+int csilk_wasm_plugin_set_fuel(csilk_wasm_plugin_t* plugin, uint32_t fuel_limit);
+
+/**
+ * @brief Get the configured instruction fuel limit for a WASM plugin instance.
+ *
+ * @param plugin Loaded WASM plugin handle.
+ * @return Configured fuel limit, or 0 if plugin is invalid.
+ */
+uint32_t csilk_wasm_plugin_get_fuel(const csilk_wasm_plugin_t* plugin);
 
 /**
  * @brief Load and validate a WebAssembly bytecode module into a plugin instance.
