@@ -96,6 +96,43 @@ void csilk_otlp_tracer_set_sample_rate(int rate);
  */
 void csilk_otlp_tracer_set_buffer_size(size_t cap);
 
+struct csilk_ai_trace_s;
+
+/**
+ * @brief Bind AI inference trace metrics and tool spans to an OTLP Span.
+ *
+ * Populates GenAI attributes (gen_ai.usage.prompt_tokens, completion_tokens,
+ * response.model, etc.) in the sidecar attribute table and creates tool child spans.
+ *
+ * @param span Target OTLP Span handle.
+ * @param trace AI trace container holding tokens, latency, and tool spans.
+ * @return 0 on success, -1 on invalid arguments.
+ */
+int csilk_otlp_span_bind_ai_trace(csilk_otlp_span_t* span, const struct csilk_ai_trace_s* trace);
+
+/**
+ * @brief Automatically attach AI trace to the active request context's OTLP span.
+ *
+ * @param ctx HTTP request context.
+ * @param trace AI trace container.
+ * @return 0 on success, -1 if no active span or invalid arguments.
+ */
+int csilk_otlp_ctx_attach_ai_trace(csilk_ctx_t* ctx, const struct csilk_ai_trace_s* trace);
+
+/**
+ * @brief Export a single OTLP span and its sidecar attributes to JSON format.
+ *
+ * @param span Span handle.
+ * @param out_buf Destination JSON buffer.
+ * @param cap Capacity of out_buf.
+ * @param out_len Destination pointer to receive the written string length.
+ * @return 0 on success, -1 on buffer overflow or serialization error.
+ */
+int csilk_otlp_export_span_json(const csilk_otlp_span_t* span,
+                                char*                    out_buf,
+                                size_t                   cap,
+                                size_t*                  out_len);
+
 #ifdef __cplusplus
 }
 #endif

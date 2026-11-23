@@ -4,19 +4,26 @@
  * @copyright MIT License
  */
 
+#include <ctype.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <ctype.h>
 
 #include <openssl/rand.h>
 #include "csilk/core/internal.h"
+#include "csilk/core/json/json.h"
 #include "csilk/core/middleware.h"
 #include "csilk/core/sync.h"
 #include "csilk/csilk.h"
+#include "csilk/drivers/ai.h"
 #include "csilk/middleware/otlp_trace.h"
+
+#define OTLP_SPAN_BUF_CAP 2048 /* default; overridable via csilk_otlp_tracer_set_buffer_size */
+#define OTLP_SAMPLE_RATE_DEFAULT 1000 /* sample 1/1000 when buffer is full */
+#define CSILK_MAX_TRACE_DEPTH 16
+#define CSILK_OTLP_SIDECAR_CAP 1024
 
 typedef struct {
     csilk_otlp_span_t* spans;
@@ -26,8 +33,16 @@ typedef struct {
     csilk_mutex_t      mutex;
 } csilk_otlp_buffer_t;
 
-#define OTLP_SPAN_BUF_CAP 2048 /* default; overridable via csilk_otlp_tracer_set_buffer_size */
-#define OTLP_SAMPLE_RATE_DEFAULT 1000 /* sample 1/1000 when buffer is full */
+typedef struct {
+    char trace_id[33];
+    char span_id[17];
+} csilk_trace_ctx_node_t;
+
+typedef struct {
+    char          span_id[17];
+    csilk_json_t* attributes;
+    bool          in_use;
+} csilk_otlp_sidecar_entry_t;
 
 static csilk_otlp_buffer_t g_otlp_buffer = {
     .spans = NULL,
@@ -39,6 +54,19 @@ static csilk_once_t     g_otlp_init_once = CSILK_ONCE_INIT;
 static atomic_int       g_otlp_init = 0;
 static _Atomic int      g_otlp_sample_rate = OTLP_SAMPLE_RATE_DEFAULT;
 static _Atomic uint64_t g_otlp_total_spans = 0; /* total spans received (for sampling decision) */
+
+static csilk_otlp_sidecar_entry_t s_sidecar_table[CSILK_OTLP_SIDECAR_CAP];
+static csilk_mutex_t              s_sidecar_mutex;
+static csilk_once_t               s_sidecar_once = CSILK_ONCE_INIT;
+
+static _Thread_local csilk_trace_ctx_node_t tls_trace_stack[CSILK_MAX_TRACE_DEPTH];
+static _Thread_local int                    tls_trace_depth = 0;
+
+static void
+_sidecar_init_once_cb(void)
+{
+    csilk_mutex_init(&s_sidecar_mutex);
+}
 
 static void
 _otlp_init_once_cb(void)
@@ -56,15 +84,6 @@ _otlp_init_once_cb(void)
     csilk_tracer_set_hooks(&hooks);
     atomic_store_explicit(&g_otlp_init, 1, memory_order_release);
 }
-
-typedef struct {
-    char trace_id[33];
-    char span_id[17];
-} csilk_trace_ctx_node_t;
-
-#define CSILK_MAX_TRACE_DEPTH 16
-static _Thread_local csilk_trace_ctx_node_t tls_trace_stack[CSILK_MAX_TRACE_DEPTH];
-static _Thread_local int                    tls_trace_depth = 0;
 
 static void
 _csilk_generate_hex_id(char* out, size_t num_bytes)
@@ -232,6 +251,7 @@ csilk_trace_middleware(csilk_ctx_t* c)
     const char*        req_path = csilk_get_path(c);
     csilk_otlp_span_t* root_span = csilk_otlp_tracer_start_span(
         req_path ? req_path : "HTTP Request", parent_span_id[0] ? parent_span_id : NULL);
+    csilk_set(c, "otlp_span", root_span);
 
     csilk_next(c);
 
@@ -336,18 +356,22 @@ csilk_otlp_tracer_start_span(const char* name, const char* parent_span_id)
 csilk_otlp_span_t*
 csilk_otlp_tracer_start_span_ctx(csilk_ctx_t* c, const char* name)
 {
+    csilk_otlp_span_t* s = NULL;
     if (c) {
         const char* tid = csilk_ctx_get_trace_id(c);
         const char* sid = csilk_ctx_get_span_id(c);
         if (tid && tid[0] != '\0') {
             csilk_otlp_push_trace_context(tid, sid);
-            csilk_otlp_span_t* s = csilk_otlp_tracer_start_span(name, sid);
+            s = csilk_otlp_tracer_start_span(name, sid);
             if (tls_trace_depth >= 2) {
                 tls_trace_stack[tls_trace_depth - 2] = tls_trace_stack[tls_trace_depth - 1];
                 tls_trace_depth--;
             }
-            return s;
+        } else {
+            s = csilk_otlp_tracer_start_span(name, NULL);
         }
+        csilk_set(c, "otlp_span", s);
+        return s;
     }
     return csilk_otlp_tracer_start_span(name, NULL);
 }
@@ -433,6 +457,21 @@ csilk_otlp_apm_spans_handler(csilk_ctx_t* c)
                             : 0.0;
         csilk_json_add_number(obj, "durationMs", dur_ms);
         csilk_json_add_number(obj, "statusCode", s->status_code);
+
+        csilk_once(&s_sidecar_once, _sidecar_init_once_cb);
+        csilk_mutex_lock(&s_sidecar_mutex);
+        for (size_t k = 0; k < CSILK_OTLP_SIDECAR_CAP; k++) {
+            if (s_sidecar_table[k].in_use &&
+                strncmp(s_sidecar_table[k].span_id, s->span_id, 16) == 0) {
+                if (s_sidecar_table[k].attributes) {
+                    csilk_json_add_object(
+                        obj, "attributes", csilk_json_copy(s_sidecar_table[k].attributes));
+                }
+                break;
+            }
+        }
+        csilk_mutex_unlock(&s_sidecar_mutex);
+
         csilk_json_array_append(arr, obj);
     }
     csilk_mutex_unlock(&g_otlp_buffer.mutex);
@@ -539,4 +578,171 @@ csilk_otlp_serve_apm_ui(csilk_app_t* app, const char* path)
     snprintf(spans_path, sizeof(spans_path), "%.*s/spans", (int)path_len, path);
     csilk_app_add_route(app, "GET", spans_path, csilk_otlp_apm_spans_handler);
     csilk_app_add_route(app, "GET", "/admin/api/telemetry/spans", csilk_otlp_apm_spans_handler);
+}
+
+int
+csilk_otlp_span_bind_ai_trace(csilk_otlp_span_t* span, const struct csilk_ai_trace_s* trace)
+{
+    if (!span || !trace) {
+        return -1;
+    }
+    csilk_once(&s_sidecar_once, _sidecar_init_once_cb);
+    csilk_mutex_lock(&s_sidecar_mutex);
+
+    csilk_otlp_sidecar_entry_t* target = NULL;
+    for (size_t i = 0; i < CSILK_OTLP_SIDECAR_CAP; i++) {
+        if (s_sidecar_table[i].in_use &&
+            strncmp(s_sidecar_table[i].span_id, span->span_id, 16) == 0) {
+            target = &s_sidecar_table[i];
+            break;
+        }
+    }
+    if (!target) {
+        for (size_t i = 0; i < CSILK_OTLP_SIDECAR_CAP; i++) {
+            if (!s_sidecar_table[i].in_use) {
+                target = &s_sidecar_table[i];
+                strncpy(target->span_id, span->span_id, sizeof(target->span_id) - 1);
+                target->span_id[sizeof(target->span_id) - 1] = '\0';
+                target->attributes = csilk_json_object();
+                target->in_use = true;
+                break;
+            }
+        }
+    }
+    if (!target) {
+        target = &s_sidecar_table[0];
+        if (target->attributes) {
+            csilk_json_free(target->attributes);
+        }
+        strncpy(target->span_id, span->span_id, sizeof(target->span_id) - 1);
+        target->span_id[sizeof(target->span_id) - 1] = '\0';
+        target->attributes = csilk_json_object();
+        target->in_use = true;
+    }
+
+    /* Set OpenTelemetry semantic conventions for GenAI */
+    csilk_json_add_int(
+        target->attributes, "gen_ai.usage.prompt_tokens", (int64_t)trace->prompt_tokens);
+    csilk_json_add_int(
+        target->attributes, "gen_ai.usage.completion_tokens", (int64_t)trace->completion_tokens);
+    csilk_json_add_int(
+        target->attributes, "gen_ai.usage.total_tokens", (int64_t)trace->total_tokens);
+    csilk_json_add_number(
+        target->attributes, "gen_ai.client.ttft_ms", (double)trace->first_token_ms);
+    csilk_json_add_number(
+        target->attributes, "gen_ai.client.duration_ms", (double)trace->latency_ms);
+    csilk_json_add_number(target->attributes, "gen_ai.usage.cost_usd", trace->cost_usd);
+
+    if (trace->model[0] != '\0') {
+        csilk_json_add_string(target->attributes, "gen_ai.response.model", trace->model);
+    }
+    if (trace->provider[0] != '\0') {
+        csilk_json_add_string(target->attributes, "gen_ai.system", trace->provider);
+    }
+
+    csilk_mutex_unlock(&s_sidecar_mutex);
+
+    /* If tool_spans JSON is present and non-empty, create child spans for tool calls */
+    if (trace->tool_spans[0] == '[' && trace->tool_spans[1] != ']') {
+        csilk_json_t* tool_arr = csilk_json_parse(trace->tool_spans);
+        if (tool_arr && csilk_json_is_array(tool_arr)) {
+            size_t   num_tools = csilk_json_array_size(tool_arr);
+            uint64_t child_start_ns = span->start_time_ns;
+            for (size_t t = 0; t < num_tools; t++) {
+                const csilk_json_t* item = csilk_json_array_get(tool_arr, t);
+                if (item) {
+                    const char* name = csilk_json_get_string(item, "name");
+                    double      lat_ms = csilk_json_get_number(item, "latency_ms");
+                    if (lat_ms <= 0.0) {
+                        lat_ms = 1.0;
+                    }
+                    char tool_span_name[128];
+                    snprintf(
+                        tool_span_name, sizeof(tool_span_name), "ai.tool.%s", name ? name : "call");
+                    csilk_otlp_span_t* child_span =
+                        csilk_otlp_tracer_start_span(tool_span_name, span->span_id);
+                    if (child_span) {
+                        child_span->start_time_ns = child_start_ns;
+                        child_span->end_time_ns = child_start_ns + (uint64_t)(lat_ms * 1000000.0);
+                        child_start_ns = child_span->end_time_ns;
+                        csilk_otlp_tracer_end_span(child_span, 1);
+                    }
+                }
+            }
+            csilk_json_free(tool_arr);
+        }
+    }
+
+    return 0;
+}
+
+int
+csilk_otlp_ctx_attach_ai_trace(csilk_ctx_t* ctx, const struct csilk_ai_trace_s* trace)
+{
+    if (!ctx || !trace) {
+        return -1;
+    }
+    csilk_otlp_span_t* span = (csilk_otlp_span_t*)csilk_get(ctx, "otlp_span");
+    if (!span) {
+        return -1;
+    }
+    return csilk_otlp_span_bind_ai_trace(span, trace);
+}
+
+int
+csilk_otlp_export_span_json(const csilk_otlp_span_t* span,
+                            char*                    out_buf,
+                            size_t                   cap,
+                            size_t*                  out_len)
+{
+    if (!span || !out_buf || cap == 0) {
+        return -1;
+    }
+    csilk_json_t* obj = csilk_json_object();
+    csilk_json_add_string(obj, "traceId", span->trace_id);
+    csilk_json_add_string(obj, "spanId", span->span_id);
+    if (span->parent_span_id[0] != '\0') {
+        csilk_json_add_string(obj, "parentSpanId", span->parent_span_id);
+    }
+    csilk_json_add_string(obj, "name", span->name);
+    csilk_json_add_number(obj, "startTimeUnixNano", (double)span->start_time_ns);
+    csilk_json_add_number(obj, "endTimeUnixNano", (double)span->end_time_ns);
+    double dur_ms = (span->end_time_ns >= span->start_time_ns)
+                        ? (double)(span->end_time_ns - span->start_time_ns) / 1000000.0
+                        : 0.0;
+    csilk_json_add_number(obj, "durationMs", dur_ms);
+    csilk_json_add_number(obj, "statusCode", span->status_code);
+
+    /* Lookup sidecar attributes if present */
+    csilk_once(&s_sidecar_once, _sidecar_init_once_cb);
+    csilk_mutex_lock(&s_sidecar_mutex);
+    for (size_t i = 0; i < CSILK_OTLP_SIDECAR_CAP; i++) {
+        if (s_sidecar_table[i].in_use &&
+            strncmp(s_sidecar_table[i].span_id, span->span_id, 16) == 0) {
+            if (s_sidecar_table[i].attributes) {
+                csilk_json_add_object(
+                    obj, "attributes", csilk_json_copy(s_sidecar_table[i].attributes));
+            }
+            break;
+        }
+    }
+    csilk_mutex_unlock(&s_sidecar_mutex);
+
+    size_t sz = 0;
+    char*  str = csilk_json_serialize(obj, &sz);
+    csilk_json_free(obj);
+    if (!str) {
+        return -1;
+    }
+    if (sz >= cap) {
+        free(str);
+        return -1;
+    }
+    memcpy(out_buf, str, sz);
+    out_buf[sz] = '\0';
+    if (out_len) {
+        *out_len = sz;
+    }
+    free(str);
+    return 0;
 }
