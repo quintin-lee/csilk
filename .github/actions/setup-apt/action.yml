@@ -19,6 +19,10 @@ runs:
         ENABLE_ARM64_PORTS: ${{ inputs.arm64_ports }}
       run: |
         set -euo pipefail
+        export DEBIAN_FRONTEND=noninteractive
+
+        # Ensure reliable upstream archive mirror and prevent azure mirror stalls
+        sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
 
         # Prevent hung TCP sockets and slow IPv6 stalls without discarding local fast mirrors.
         sudo tee /etc/apt/apt.conf.d/99csilk-ci >/dev/null <<'EOF'
@@ -26,6 +30,10 @@ runs:
         Acquire::http::Timeout "30";
         Acquire::https::Timeout "30";
         Acquire::ForceIPv4 "true";
+        Dpkg::Options {
+           "--force-confdef";
+           "--force-confold";
+        }
         EOF
 
         if [ "${ENABLE_ARM64_PORTS}" = "true" ]; then
@@ -44,19 +52,7 @@ runs:
           sudo dpkg --add-architecture arm64
         fi
 
-        fallback_to_archive() {
-          echo "::warning::Default apt mirror failed or timed out; falling back to archive.ubuntu.com"
-          sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list /etc/apt/sources.list.d/* /etc/apt/apt-mirrors.txt 2>/dev/null || true
-          sudo timeout 120 apt-get update || true
-        }
-
-        if ! sudo timeout 90 apt-get update; then
-          fallback_to_archive
-        fi
+        sudo timeout 120 apt-get update -y
 
         # shellcheck disable=SC2086
-        if ! sudo timeout 300 apt-get install -y ${APT_PACKAGES}; then
-          fallback_to_archive
-          # shellcheck disable=SC2086
-          sudo timeout 300 apt-get install -y --fix-missing ${APT_PACKAGES}
-        fi
+        sudo timeout 300 apt-get install -y --no-install-recommends ${APT_PACKAGES}
