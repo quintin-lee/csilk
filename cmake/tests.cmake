@@ -243,11 +243,13 @@ set(CSILK_WORKFLOW_TESTS
     test_wf_tools_monitor
     test_wf_grid
     test_wf_grid_integration
+    test_wf_grid_raft
 )
 set(CSILK_WORKFLOW_TEST_DIRS
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
     workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
+    workflow
     workflow
     workflow
     workflow
