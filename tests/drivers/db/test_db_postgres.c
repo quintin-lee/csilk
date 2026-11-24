@@ -167,8 +167,6 @@ test_postgres_real_connection(void)
     int              exec_done = 0;
     rc = csilk_db_exec_async(pool,
                              "INSERT INTO test_pg_items (name, score) VALUES ('AsyncUser', 88)",
-                             nullptr,
-                             loop,
                              on_async_exec_cb,
                              &exec_done);
     assert(rc == 0);
