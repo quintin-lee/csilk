@@ -88,6 +88,15 @@ struct csilk_stmt_s {
  */
 char* csilk_sql_rewrite_placeholders(const char* sql, int* out_param_count);
 
+/**
+ * @brief Interpolate SQL ? placeholders with client-side escaped parameters for MySQL.
+ * @param mysql Raw MYSQL* handle (optional, if NULL a fallback escape is used).
+ * @param sql Input SQL query string.
+ * @param params Null-terminated array of string parameters.
+ * @return Heap-allocated interpolated SQL string (caller frees), or NULL on OOM.
+ */
+char* csilk_mysql_interpolate_params(void* mysql, const char* sql, const char** params);
+
 int csilk_db_pool_queue_waiter(csilk_db_pool_t* pool, csilk_db_async_resume_fn fn, void* arg);
 
 #endif

@@ -5,6 +5,72 @@
 
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
+#include "drivers/db/db_internal.h"
+
+static void
+test_mysql_interpolate_params_unit(void)
+{
+    const char* p1[] = {"42", "Alice", nullptr};
+    char*       res = csilk_mysql_interpolate_params(
+        nullptr, "SELECT * FROM users WHERE id = ? AND name = ?", p1);
+    assert(res != nullptr);
+    assert(strcmp(res, "SELECT * FROM users WHERE id = '42' AND name = 'Alice'") == 0);
+    free(res);
+
+    /* Test quote escaping */
+    const char* p2[] = {"O'Reilly", nullptr};
+    res = csilk_mysql_interpolate_params(nullptr, "SELECT * FROM users WHERE data = ?", p2);
+    assert(res != nullptr);
+    assert(strcmp(res, "SELECT * FROM users WHERE data = 'O\\'Reilly'") == 0);
+    free(res);
+
+    /* Test literal quote skipping */
+    const char* p3[] = {"10", nullptr};
+    res = csilk_mysql_interpolate_params(
+        nullptr, "SELECT 'what?is?this' FROM users WHERE id = ?", p3);
+    assert(res != nullptr);
+    assert(strcmp(res, "SELECT 'what?is?this' FROM users WHERE id = '10'") == 0);
+    free(res);
+
+    /* Test null param */
+    const char* p4[] = {"1", nullptr, nullptr};
+    res = csilk_mysql_interpolate_params(
+        nullptr, "SELECT * FROM users WHERE id = ? AND desc = ?", p4);
+    assert(res != nullptr);
+    assert(strcmp(res, "SELECT * FROM users WHERE id = '1' AND desc = NULL") == 0);
+    free(res);
+
+    printf("test_mysql_interpolate_params_unit: PASS\n");
+}
+
+#ifdef HAS_MYSQL
+typedef struct {
+    int  count;
+    bool done;
+} mysql_async_test_state_t;
+
+static void
+on_mysql_async_exec_cb(int res_rc, void* udata)
+{
+    int* ed = (int*)udata;
+    assert(res_rc == 0);
+    *ed = 1;
+}
+
+static void
+on_mysql_async_query_cb(csilk_json_t* res, csilk_db_err_t err, void* udata)
+{
+    mysql_async_test_state_t* st = (mysql_async_test_state_t*)udata;
+    assert(err == CSILK_DB_OK);
+    assert(res != nullptr);
+    assert(csilk_json_array_size(res) >= 1);
+    csilk_json_free(res);
+    st->count++;
+    if (st->count == 10) {
+        st->done = true;
+    }
+}
+#endif
 
 void
 test_mysql_real_connection(void)
@@ -105,7 +171,37 @@ test_mysql_real_connection(void)
         assert(csilk_db_is_nonblocking(pool) == 0);
     }
 
-    /* 8. Clean up */
+    /* 8. Async query & exec tests */
+    csilk_io_loop_t* loop = csilk_io_default_loop();
+    int              exec_done = 0;
+    rc = csilk_db_exec_async(pool,
+                             "INSERT INTO test_mysql_items (name, score) VALUES ('AsyncUser', 88)",
+                             on_mysql_async_exec_cb,
+                             &exec_done);
+    assert(rc == 0);
+    while (!exec_done) {
+        csilk_io_run(loop, CSILK_IO_RUN_ONCE);
+    }
+    assert(exec_done == 1);
+
+    /* Parameterized async query */
+    mysql_async_test_state_t astate = {.count = 0, .done = false};
+    const char*              async_q_params[] = {"AsyncUser", nullptr};
+    for (int i = 0; i < 10; i++) {
+        rc = csilk_db_query_async(pool,
+                                  "SELECT score FROM test_mysql_items WHERE name = ?",
+                                  async_q_params,
+                                  loop,
+                                  on_mysql_async_query_cb,
+                                  &astate);
+        assert(rc == 0);
+    }
+    while (!astate.done) {
+        csilk_io_run(loop, CSILK_IO_RUN_ONCE);
+    }
+    assert(astate.count == 10);
+
+    /* 9. Clean up */
     csilk_db_exec(pool, "DROP TABLE test_mysql_items");
     csilk_db_pool_free(pool);
     printf("test_db_mysql: PASS\n");
@@ -115,6 +211,7 @@ test_mysql_real_connection(void)
 int
 main(void)
 {
+    test_mysql_interpolate_params_unit();
     test_mysql_real_connection();
     return 0;
 }

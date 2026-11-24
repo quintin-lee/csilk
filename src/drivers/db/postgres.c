@@ -836,7 +836,7 @@ on_pg_async_timeout(csilk_io_timer_t* timer)
             PQfreeCancel(cancel);
         }
     }
-    pg_async_finish(op, NULL, CSILK_DB_ERR_TIMEOUT, -1, false);
+    pg_async_finish(op, NULL, CSILK_DB_ERR_BUSY, -1, false);
 }
 
 static void

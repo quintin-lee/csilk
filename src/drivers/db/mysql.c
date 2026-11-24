@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "csilk/core/sys_io.h"
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
 #include "db_internal.h"
@@ -852,12 +853,144 @@ static int
 mysql_drv_set_nonblocking(csilk_db_pool_t* pool, int enable)
 {
     (void)pool;
-#ifdef MYSQL_WAIT_READ
     (void)enable;
     return 0;
-#else
-    return enable ? -1 : 0;
-#endif
+}
+
+char*
+csilk_mysql_interpolate_params(void* mysql_ptr, const char* sql, const char** params)
+{
+    if (!sql) {
+        return NULL;
+    }
+    if (!params || !params[0]) {
+        return strdup(sql);
+    }
+
+    MYSQL* mysql = (MYSQL*)mysql_ptr;
+
+    /* Count unquoted ? placeholders */
+    int  param_count = 0;
+    bool in_quote = false;
+    for (const char* p = sql; *p; p++) {
+        if (*p == '\'') {
+            if (in_quote && *(p + 1) == '\'') {
+                p++;
+            } else {
+                in_quote = !in_quote;
+            }
+        } else if (*p == '?' && !in_quote) {
+            param_count++;
+        }
+    }
+
+    if (param_count == 0) {
+        return strdup(sql);
+    }
+
+    /* Escape all params upfront and compute required buffer length */
+    char** escaped_params = calloc((size_t)param_count, sizeof(char*));
+    if (!escaped_params) {
+        return NULL;
+    }
+
+    size_t total_len = strlen(sql);
+    for (int i = 0; i < param_count; i++) {
+        const char* val = params[i];
+        if (!val) {
+            escaped_params[i] = strdup("NULL");
+            if (!escaped_params[i]) {
+                for (int j = 0; j < i; j++) {
+                    free(escaped_params[j]);
+                }
+                free(escaped_params);
+                return NULL;
+            }
+            total_len += 4;
+        } else {
+            size_t val_len = strlen(val);
+            char*  esc = malloc(val_len * 2 + 1);
+            if (!esc) {
+                for (int j = 0; j < i; j++) {
+                    free(escaped_params[j]);
+                }
+                free(escaped_params);
+                return NULL;
+            }
+            unsigned long esc_len = 0;
+            if (mysql) {
+                esc_len = mysql_real_escape_string(mysql, esc, val, (unsigned long)val_len);
+            } else {
+                unsigned long d = 0;
+                for (size_t s = 0; s < val_len; s++) {
+                    if (val[s] == '\'' || val[s] == '\\') {
+                        esc[d++] = '\\';
+                    }
+                    esc[d++] = val[s];
+                }
+                esc[d] = '\0';
+                esc_len = d;
+            }
+            char* quoted = malloc(esc_len + 3);
+            if (!quoted) {
+                free(esc);
+                for (int j = 0; j < i; j++) {
+                    free(escaped_params[j]);
+                }
+                free(escaped_params);
+                return NULL;
+            }
+            quoted[0] = '\'';
+            memcpy(quoted + 1, esc, esc_len);
+            quoted[esc_len + 1] = '\'';
+            quoted[esc_len + 2] = '\0';
+            free(esc);
+
+            escaped_params[i] = quoted;
+            total_len += esc_len + 2;
+        }
+    }
+
+    char* out = malloc(total_len + 1);
+    if (!out) {
+        for (int i = 0; i < param_count; i++) {
+            free(escaped_params[i]);
+        }
+        free(escaped_params);
+        return NULL;
+    }
+
+    char* dst = out;
+    int   p_idx = 0;
+    in_quote = false;
+    for (const char* p = sql; *p; p++) {
+        if (*p == '\'') {
+            *dst++ = *p;
+            if (in_quote && *(p + 1) == '\'') {
+                *dst++ = *(++p);
+            } else {
+                in_quote = !in_quote;
+            }
+        } else if (*p == '?' && !in_quote) {
+            if (p_idx < param_count) {
+                const char* rep = escaped_params[p_idx++];
+                size_t      rlen = strlen(rep);
+                memcpy(dst, rep, rlen);
+                dst += rlen;
+            } else {
+                *dst++ = '?';
+            }
+        } else {
+            *dst++ = *p;
+        }
+    }
+    *dst = '\0';
+
+    for (int i = 0; i < param_count; i++) {
+        free(escaped_params[i]);
+    }
+    free(escaped_params);
+    return out;
 }
 
 #ifdef MYSQL_WAIT_READ
@@ -892,41 +1025,334 @@ mysql_res_to_json(MYSQL_RES* res)
     return array;
 }
 
-static int
-mysql_drv_wait_for_status(MYSQL* mysql, int wait_status, int timeout_ms)
+typedef enum {
+    MYSQL_ASYNC_QUERYING = 0,
+    MYSQL_ASYNC_STORING,
+    MYSQL_ASYNC_CLOSING
+} mysql_async_state_t;
+
+typedef struct {
+    csilk_db_pool_t*        pool;
+    void*                   raw_conn;
+    int                     lease_id;
+    mysql_conn_t*           conn;
+    char*                   interpolated_sql;
+    csilk_io_loop_t*        loop;
+    csilk_io_poll_t         poll;
+    csilk_io_timer_t        timer;
+    mysql_async_state_t     state;
+    bool                    is_query;
+    csilk_db_query_async_cb query_cb;
+    csilk_db_exec_async_cb  exec_cb;
+    void*                   user_data;
+    bool                    poll_started;
+    bool                    timer_started;
+    int                     closing_count;
+    int                     query_ret;
+    MYSQL_RES*              res;
+    csilk_json_t*           result_json;
+    csilk_db_err_t          result_err;
+    int                     result_exec_rc;
+} mysql_async_op_t;
+
+static void
+on_mysql_handle_closed(csilk_io_handle_t* handle)
 {
-    if (!mysql || wait_status == 0) {
-        return 0;
+    mysql_async_op_t* op = (mysql_async_op_t*)handle->data;
+    if (!op) {
+        return;
     }
-    int sock = (int)mysql_get_socket(mysql);
-    if (sock < 0) {
-        return 0;
+    op->closing_count--;
+    if (op->closing_count == 0) {
+        if (op->is_query) {
+            if (op->query_cb) {
+                op->query_cb(op->result_json, op->result_err, op->user_data);
+            } else if (op->result_json) {
+                csilk_json_free(op->result_json);
+            }
+        } else {
+            if (op->exec_cb) {
+                op->exec_cb(op->result_exec_rc, op->user_data);
+            }
+        }
+        if (op->interpolated_sql) {
+            free(op->interpolated_sql);
+        }
+        free(op);
     }
-    short events = 0;
-    if (wait_status & MYSQL_WAIT_READ) {
-        events |= POLLIN;
+}
+
+static void
+mysql_async_finish(
+    mysql_async_op_t* op, csilk_json_t* json, csilk_db_err_t err, int exec_rc, bool is_healthy)
+{
+    if (!op || op->state == MYSQL_ASYNC_CLOSING) {
+        return;
     }
-    if (wait_status & MYSQL_WAIT_WRITE) {
-        events |= POLLOUT;
+    op->state = MYSQL_ASYNC_CLOSING;
+
+    op->result_json = json;
+    op->result_err = err;
+    op->result_exec_rc = exec_rc;
+
+    if (op->timer_started) {
+        csilk_io_timer_stop(&op->timer);
+        op->timer_started = false;
     }
-    if (wait_status & MYSQL_WAIT_EXCEPT) {
-        events |= POLLPRI;
+    if (op->poll_started) {
+        csilk_io_poll_stop(&op->poll);
+        op->poll_started = false;
     }
 
-    struct pollfd pfd = {.fd = sock, .events = events, .revents = 0};
-    int           r = poll(&pfd, 1, timeout_ms > 0 ? timeout_ms : 100);
-    int           status = 0;
-    if (r > 0) {
-        if (pfd.revents & (POLLIN | POLLHUP | POLLERR)) {
-            status |= MYSQL_WAIT_READ;
-        }
-        if (pfd.revents & POLLOUT) {
-            status |= MYSQL_WAIT_WRITE;
-        }
-    } else if (r == 0) {
-        status |= MYSQL_WAIT_TIMEOUT;
+    if (op->raw_conn) {
+        csilk_db_pool_put_async(op->pool, op->raw_conn, op->lease_id, is_healthy);
+        op->raw_conn = NULL;
     }
-    return status;
+
+    op->closing_count = 2;
+    op->poll.data = op;
+    op->timer.data = op;
+    csilk_io_close((csilk_io_handle_t*)&op->poll, on_mysql_handle_closed);
+    csilk_io_close((csilk_io_handle_t*)&op->timer, on_mysql_handle_closed);
+}
+
+static void
+on_mysql_async_timeout(csilk_io_timer_t* timer)
+{
+    mysql_async_op_t* op = (mysql_async_op_t*)timer->data;
+    if (!op || op->state == MYSQL_ASYNC_CLOSING) {
+        return;
+    }
+    mysql_async_finish(op, NULL, CSILK_DB_ERR_BUSY, -1, false);
+}
+
+static void
+on_mysql_async_poll(csilk_io_poll_t* handle, int status, int events)
+{
+    mysql_async_op_t* op = (mysql_async_op_t*)handle->data;
+    if (!op || op->state == MYSQL_ASYNC_CLOSING) {
+        return;
+    }
+
+    if (status < 0) {
+        mysql_async_finish(op, NULL, CSILK_DB_ERR_CONN, -1, false);
+        return;
+    }
+
+    int mysql_status = 0;
+    if (events & CSILK_IO_READABLE) {
+        mysql_status |= MYSQL_WAIT_READ;
+    }
+    if (events & CSILK_IO_WRITABLE) {
+        mysql_status |= MYSQL_WAIT_WRITE;
+    }
+
+    if (op->state == MYSQL_ASYNC_QUERYING) {
+        int wait_status = mysql_real_query_cont(&op->query_ret, op->conn->db, mysql_status);
+        if (wait_status != 0) {
+            int new_events = 0;
+            if (wait_status & MYSQL_WAIT_READ) {
+                new_events |= CSILK_IO_READABLE;
+            }
+            if (wait_status & MYSQL_WAIT_WRITE) {
+                new_events |= CSILK_IO_WRITABLE;
+            }
+            csilk_io_poll_start(&op->poll, new_events, on_mysql_async_poll);
+            return;
+        }
+
+        if (op->query_ret != 0) {
+            mysql_async_finish(op, NULL, CSILK_DB_ERR_SQL, -1, true);
+            return;
+        }
+
+        if (!op->is_query) {
+            mysql_async_finish(op, NULL, CSILK_DB_OK, 0, true);
+            return;
+        }
+
+        op->state = MYSQL_ASYNC_STORING;
+        wait_status = mysql_store_result_start(&op->res, op->conn->db);
+        if (wait_status == 0) {
+            csilk_json_t*  json = NULL;
+            csilk_db_err_t err = CSILK_DB_OK;
+            if (op->res) {
+                json = mysql_res_to_json(op->res);
+                mysql_free_result(op->res);
+                op->res = NULL;
+            } else if (mysql_field_count(op->conn->db) > 0) {
+                err = CSILK_DB_ERR_SQL;
+            } else {
+                json = csilk_json_array();
+            }
+            mysql_async_finish(op, json, err, 0, true);
+            return;
+        }
+
+        int new_events = 0;
+        if (wait_status & MYSQL_WAIT_READ) {
+            new_events |= CSILK_IO_READABLE;
+        }
+        if (wait_status & MYSQL_WAIT_WRITE) {
+            new_events |= CSILK_IO_WRITABLE;
+        }
+        csilk_io_poll_start(&op->poll, new_events, on_mysql_async_poll);
+        return;
+    }
+
+    if (op->state == MYSQL_ASYNC_STORING) {
+        int wait_status = mysql_store_result_cont(&op->res, op->conn->db, mysql_status);
+        if (wait_status != 0) {
+            int new_events = 0;
+            if (wait_status & MYSQL_WAIT_READ) {
+                new_events |= CSILK_IO_READABLE;
+            }
+            if (wait_status & MYSQL_WAIT_WRITE) {
+                new_events |= CSILK_IO_WRITABLE;
+            }
+            csilk_io_poll_start(&op->poll, new_events, on_mysql_async_poll);
+            return;
+        }
+
+        csilk_json_t*  json = NULL;
+        csilk_db_err_t err = CSILK_DB_OK;
+        if (op->res) {
+            json = mysql_res_to_json(op->res);
+            mysql_free_result(op->res);
+            op->res = NULL;
+        } else if (mysql_field_count(op->conn->db) > 0) {
+            err = CSILK_DB_ERR_SQL;
+        } else {
+            json = csilk_json_array();
+        }
+        mysql_async_finish(op, json, err, 0, true);
+        return;
+    }
+}
+
+static int
+mysql_submit_async_op(csilk_db_pool_t*        pool,
+                      const char*             sql,
+                      const char**            params,
+                      csilk_io_loop_t*        loop,
+                      bool                    is_query,
+                      csilk_db_query_async_cb query_cb,
+                      csilk_db_exec_async_cb  exec_cb,
+                      void*                   user_data)
+{
+    if (!pool || !sql || (is_query && !query_cb) || (!is_query && !exec_cb)) {
+        return -1;
+    }
+
+    void* raw_conn = NULL;
+    int   lease_id = 0;
+    if (csilk_db_pool_acquire_async(pool, &raw_conn, &lease_id) != 0 || !raw_conn) {
+        if (is_query) {
+            query_cb(NULL, CSILK_DB_ERR_CONN, user_data);
+        } else {
+            exec_cb(-1, user_data);
+        }
+        return -1;
+    }
+
+    mysql_conn_t* conn = (mysql_conn_t*)raw_conn;
+
+    char* query_str = csilk_mysql_interpolate_params(conn->db, sql, params);
+    if (!query_str) {
+        csilk_db_pool_put_async(pool, raw_conn, lease_id, true);
+        if (is_query) {
+            query_cb(NULL, CSILK_DB_ERR_OOM, user_data);
+        } else {
+            exec_cb(-1, user_data);
+        }
+        return -1;
+    }
+
+    mysql_async_op_t* op = calloc(1, sizeof(*op));
+    if (!op) {
+        free(query_str);
+        csilk_db_pool_put_async(pool, raw_conn, lease_id, true);
+        if (is_query) {
+            query_cb(NULL, CSILK_DB_ERR_OOM, user_data);
+        } else {
+            exec_cb(-1, user_data);
+        }
+        return -1;
+    }
+
+    op->pool = pool;
+    op->raw_conn = raw_conn;
+    op->lease_id = lease_id;
+    op->conn = conn;
+    op->interpolated_sql = query_str;
+    op->loop = loop ? loop : csilk_io_default_loop();
+    op->is_query = is_query;
+    op->query_cb = query_cb;
+    op->exec_cb = exec_cb;
+    op->user_data = user_data;
+
+    int sock = (int)mysql_get_socket(conn->db);
+    if (sock < 0) {
+        csilk_db_pool_put_async(pool, raw_conn, lease_id, false);
+        free(query_str);
+        free(op);
+        if (is_query) {
+            query_cb(NULL, CSILK_DB_ERR_CONN, user_data);
+        } else {
+            exec_cb(-1, user_data);
+        }
+        return -1;
+    }
+
+    csilk_io_poll_init_socket(op->loop, &op->poll, sock);
+    op->poll.data = op;
+
+    csilk_io_timer_init(op->loop, &op->timer);
+    op->timer.data = op;
+    csilk_io_timer_start(&op->timer, on_mysql_async_timeout, 30000, 0);
+    op->timer_started = true;
+
+    op->state = MYSQL_ASYNC_QUERYING;
+    int wait_status = mysql_real_query_start(
+        &op->query_ret, conn->db, query_str, (unsigned long)strlen(query_str));
+    if (wait_status == 0) {
+        if (op->query_ret != 0) {
+            mysql_async_finish(op, NULL, CSILK_DB_ERR_SQL, -1, true);
+            return 0;
+        }
+        if (!is_query) {
+            mysql_async_finish(op, NULL, CSILK_DB_OK, 0, true);
+            return 0;
+        }
+        op->state = MYSQL_ASYNC_STORING;
+        wait_status = mysql_store_result_start(&op->res, conn->db);
+        if (wait_status == 0) {
+            csilk_json_t*  json = NULL;
+            csilk_db_err_t err = CSILK_DB_OK;
+            if (op->res) {
+                json = mysql_res_to_json(op->res);
+                mysql_free_result(op->res);
+                op->res = NULL;
+            } else if (mysql_field_count(conn->db) > 0) {
+                err = CSILK_DB_ERR_SQL;
+            } else {
+                json = csilk_json_array();
+            }
+            mysql_async_finish(op, json, err, 0, true);
+            return 0;
+        }
+    }
+
+    int events_needed = 0;
+    if (wait_status & MYSQL_WAIT_READ) {
+        events_needed |= CSILK_IO_READABLE;
+    }
+    if (wait_status & MYSQL_WAIT_WRITE) {
+        events_needed |= CSILK_IO_WRITABLE;
+    }
+    csilk_io_poll_start(&op->poll, events_needed, on_mysql_async_poll);
+    op->poll_started = true;
+    return 0;
 }
 
 static int
@@ -937,53 +1363,7 @@ mysql_drv_query_async(csilk_db_pool_t*        pool,
                       csilk_db_query_async_cb cb,
                       void*                   user_data)
 {
-    (void)loop;
-    (void)params;
-    if (!pool || !sql || !cb) {
-        return -1;
-    }
-
-    void* raw_conn = NULL;
-    if (csilk_db_pool_acquire(pool, &raw_conn) != 0 || !raw_conn) {
-        cb(NULL, CSILK_DB_ERR_CONN, user_data);
-        return -1;
-    }
-
-    mysql_conn_t* conn = (mysql_conn_t*)raw_conn;
-    int           ret = 0;
-    int wait_status = mysql_real_query_start(&ret, conn->db, sql, (unsigned long)strlen(sql));
-    while (wait_status != 0) {
-        int status = mysql_drv_wait_for_status(conn->db, wait_status, 100);
-        wait_status = mysql_real_query_cont(&ret, conn->db, status);
-    }
-
-    if (ret != 0) {
-        csilk_db_pool_put(pool, raw_conn);
-        cb(NULL, CSILK_DB_ERR_SQL, user_data);
-        return -1;
-    }
-
-    MYSQL_RES* res = NULL;
-    wait_status = mysql_store_result_start(&res, conn->db);
-    while (wait_status != 0) {
-        int status = mysql_drv_wait_for_status(conn->db, wait_status, 100);
-        wait_status = mysql_store_result_cont(&res, conn->db, status);
-    }
-
-    csilk_json_t*  json = NULL;
-    csilk_db_err_t err = CSILK_DB_OK;
-    if (res) {
-        json = mysql_res_to_json(res);
-        mysql_free_result(res);
-    } else if (mysql_field_count(conn->db) > 0) {
-        err = CSILK_DB_ERR_SQL;
-    } else {
-        json = csilk_json_array();
-    }
-
-    csilk_db_pool_put(pool, raw_conn);
-    cb(json, err, user_data);
-    return 0;
+    return mysql_submit_async_op(pool, sql, params, loop, true, cb, NULL, user_data);
 }
 
 static int
@@ -994,30 +1374,7 @@ mysql_drv_exec_async(csilk_db_pool_t*       pool,
                      csilk_db_exec_async_cb cb,
                      void*                  user_data)
 {
-    (void)loop;
-    (void)params;
-    if (!pool || !sql || !cb) {
-        return -1;
-    }
-
-    void* raw_conn = NULL;
-    if (csilk_db_pool_acquire(pool, &raw_conn) != 0 || !raw_conn) {
-        cb(-1, user_data);
-        return -1;
-    }
-
-    mysql_conn_t* conn = (mysql_conn_t*)raw_conn;
-    int           ret = 0;
-    int wait_status = mysql_real_query_start(&ret, conn->db, sql, (unsigned long)strlen(sql));
-    while (wait_status != 0) {
-        int status = mysql_drv_wait_for_status(conn->db, wait_status, 100);
-        wait_status = mysql_real_query_cont(&ret, conn->db, status);
-    }
-
-    int rc = (ret == 0) ? 0 : -1;
-    csilk_db_pool_put(pool, raw_conn);
-    cb(rc, user_data);
-    return 0;
+    return mysql_submit_async_op(pool, sql, params, loop, false, NULL, cb, user_data);
 }
 #endif
 
