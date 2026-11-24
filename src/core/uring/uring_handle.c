@@ -184,4 +184,83 @@ csilk_io_timer_init(csilk_io_loop_t* loop, csilk_io_timer_t* handle)
     return 0;
 }
 
+/* ====================================================================
+ * Poll handle
+ * ==================================================================== */
+
+int
+csilk_io_poll_init(csilk_io_loop_t* loop, csilk_io_poll_t* handle, int fd)
+{
+    if (!handle || fd < 0) {
+        return -1;
+    }
+    if (!loop) {
+        loop = csilk_io_default_loop();
+    }
+    handle->loop = loop;
+    handle->data = NULL;
+    handle->fd = fd;
+    handle->flags = 0;
+    handle->type = CSILK_IO_HANDLE_POLL;
+    handle->close_cb = NULL;
+    handle->generation = 1;
+    handle->cb = NULL;
+    handle->events = 0;
+    return 0;
+}
+
+int
+csilk_io_poll_init_socket(csilk_io_loop_t* loop, csilk_io_poll_t* handle, csilk_io_os_sock_t socket)
+{
+    return csilk_io_poll_init(loop, handle, (int)socket);
+}
+
+int
+csilk_io_poll_start(csilk_io_poll_t* handle, int events, csilk_io_poll_cb cb)
+{
+    if (!handle || handle->fd < 0 || !cb) {
+        return -1;
+    }
+    handle->cb = cb;
+    handle->events = events;
+    handle->flags |= CSILK_IO_HANDLE_ACTIVE;
+    handle->generation++;
+
+    short poll_mask = 0;
+    if (events & CSILK_IO_READABLE) {
+        poll_mask |= POLLIN | POLLPRI;
+    }
+    if (events & CSILK_IO_WRITABLE) {
+        poll_mask |= POLLOUT;
+    }
+
+    csilk_io_loop_t* loop = handle->loop;
+    if (loop) {
+        loop->active_handles++;
+        struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
+        if (sqe) {
+            io_uring_prep_poll_add(sqe, handle->fd, poll_mask);
+            io_uring_sqe_set_data64(
+                sqe, uring_encode_handle_data(URING_OP_POLL, (csilk_io_handle_t*)handle));
+            io_uring_submit(&loop->ring);
+        }
+    }
+    return 0;
+}
+
+int
+csilk_io_poll_stop(csilk_io_poll_t* handle)
+{
+    if (!handle || !(handle->flags & CSILK_IO_HANDLE_ACTIVE)) {
+        return 0;
+    }
+    handle->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+    handle->generation++;
+    csilk_io_loop_t* loop = handle->loop;
+    if (loop && loop->active_handles > 0) {
+        loop->active_handles--;
+    }
+    return 0;
+}
+
 #endif

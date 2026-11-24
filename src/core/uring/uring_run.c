@@ -356,6 +356,52 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                 }
 
                 /* ----------------------------------------------------------------
+                 * URING_OP_POLL
+                 * General file-descriptor / socket poll event.
+                 * ---------------------------------------------------------------- */
+            } else if (op == URING_OP_POLL) {
+                csilk_io_poll_t* poll_h = (csilk_io_poll_t*)ptr;
+                if (is_stale_poll((csilk_io_handle_t*)poll_h, gen)) {
+                    continue;
+                }
+                int cqe_res = cqe->res;
+                int events = 0;
+                if (cqe_res > 0) {
+                    if (cqe_res & (POLLIN | POLLPRI)) {
+                        events |= CSILK_IO_READABLE;
+                    }
+                    if (cqe_res & POLLOUT) {
+                        events |= CSILK_IO_WRITABLE;
+                    }
+                    if (cqe_res & (POLLHUP | POLLERR)) {
+                        events |= CSILK_IO_DISCONNECT;
+                    }
+                }
+                /* Re-arm if still active */
+                if ((poll_h->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                    !(poll_h->flags & CSILK_IO_HANDLE_CLOSING)) {
+                    short poll_mask = 0;
+                    if (poll_h->events & CSILK_IO_READABLE) {
+                        poll_mask |= POLLIN | POLLPRI;
+                    }
+                    if (poll_h->events & CSILK_IO_WRITABLE) {
+                        poll_mask |= POLLOUT;
+                    }
+                    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                    if (sqe) {
+                        io_uring_prep_poll_add(sqe, poll_h->fd, poll_mask);
+                        io_uring_sqe_set_data64(
+                            sqe,
+                            uring_encode_handle_data(URING_OP_POLL, (csilk_io_handle_t*)poll_h));
+                        io_uring_submit(ring);
+                    }
+                }
+                if (poll_h->cb) {
+                    int status = cqe_res >= 0 ? 0 : cqe_res;
+                    poll_h->cb(poll_h, status, events);
+                }
+
+                /* ----------------------------------------------------------------
                  * URING_OP_UV_WRITE
                  * Defer to csilk_uv_on_write_done which checks client generation.
                  * ---------------------------------------------------------------- */

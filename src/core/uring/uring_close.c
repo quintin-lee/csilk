@@ -108,6 +108,9 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
             atomic_store_explicit(&async->event_fd, -1, memory_order_release);
             async->fd = -1;
         }
+    } else if (handle->type == CSILK_IO_HANDLE_POLL) {
+        csilk_io_poll_stop((csilk_io_poll_t*)handle);
+        handle->fd = -1;
     } else if (handle->type == CSILK_IO_HANDLE_TCP) {
         if (handle->fd >= 0) {
             shutdown(handle->fd, SHUT_WR);

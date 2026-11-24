@@ -36,6 +36,7 @@ typedef enum {
     URING_OP_UV_WRITE,
     URING_OP_POLL_ASYNC,
     URING_OP_POLL_SIGNAL,
+    URING_OP_POLL,
     /* Differentiated timer opcodes so on_timeout knows which timer fired */
     URING_OP_TMR_READ,
     URING_OP_TMR_WRITE,
