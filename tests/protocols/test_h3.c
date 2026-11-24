@@ -16,11 +16,13 @@
 #include <openssl/ssl.h>
 #endif
 
-static int   g_h3_handler_invoked = 0;
-static char  g_h3_received_body[128] = {0};
-static char  g_h3_received_auth[128] = {0};
+static int  g_h3_handler_invoked = 0;
+static char g_h3_received_body[128] = {0};
+static char g_h3_received_auth[128] = {0};
+#ifdef CSILK_HAS_NGTCP2
 static int   g_h3_drain_callback_called = 0;
 static void* g_h3_drain_callback_data = NULL;
+#endif
 
 static void
 _test_h3_order_handler(csilk_ctx_t* c)
@@ -41,14 +43,6 @@ _test_h3_order_handler(csilk_ctx_t* c)
     }
     csilk_set_header(c, "Content-Type", "application/json");
     csilk_string(c, 201, "{\"status\":\"order_created\"}");
-}
-
-static void
-_test_h3_drain_cb(csilk_ctx_t* c, void* user_data)
-{
-    (void)c;
-    g_h3_drain_callback_called++;
-    g_h3_drain_callback_data = user_data;
 }
 
 static void
@@ -630,7 +624,14 @@ test_h3_backpressure_null_guards(void)
     printf("test_h3_backpressure_null_guards: PASS\n");
 }
 
-#ifdef CSILK_HAS_NGTCP2
+static void
+_test_h3_drain_cb(csilk_ctx_t* c, void* user_data)
+{
+    (void)c;
+    g_h3_drain_callback_called++;
+    g_h3_drain_callback_data = user_data;
+}
+
 static void
 test_h3_response_streaming_and_backpressure(void)
 {
@@ -763,7 +764,6 @@ test_h3_response_streaming_and_backpressure(void)
 
     printf("test_h3_response_streaming_and_backpressure: PASS\n");
 }
-#endif
 
 static void
 test_h3_0rtt_early_data(void)
@@ -802,9 +802,9 @@ main()
     test_h3_set_enabled();
     test_h3_dispatch_guard();
     test_h3_router_dispatch();
+#ifdef CSILK_HAS_NGTCP2
     test_h3_stream_mux();
     test_h3_backpressure_null_guards();
-#ifdef CSILK_HAS_NGTCP2
     test_h3_quic_tls();
     test_h3_session_send_response_and_body();
     test_h3_response_streaming_and_backpressure();
