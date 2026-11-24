@@ -18,6 +18,7 @@
 #include "csilk/csilk.h"
 #include "http3_internal.h"
 #include "core/internal/srv_internal.h"
+#include "core/internal/srv_impl.h"
 #include "core/primitives/header_map.h"
 
 #include <errno.h>
@@ -582,6 +583,10 @@ csilk_h3_dispatch_stream(csilk_client_t* client, csilk_h3_stream_data_t* sd)
     }
 
     /* Dispatch through the shared middleware/router pipeline */
+    if (csilk_conn_get_state(client) == CSILK_CONN_ACCEPTED) {
+        csilk_conn_set_state(client, CSILK_CONN_READING);
+    }
+    csilk_conn_set_state(client, CSILK_CONN_PROCESSING);
     _csilk_dispatch_request(ctx);
 
     return 0;
@@ -658,6 +663,10 @@ csilk_h3_send_response_for_ctx(csilk_ctx_t* c)
 
     if (client->server) {
         _csilk_trigger_hooks(client->server, c, CSILK_HOOK_REQUEST_END);
+    }
+
+    if (csilk_conn_get_state(client) == CSILK_CONN_WRITING) {
+        csilk_conn_set_state(client, CSILK_CONN_READING);
     }
 #else
     (void)c;

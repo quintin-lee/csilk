@@ -111,7 +111,12 @@ struct csilk_h3_transport_s {
 
 CSILK_INTERNAL int _h3_send_quic_packets(csilk_h3_transport_t* t, struct csilk_h3_conn_s* conn);
 #ifdef CSILK_HAS_NGTCP2
-CSILK_INTERNAL int _h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn);
+CSILK_INTERNAL int                     _h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn);
+CSILK_INTERNAL struct csilk_h3_conn_s* _h3_new_conn(csilk_h3_transport_t*  t,
+                                                    const ngtcp2_cid*      dcid,
+                                                    const struct sockaddr* remote,
+                                                    socklen_t              remote_len);
+CSILK_INTERNAL void _h3_del_conn(csilk_h3_transport_t* t, struct csilk_h3_conn_s* c);
 #endif
 
 #ifdef __cplusplus

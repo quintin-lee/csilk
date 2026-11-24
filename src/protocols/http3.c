@@ -22,6 +22,7 @@
 #include "csilk/csilk.h"
 #include "http3_internal.h"
 #include "core/internal/srv_internal.h"
+#include "core/internal/srv_impl.h"
 
 #include <errno.h>
 #include <netinet/in.h>
@@ -302,7 +303,7 @@ _h3_find_conn(csilk_h3_transport_t* t, const uint8_t* dcid, size_t dcid_len)
 /**
  * @brief Allocate and register a new QUIC connection.
  */
-static struct csilk_h3_conn_s*
+CSILK_INTERNAL struct csilk_h3_conn_s*
 _h3_new_conn(csilk_h3_transport_t*  t,
              const ngtcp2_cid*      dcid,
              const struct sockaddr* remote,
@@ -322,21 +323,49 @@ _h3_new_conn(csilk_h3_transport_t*  t,
     c->state = 0; /* new */
     c->stream_count = 0;
     c->transport = t;
-    c->client = calloc(1, sizeof(csilk_client_t));
-    if (c->client) {
-        csilk_client_t* cl = (csilk_client_t*)c->client;
-        cl->protocol = CSILK_PROTO_HTTP3;
-        cl->h3_conn = c;
-        cl->server = (csilk_server_t*)t->server;
-        cl->ctx._internal_client = cl;
-        cl->ctx.server = cl->server;
-        cl->ctx.arena = csilk_arena_new(4096);
-        cl->ctx.file_fd = -1;
-        cl->ctx.handler_index = -1;
-        cl->ctx.request_seq = 1;
-        cl->ctx.write_high_water_mark = CSILK_WRITE_HWM_DEFAULT;
-        cl->ctx.write_low_water_mark = CSILK_WRITE_LWM_DEFAULT;
-        cl->ctx.max_write_buffer_size = CSILK_WRITE_MAX_BUFFER_DEFAULT;
+
+    worker_pool_t*  wp = (worker_pool_t*)t->wp;
+    csilk_server_t* srv = (csilk_server_t*)t->server;
+    if (wp) {
+        c->client = pool_get(wp);
+        if (c->client) {
+            csilk_client_t* cl = (csilk_client_t*)c->client;
+            cl->protocol = CSILK_PROTO_HTTP3;
+            cl->h3_conn = c;
+            cl->server = srv;
+            cl->owner_pool = wp;
+            cl->ctx._internal_client = cl;
+            cl->ctx.server = srv;
+            cl->ctx.arena = pool_get_arena(wp);
+            cl->ctx.file_fd = -1;
+            cl->ctx.handler_index = -1;
+            cl->ctx.request_seq = 1;
+            cl->ctx.write_high_water_mark = CSILK_WRITE_HWM_DEFAULT;
+            cl->ctx.write_low_water_mark = CSILK_WRITE_LWM_DEFAULT;
+            cl->ctx.max_write_buffer_size = CSILK_WRITE_MAX_BUFFER_DEFAULT;
+            csilk_conn_set_state(cl, CSILK_CONN_ACCEPTED);
+            if (srv) {
+                client_list_add(srv, cl);
+            }
+        }
+    } else {
+        c->client = calloc(1, sizeof(csilk_client_t));
+        if (c->client) {
+            csilk_client_t* cl = (csilk_client_t*)c->client;
+            cl->protocol = CSILK_PROTO_HTTP3;
+            cl->h3_conn = c;
+            cl->server = srv;
+            cl->ctx._internal_client = cl;
+            cl->ctx.server = srv;
+            cl->ctx.arena = csilk_arena_new(4096);
+            cl->ctx.file_fd = -1;
+            cl->ctx.handler_index = -1;
+            cl->ctx.request_seq = 1;
+            cl->ctx.write_high_water_mark = CSILK_WRITE_HWM_DEFAULT;
+            cl->ctx.write_low_water_mark = CSILK_WRITE_LWM_DEFAULT;
+            cl->ctx.max_write_buffer_size = CSILK_WRITE_MAX_BUFFER_DEFAULT;
+            csilk_conn_set_state(cl, CSILK_CONN_ACCEPTED);
+        }
     }
     c->dcid_len = dcid->datalen;
     if (dcid->datalen > 0) {
@@ -358,7 +387,7 @@ CSILK_INTERNAL int _h3_send_quic_packets(csilk_h3_transport_t* t, struct csilk_h
 /**
  * @brief Unregister and free a QUIC connection.
  */
-static void
+CSILK_INTERNAL void
 _h3_del_conn(csilk_h3_transport_t* t, struct csilk_h3_conn_s* c)
 {
     if (!c) {
@@ -383,14 +412,31 @@ _h3_del_conn(csilk_h3_transport_t* t, struct csilk_h3_conn_s* c)
         c->ssl = NULL;
     }
 
+    worker_pool_t*  wp = (worker_pool_t*)t->wp;
+    csilk_server_t* srv = (csilk_server_t*)t->server;
+
     if (c->client) {
         csilk_client_t* cl = (csilk_client_t*)c->client;
-        if (cl->ctx.arena) {
-            csilk_arena_free(cl->ctx.arena);
-            cl->ctx.arena = NULL;
+        csilk_conn_set_state(cl, CSILK_CONN_CLOSING);
+        csilk_conn_set_state(cl, CSILK_CONN_CLOSED);
+        if (wp) {
+            if (srv) {
+                client_list_remove(srv, cl);
+            }
+            if (cl->ctx.arena) {
+                pool_put_arena(wp, cl->ctx.arena);
+                cl->ctx.arena = NULL;
+            }
+            csilk_ctx_cleanup(&cl->ctx);
+            pool_put(wp, cl);
+        } else {
+            if (cl->ctx.arena) {
+                csilk_arena_free(cl->ctx.arena);
+                cl->ctx.arena = NULL;
+            }
+            csilk_ctx_cleanup(&cl->ctx);
+            free(cl);
         }
-        csilk_ctx_cleanup(&cl->ctx);
-        free(cl);
         c->client = NULL;
     }
 
