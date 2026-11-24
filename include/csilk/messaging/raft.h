@@ -63,6 +63,35 @@ typedef struct {
 } csilk_raft_membership_t;
 
 /**
+ * @brief Raft cluster topology and membership transition events.
+ */
+typedef enum {
+    CSILK_RAFT_TOPOLOGY_NODE_JOINED = 1, /**< New peer node added to cluster */
+    CSILK_RAFT_TOPOLOGY_NODE_LEFT   = 2, /**< Peer node removed or pruned from cluster */
+    CSILK_RAFT_TOPOLOGY_CONF_STABLE = 3  /**< Cluster returned to stable configuration */
+} csilk_raft_topology_event_t;
+
+/**
+ * @brief Callback for Raft cluster topology events.
+ */
+typedef void (*csilk_raft_topology_cb_t)(csilk_raft_node_t*          node,
+                                         csilk_raft_topology_event_t event,
+                                         const char*                 peer_id,
+                                         const char*                 peer_addr,
+                                         void*                       user_data);
+
+/**
+ * @brief Registers a topology event listener callback on the Raft node.
+ * @param node Raft node instance.
+ * @param cb Callback function (or NULL to unregister).
+ * @param user_data User context pointer passed to callback.
+ * @return 0 on success, negative value on invalid args.
+ */
+int csilk_raft_set_topology_cb(csilk_raft_node_t*       node,
+                               csilk_raft_topology_cb_t cb,
+                               void*                    user_data);
+
+/**
  * @brief Registers a peer node into the cluster topology.
  * @param node Local node instance.
  * @param peer_id Peer node ID string.

@@ -249,6 +249,78 @@ test_dynamic_cluster_add_and_remove(void)
     printf("test_dynamic_cluster_add_and_remove passed\n");
 }
 
+typedef struct {
+    int  joined_count;
+    char last_joined_id[64];
+    char last_joined_addr[128];
+    int  left_count;
+    char last_left_id[64];
+    int  stable_count;
+} test_topology_ctx_t;
+
+static void
+_test_topology_cb(csilk_raft_node_t*          node,
+                  csilk_raft_topology_event_t event,
+                  const char*                 peer_id,
+                  const char*                 peer_addr,
+                  void*                       user_data)
+{
+    (void)node;
+    test_topology_ctx_t* ctx = (test_topology_ctx_t*)user_data;
+    if (event == CSILK_RAFT_TOPOLOGY_NODE_JOINED) {
+        ctx->joined_count++;
+        if (peer_id) {
+            snprintf(ctx->last_joined_id, sizeof(ctx->last_joined_id), "%s", peer_id);
+        }
+        if (peer_addr) {
+            snprintf(ctx->last_joined_addr, sizeof(ctx->last_joined_addr), "%s", peer_addr);
+        }
+    } else if (event == CSILK_RAFT_TOPOLOGY_NODE_LEFT) {
+        ctx->left_count++;
+        if (peer_id) {
+            snprintf(ctx->last_left_id, sizeof(ctx->last_left_id), "%s", peer_id);
+        }
+    } else if (event == CSILK_RAFT_TOPOLOGY_CONF_STABLE) {
+        ctx->stable_count++;
+    }
+}
+
+static void
+test_topology_listener_callbacks(void)
+{
+    csilk_raft_config_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    cfg.node_id = 1;
+    cfg.cluster_size = 3;
+
+    csilk_raft_node_t* node = csilk_raft_node_new(&cfg);
+    assert(node != nullptr);
+
+    test_topology_ctx_t ctx;
+    memset(&ctx, 0, sizeof(ctx));
+
+    /* Register topology listener */
+    assert(csilk_raft_set_topology_cb(node, _test_topology_cb, &ctx) == 0);
+
+    /* Adding peers triggers NODE_JOINED */
+    assert(csilk_raft_node_add_peer(node, "2", "127.0.0.1:8002") == 0);
+    assert(ctx.joined_count == 1);
+    assert(strcmp(ctx.last_joined_id, "2") == 0);
+    assert(strcmp(ctx.last_joined_addr, "127.0.0.1:8002") == 0);
+
+    assert(csilk_raft_node_add_peer(node, "3", "127.0.0.1:8003") == 0);
+    assert(ctx.joined_count == 2);
+    assert(strcmp(ctx.last_joined_id, "3") == 0);
+
+    /* Unregister listener */
+    assert(csilk_raft_set_topology_cb(node, nullptr, nullptr) == 0);
+    assert(csilk_raft_node_add_peer(node, "4", "127.0.0.1:8004") == 0);
+    assert(ctx.joined_count == 2);
+
+    csilk_raft_node_free(node);
+    printf("test_topology_listener_callbacks passed\n");
+}
+
 int
 main(void)
 {
@@ -257,6 +329,7 @@ main(void)
     test_membership_validation_and_rejections();
     test_joint_consensus_dual_quorum_logic();
     test_dynamic_cluster_add_and_remove();
+    test_topology_listener_callbacks();
     printf("All Raft Joint Consensus membership tests passed successfully!\n");
     return 0;
 }
