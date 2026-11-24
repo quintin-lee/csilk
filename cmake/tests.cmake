@@ -171,6 +171,7 @@ set(CSILK_CORE_TESTS
     test_mvcc_cache_snapshot
     test_hot_update_atomic
     test_lazy_arena
+    test_io_poll
 )
 set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
@@ -183,7 +184,7 @@ set(CSILK_CORE_TEST_DIRS
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
     core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core
+    core;core;core;core;core;core;core;core;core
 )
 
 

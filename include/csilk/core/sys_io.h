@@ -59,7 +59,8 @@ typedef enum {
     CSILK_IO_HANDLE_TIMER,
     CSILK_IO_HANDLE_ASYNC,
     CSILK_IO_HANDLE_SIGNAL,
-    CSILK_IO_HANDLE_FS_EVENT
+    CSILK_IO_HANDLE_FS_EVENT,
+    CSILK_IO_HANDLE_POLL
 } csilk_io_handle_type_t;
 
 typedef struct uring_op_context_s uring_op_context_t;
@@ -539,6 +540,26 @@ typedef struct {
     void* data; /**< Opaque user data. */
 } csilk_io_work_t;
 
+typedef struct csilk_io_poll_s csilk_io_poll_t;
+typedef void (*csilk_io_poll_cb)(csilk_io_poll_t* handle, int status, int events);
+
+#define CSILK_IO_READABLE 0x01
+#define CSILK_IO_WRITABLE 0x02
+#define CSILK_IO_DISCONNECT 0x04
+
+struct csilk_io_poll_s {
+    CSILK_IO_HANDLE_FIELDS
+    csilk_io_poll_cb cb;
+    int              events;
+};
+
+int csilk_io_poll_init(csilk_io_loop_t* loop, csilk_io_poll_t* handle, int fd);
+int csilk_io_poll_init_socket(csilk_io_loop_t*   loop,
+                              csilk_io_poll_t*   handle,
+                              csilk_io_os_sock_t socket);
+int csilk_io_poll_start(csilk_io_poll_t* handle, int events, csilk_io_poll_cb cb);
+int csilk_io_poll_stop(csilk_io_poll_t* handle);
+
 #include <time.h>
 #include <unistd.h>
 /**
@@ -976,6 +997,36 @@ typedef uv_connection_cb csilk_io_connection_cb;
 typedef uv_alloc_cb      csilk_io_alloc_cb;
 typedef uv_read_cb       csilk_io_read_cb;
 typedef uv_signal_cb     csilk_io_signal_cb;
+typedef uv_poll_t        csilk_io_poll_t;
+typedef void (*csilk_io_poll_cb)(csilk_io_poll_t* handle, int status, int events);
+
+#define CSILK_IO_READABLE UV_READABLE
+#define CSILK_IO_WRITABLE UV_WRITABLE
+#define CSILK_IO_DISCONNECT UV_DISCONNECT
+
+static inline int
+csilk_io_poll_init(csilk_io_loop_t* loop, csilk_io_poll_t* handle, int fd)
+{
+    return uv_poll_init(loop, handle, fd);
+}
+
+static inline int
+csilk_io_poll_init_socket(csilk_io_loop_t* loop, csilk_io_poll_t* handle, csilk_io_os_sock_t socket)
+{
+    return uv_poll_init_socket(loop, handle, socket);
+}
+
+static inline int
+csilk_io_poll_start(csilk_io_poll_t* handle, int events, csilk_io_poll_cb cb)
+{
+    return uv_poll_start(handle, events, (uv_poll_cb)cb);
+}
+
+static inline int
+csilk_io_poll_stop(csilk_io_poll_t* handle)
+{
+    return uv_poll_stop(handle);
+}
 
 #define csilk_io_is_active uv_is_active
 static inline const char*
