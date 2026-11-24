@@ -103,6 +103,34 @@ int csilk_wf_grid_rebalance(csilk_wf_grid_t* grid, const char* failed_node_id);
 size_t csilk_wf_grid_task_count(const csilk_wf_grid_t* grid);
 
 /**
+ * @brief Synchronize grid peers with Raft cluster membership topology and register dynamic listener.
+ *
+ * Automatically pulls existing cluster members and subscribes to dynamic node additions
+ * and removals via Raft Joint Consensus events. When a node leaves, rebalances tasks.
+ *
+ * @param grid Grid node handle.
+ * @return 0 on success, -1 on NULL grid or grid has no raft handle.
+ */
+int csilk_wf_grid_sync_raft_topology(csilk_wf_grid_t* grid);
+
+/**
+ * @brief Returns the number of peers tracked by this grid node.
+ *
+ * @param grid Grid node handle.
+ * @return Number of tracked peers.
+ */
+size_t csilk_wf_grid_peer_count(const csilk_wf_grid_t* grid);
+
+/**
+ * @brief Checks if a specific peer_id is registered in this grid's peer table.
+ *
+ * @param grid Grid node handle.
+ * @param peer_id Peer identifier string.
+ * @return true if tracked, false otherwise.
+ */
+bool csilk_wf_grid_has_peer(const csilk_wf_grid_t* grid, const char* peer_id);
+
+/**
  * @brief Free resources associated with a grid node.
  *
  * @param grid Grid node handle.

@@ -217,8 +217,8 @@ struct csilk_raft_node_s {
     void*                          apply_user_data;
 
     /* Cluster topology event listener */
-    csilk_raft_topology_cb_t       topology_cb;
-    void*                          topology_user_data;
+    csilk_raft_topology_cb_t topology_cb;
+    void*                    topology_user_data;
 
     /* Flag set when apply_cb/snapshot_apply_cb must be invoked after the
      * node->mutex is released (to avoid blocking the consensus state

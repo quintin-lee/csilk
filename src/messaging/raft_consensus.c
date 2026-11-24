@@ -1120,7 +1120,7 @@ csilk_raft_node_add_peer(csilk_raft_node_t* node, const char* peer_id, const cha
                 }
             }
             csilk_raft_topology_cb_t top_cb = node->topology_cb;
-            void* top_ud = node->topology_user_data;
+            void*                    top_ud = node->topology_user_data;
             csilk_mutex_unlock(&node->mutex);
             if (top_cb) {
                 top_cb(node, CSILK_RAFT_TOPOLOGY_NODE_JOINED, peer_id, peer_addr, top_ud);
@@ -1163,7 +1163,7 @@ csilk_raft_node_add_peer(csilk_raft_node_t* node, const char* peer_id, const cha
     }
 
     csilk_raft_topology_cb_t top_cb = node->topology_cb;
-    void* top_ud = node->topology_user_data;
+    void*                    top_ud = node->topology_user_data;
     csilk_mutex_unlock(&node->mutex);
     if (top_cb) {
         top_cb(node, CSILK_RAFT_TOPOLOGY_NODE_JOINED, peer_id, peer_addr, top_ud);

@@ -39,6 +39,10 @@ struct csilk_wf_grid_s {
     size_t                head; /* Top of deque (remote steal point) */
     size_t                tail; /* Bottom of deque (local push/pop point) */
     size_t                count;
+    char                  peer_ids[CSILK_WF_GRID_MAX_PEERS][64];
+    char                  peer_addrs[CSILK_WF_GRID_MAX_PEERS][128];
+    size_t                peer_count;
+    bool                  raft_synced;
 };
 
 static csilk_wf_grid_t* g_registered_grids[CSILK_WF_GRID_MAX_PEERS];
@@ -94,6 +98,98 @@ _unlock_grid_pair(csilk_wf_grid_t* a, csilk_wf_grid_t* b)
     }
 }
 
+static bool
+_grid_has_peer_locked(const csilk_wf_grid_t* grid, const char* peer_id)
+{
+    if (!grid || !peer_id) {
+        return false;
+    }
+    for (size_t i = 0; i < grid->peer_count; i++) {
+        if (strcmp(grid->peer_ids[i], peer_id) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void
+_grid_add_peer_locked(csilk_wf_grid_t* grid, const char* peer_id, const char* peer_addr)
+{
+    if (!grid || !peer_id || peer_id[0] == '\0' || strcmp(grid->node_id, peer_id) == 0) {
+        return;
+    }
+    if (grid->raft) {
+        char raft_local_id[64];
+        snprintf(raft_local_id, sizeof(raft_local_id), "%u", csilk_raft_get_node_id(grid->raft));
+        if (strcmp(peer_id, raft_local_id) == 0) {
+            return;
+        }
+    }
+    for (size_t i = 0; i < grid->peer_count; i++) {
+        if (strcmp(grid->peer_ids[i], peer_id) == 0) {
+            if (peer_addr && peer_addr[0] != '\0') {
+                snprintf(grid->peer_addrs[i], sizeof(grid->peer_addrs[i]), "%s", peer_addr);
+            }
+            return;
+        }
+    }
+    if (grid->peer_count < CSILK_WF_GRID_MAX_PEERS) {
+        snprintf(grid->peer_ids[grid->peer_count], sizeof(grid->peer_ids[0]), "%s", peer_id);
+        if (peer_addr) {
+            snprintf(
+                grid->peer_addrs[grid->peer_count], sizeof(grid->peer_addrs[0]), "%s", peer_addr);
+        } else {
+            grid->peer_addrs[grid->peer_count][0] = '\0';
+        }
+        grid->peer_count++;
+    }
+}
+
+static void
+_grid_remove_peer_locked(csilk_wf_grid_t* grid, const char* peer_id)
+{
+    if (!grid || !peer_id) {
+        return;
+    }
+    for (size_t i = 0; i < grid->peer_count; i++) {
+        if (strcmp(grid->peer_ids[i], peer_id) == 0) {
+            for (size_t j = i; j + 1 < grid->peer_count; j++) {
+                memcpy(grid->peer_ids[j], grid->peer_ids[j + 1], sizeof(grid->peer_ids[0]));
+                memcpy(grid->peer_addrs[j], grid->peer_addrs[j + 1], sizeof(grid->peer_addrs[0]));
+            }
+            grid->peer_count--;
+            break;
+        }
+    }
+}
+
+static void
+_on_raft_topology_event(csilk_raft_node_t*          node,
+                        csilk_raft_topology_event_t event,
+                        const char*                 peer_id,
+                        const char*                 peer_addr,
+                        void*                       user_data)
+{
+    (void)node;
+    csilk_wf_grid_t* grid = (csilk_wf_grid_t*)user_data;
+    if (!grid) {
+        return;
+    }
+
+    if (event == CSILK_RAFT_TOPOLOGY_NODE_JOINED && peer_id && peer_id[0] != '\0') {
+        csilk_mutex_lock(&grid->mutex);
+        _grid_add_peer_locked(grid, peer_id, peer_addr);
+        csilk_mutex_unlock(&grid->mutex);
+    } else if (event == CSILK_RAFT_TOPOLOGY_NODE_LEFT && peer_id && peer_id[0] != '\0') {
+        csilk_mutex_lock(&grid->mutex);
+        _grid_remove_peer_locked(grid, peer_id);
+        csilk_mutex_unlock(&grid->mutex);
+
+        /* Automatically rebalance tasks previously leased to the departed node */
+        csilk_wf_grid_rebalance(grid, peer_id);
+    }
+}
+
 csilk_wf_grid_t*
 csilk_wf_grid_new(const char* node_id, csilk_raft_node_t* raft, csilk_mq_t* mq)
 {
@@ -128,6 +224,10 @@ csilk_wf_grid_free(csilk_wf_grid_t* grid)
 {
     if (!grid) {
         return;
+    }
+
+    if (grid->raft && grid->raft_synced) {
+        csilk_raft_set_topology_cb(grid->raft, NULL, NULL);
     }
 
     /* Unregister from peer directory */
@@ -365,6 +465,57 @@ csilk_wf_grid_task_count(const csilk_wf_grid_t* grid)
     size_t cnt = g->count;
     csilk_mutex_unlock(&g->mutex);
     return cnt;
+}
+
+int
+csilk_wf_grid_sync_raft_topology(csilk_wf_grid_t* grid)
+{
+    if (!grid || !grid->raft) {
+        return -1;
+    }
+
+    /* 1. Pull existing cluster members from Raft */
+    csilk_raft_membership_t memb;
+    if (csilk_raft_get_membership(grid->raft, &memb) == 0) {
+        csilk_mutex_lock(&grid->mutex);
+        for (size_t i = 0; i < memb.old_count; i++) {
+            _grid_add_peer_locked(grid, memb.old_nodes[i].id, memb.old_nodes[i].addr);
+        }
+        for (size_t i = 0; i < memb.new_count; i++) {
+            _grid_add_peer_locked(grid, memb.new_nodes[i].id, memb.new_nodes[i].addr);
+        }
+        grid->raft_synced = true;
+        csilk_mutex_unlock(&grid->mutex);
+    }
+
+    /* 2. Register dynamic event listener callback */
+    return csilk_raft_set_topology_cb(grid->raft, _on_raft_topology_event, grid);
+}
+
+size_t
+csilk_wf_grid_peer_count(const csilk_wf_grid_t* grid)
+{
+    if (!grid) {
+        return 0;
+    }
+    csilk_wf_grid_t* g = (csilk_wf_grid_t*)grid;
+    csilk_mutex_lock(&g->mutex);
+    size_t cnt = g->peer_count;
+    csilk_mutex_unlock(&g->mutex);
+    return cnt;
+}
+
+bool
+csilk_wf_grid_has_peer(const csilk_wf_grid_t* grid, const char* peer_id)
+{
+    if (!grid || !peer_id) {
+        return false;
+    }
+    csilk_wf_grid_t* g = (csilk_wf_grid_t*)grid;
+    csilk_mutex_lock(&g->mutex);
+    bool found = _grid_has_peer_locked(g, peer_id);
+    csilk_mutex_unlock(&g->mutex);
+    return found;
 }
 
 int

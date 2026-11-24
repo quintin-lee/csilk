@@ -117,6 +117,13 @@ size_t csilk_raft_append_log_batch(csilk_raft_node_t*    node,
                                    uint64_t*             out_first_index);
 
 /**
+ * @brief Get configured local node ID of Raft node.
+ * @param node Raft node instance.
+ * @return Local node ID (0 if NULL).
+ */
+uint32_t csilk_raft_get_node_id(const csilk_raft_node_t* node);
+
+/**
  * @brief Get current role of Raft node.
  * @param node Raft node instance.
  * @return Node role enum.

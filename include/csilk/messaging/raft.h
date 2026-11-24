@@ -67,7 +67,7 @@ typedef struct {
  */
 typedef enum {
     CSILK_RAFT_TOPOLOGY_NODE_JOINED = 1, /**< New peer node added to cluster */
-    CSILK_RAFT_TOPOLOGY_NODE_LEFT   = 2, /**< Peer node removed or pruned from cluster */
+    CSILK_RAFT_TOPOLOGY_NODE_LEFT = 2,   /**< Peer node removed or pruned from cluster */
     CSILK_RAFT_TOPOLOGY_CONF_STABLE = 3  /**< Cluster returned to stable configuration */
 } csilk_raft_topology_event_t;
 
@@ -87,9 +87,8 @@ typedef void (*csilk_raft_topology_cb_t)(csilk_raft_node_t*          node,
  * @param user_data User context pointer passed to callback.
  * @return 0 on success, negative value on invalid args.
  */
-int csilk_raft_set_topology_cb(csilk_raft_node_t*       node,
-                               csilk_raft_topology_cb_t cb,
-                               void*                    user_data);
+int
+csilk_raft_set_topology_cb(csilk_raft_node_t* node, csilk_raft_topology_cb_t cb, void* user_data);
 
 /**
  * @brief Registers a peer node into the cluster topology.

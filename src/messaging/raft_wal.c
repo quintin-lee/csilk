@@ -826,6 +826,15 @@ csilk_raft_wal_sync_count(const csilk_raft_node_t* node)
     return cnt;
 }
 
+uint32_t
+csilk_raft_get_node_id(const csilk_raft_node_t* node)
+{
+    if (!node) {
+        return 0;
+    }
+    return node->config.node_id;
+}
+
 csilk_raft_role_t
 csilk_raft_get_role(const csilk_raft_node_t* node)
 {

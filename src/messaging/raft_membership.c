@@ -270,8 +270,8 @@ _raft_membership_apply_entry_locked(csilk_raft_node_t* node,
             node->membership.new_nodes, new_src, hdr->new_count * sizeof(csilk_raft_node_info_t));
 
         /* Add any newly introduced nodes to peer list */
-        char joined_ids[CSILK_RAFT_MAX_PEERS][64];
-        char joined_addrs[CSILK_RAFT_MAX_PEERS][128];
+        char   joined_ids[CSILK_RAFT_MAX_PEERS][64];
+        char   joined_addrs[CSILK_RAFT_MAX_PEERS][128];
         size_t joined_count = 0;
 
         for (size_t i = 0; i < hdr->new_count; i++) {
@@ -279,15 +279,17 @@ _raft_membership_apply_entry_locked(csilk_raft_node_t* node,
             _raft_ensure_peer_exists_locked(node, new_src[i].id, new_src[i].addr);
             if (node->peer_count > old_peers && joined_count < CSILK_RAFT_MAX_PEERS) {
                 snprintf(joined_ids[joined_count], sizeof(joined_ids[0]), "%s", new_src[i].id);
-                snprintf(joined_addrs[joined_count], sizeof(joined_addrs[0]), "%s", new_src[i].addr);
+                snprintf(
+                    joined_addrs[joined_count], sizeof(joined_addrs[0]), "%s", new_src[i].addr);
                 joined_count++;
             }
         }
         if (node->topology_cb && joined_count > 0) {
             csilk_raft_topology_cb_t top_cb = node->topology_cb;
-            void* top_ud = node->topology_user_data;
+            void*                    top_ud = node->topology_user_data;
             for (size_t i = 0; i < joined_count; i++) {
-                top_cb(node, CSILK_RAFT_TOPOLOGY_NODE_JOINED, joined_ids[i], joined_addrs[i], top_ud);
+                top_cb(
+                    node, CSILK_RAFT_TOPOLOGY_NODE_JOINED, joined_ids[i], joined_addrs[i], top_ud);
             }
         }
         return 1;

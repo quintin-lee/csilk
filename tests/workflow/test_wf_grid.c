@@ -5,8 +5,10 @@
 
 #include "csilk/csilk.h"
 #include "csilk/app/wf_grid.h"
+#include "csilk/messaging/raft.h"
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 int
@@ -54,6 +56,34 @@ main(void)
 
     csilk_wf_grid_free(grid_a);
     csilk_wf_grid_free(grid_b);
+
+    /* Test Grid ↔ Raft Topology Auto-Discovery */
+    printf("=== Test: Grid ↔ Raft Topology Auto-Discovery ===\n");
+    csilk_raft_config_t rcfg;
+    memset(&rcfg, 0, sizeof(rcfg));
+    rcfg.node_id = 1;
+    rcfg.cluster_size = 3;
+
+    csilk_raft_node_t* raft_node = csilk_raft_node_new(&rcfg);
+    assert(raft_node != NULL);
+    assert(csilk_raft_node_add_peer(raft_node, "node-peer-1", "127.0.0.1:9001") == 0);
+
+    csilk_wf_grid_t* grid_raft = csilk_wf_grid_new("node-local", raft_node, NULL);
+    assert(grid_raft != NULL);
+    assert(csilk_wf_grid_peer_count(grid_raft) == 0);
+
+    /* Sync initial topology */
+    assert(csilk_wf_grid_sync_raft_topology(grid_raft) == 0);
+    assert(csilk_wf_grid_has_peer(grid_raft, "node-peer-1") == true);
+    assert(csilk_wf_grid_peer_count(grid_raft) == 1);
+
+    /* Dynamically add new peer to Raft, verify Grid discovers it automatically */
+    assert(csilk_raft_node_add_peer(raft_node, "node-peer-2", "127.0.0.1:9002") == 0);
+    assert(csilk_wf_grid_has_peer(grid_raft, "node-peer-2") == true);
+    assert(csilk_wf_grid_peer_count(grid_raft) == 2);
+
+    csilk_wf_grid_free(grid_raft);
+    csilk_raft_node_free(raft_node);
 
     printf("PASS: test_wf_grid\n");
     return 0;
