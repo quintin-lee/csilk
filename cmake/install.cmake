@@ -80,6 +80,10 @@ if(CSILK_BUILD_SHARED)
 endif()
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+if(CSILK_USE_URING AND liburing_SOURCE_DIR AND liburing_BINARY_DIR)
+    install(DIRECTORY ${liburing_SOURCE_DIR}/src/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    install(DIRECTORY ${liburing_BINARY_DIR}/src/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+endif()
 # version.h is generated at configure time into the binary include/ tree,
 # so it must be installed explicitly (the source include/ only holds the .in
 # template).

@@ -31,6 +31,10 @@ set(_install_targets
     csilk_workflow
     yyjson)
 
+if(CSILK_USE_URING)
+  list(APPEND _install_targets uring)
+endif()
+
 if(CSILK_BUILD_SHARED)
   list(APPEND _install_targets
       csilk_shared
