@@ -151,6 +151,9 @@ typedef struct CSILK_CACHE_ALIGNED {
     csilk_lfqueue_t  dispatch_queue; /**< Lock-free MPSC dispatch queue. */
     csilk_client_t*  active_clients; /**< Head of worker-local active connections list. */
     void*            thread_pool;    /**< io_uring thread pool (NULL in libuv mode). */
+    csilk_io_udp_t   h3_udp_handle;  /**< Worker-local UDP listen handle for HTTP/3. */
+    bool             h3_udp_active;  /**< True if h3_udp_handle is bound and receiving. */
+    void*            h3_transport;   /**< Worker-local csilk_h3_transport_t instance. */
 } worker_pool_t;
 
 #define CSILK_RELOAD_MAX_READERS 256
@@ -259,6 +262,8 @@ struct csilk_server_s {
     csilk_mutex_t                config_mutex; /**< Protects runtime config updates. */
     void* quic_transport;                      /**< Optional QUIC transport callbacks for HTTP/3. */
     void* h3_transport; /**< Active csilk_h3_transport_t instance (if HTTP/3 enabled). */
+    int   h3_port;      /**< Configured HTTP/3 UDP port (e.g. 443). */
+    void* h3_ssl_ctx;   /**< Shared OpenSSL SSL_CTX* for QUIC across workers. */
     void* app;          /**< Back-reference to owning csilk_app_t (NULL for bare servers). */
 };
 

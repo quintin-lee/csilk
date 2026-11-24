@@ -316,6 +316,7 @@ set(CSILK_PROTOCOL_TESTS
     test_h2_dispatch_lifecycle
     test_h2_header_bench
     test_h3
+    test_h3_worker
     test_mcp_jsonrpc
     test_mcp_server_client
     test_mcp_server_core
@@ -325,7 +326,7 @@ set(CSILK_PROTOCOL_TESTS
     test_grpc
 )
 set(CSILK_PROTOCOL_TEST_DIRS
-    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
+    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
 )
 
 # -- Security tests --

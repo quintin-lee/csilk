@@ -149,6 +149,7 @@ reset_hot_state(csilk_client_t* client)
         client->h2_session = NULL;
     }
     csilk_h2_free_streams(client);
+    client->h3_conn = NULL;
 
     /* Connection lifecycle and parser flags */
     csilk_conn_set_state(client, CSILK_CONN_INIT);

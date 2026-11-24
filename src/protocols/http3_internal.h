@@ -106,6 +106,7 @@ struct csilk_h3_transport_s {
     struct csilk_h3_conn_s* conns[CSILK_H3_MAX_CONNS];
     int                     conn_count;
     void*                   server; /* csilk_server_t* (owning server if any) */
+    void*                   wp;     /* worker_pool_t* (owning worker pool if any) */
 };
 
 CSILK_INTERNAL int _h3_send_quic_packets(csilk_h3_transport_t* t, struct csilk_h3_conn_s* conn);
