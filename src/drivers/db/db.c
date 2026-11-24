@@ -116,6 +116,17 @@ csilk_sql_rewrite_placeholders(const char* sql, int* out_param_count)
     return out;
 }
 
+#ifndef HAS_MYSQL
+char*
+csilk_mysql_interpolate_params(void* mysql_ptr, const char* sql, const char** params)
+{
+    (void)mysql_ptr;
+    (void)sql;
+    (void)params;
+    return NULL;
+}
+#endif
+
 /** @brief Read aggregated database metrics atomically.
  * @param stats [out] Pointer to a csilk_db_stats_t struct to populate.
  * @note Safe to call from any thread. */

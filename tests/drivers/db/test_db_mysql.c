@@ -10,6 +10,10 @@
 static void
 test_mysql_interpolate_params_unit(void)
 {
+#ifndef HAS_MYSQL
+    printf("test_mysql_interpolate_params_unit: SKIPPED (HAS_MYSQL not defined)\n");
+    return;
+#else
     const char* p1[] = {"42", "Alice", nullptr};
     char*       res = csilk_mysql_interpolate_params(
         nullptr, "SELECT * FROM users WHERE id = ? AND name = ?", p1);
@@ -41,6 +45,7 @@ test_mysql_interpolate_params_unit(void)
     free(res);
 
     printf("test_mysql_interpolate_params_unit: PASS\n");
+#endif
 }
 
 #ifdef HAS_MYSQL
