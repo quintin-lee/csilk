@@ -739,22 +739,208 @@ postgres_set_nonblocking(csilk_db_pool_t* pool, int enable)
     return 0;
 }
 
-static int
-postgres_query_async(csilk_db_pool_t*        pool,
-                     const char*             sql,
-                     const char**            params,
-                     csilk_io_loop_t*        loop,
-                     csilk_db_query_async_cb cb,
-                     void*                   user_data)
+typedef enum { PG_ASYNC_FLUSHING = 0, PG_ASYNC_READING, PG_ASYNC_CLOSING } pg_async_state_t;
+
+typedef struct {
+    csilk_db_pool_t*        pool;
+    void*                   raw_conn;
+    int                     lease_id;
+    pg_conn_t*              conn;
+    csilk_io_loop_t*        loop;
+    csilk_io_poll_t         poll;
+    csilk_io_timer_t        timer;
+    pg_async_state_t        state;
+    bool                    is_query;
+    csilk_db_query_async_cb query_cb;
+    csilk_db_exec_async_cb  exec_cb;
+    void*                   user_data;
+    bool                    poll_started;
+    bool                    timer_started;
+    int                     closing_count;
+    csilk_json_t*           result_json;
+    csilk_db_err_t          result_err;
+    int                     result_exec_rc;
+} pg_async_op_t;
+
+static void
+on_pg_handle_closed(csilk_io_handle_t* handle)
 {
-    (void)loop;
-    if (!pool || !sql || !cb) {
+    pg_async_op_t* op = (pg_async_op_t*)handle->data;
+    if (!op) {
+        return;
+    }
+    op->closing_count--;
+    if (op->closing_count == 0) {
+        if (op->is_query) {
+            if (op->query_cb) {
+                op->query_cb(op->result_json, op->result_err, op->user_data);
+            } else if (op->result_json) {
+                csilk_json_free(op->result_json);
+            }
+        } else {
+            if (op->exec_cb) {
+                op->exec_cb(op->result_exec_rc, op->user_data);
+            }
+        }
+        free(op);
+    }
+}
+
+static void
+pg_async_finish(
+    pg_async_op_t* op, csilk_json_t* json, csilk_db_err_t err, int exec_rc, bool is_healthy)
+{
+    if (!op || op->state == PG_ASYNC_CLOSING) {
+        return;
+    }
+    op->state = PG_ASYNC_CLOSING;
+
+    op->result_json = json;
+    op->result_err = err;
+    op->result_exec_rc = exec_rc;
+
+    if (op->timer_started) {
+        csilk_io_timer_stop(&op->timer);
+        op->timer_started = false;
+    }
+    if (op->poll_started) {
+        csilk_io_poll_stop(&op->poll);
+        op->poll_started = false;
+    }
+
+    if (op->raw_conn) {
+        csilk_db_pool_put_async(op->pool, op->raw_conn, op->lease_id, is_healthy);
+        op->raw_conn = NULL;
+    }
+
+    op->closing_count = 2;
+    op->poll.data = op;
+    op->timer.data = op;
+    csilk_io_close((csilk_io_handle_t*)&op->poll, on_pg_handle_closed);
+    csilk_io_close((csilk_io_handle_t*)&op->timer, on_pg_handle_closed);
+}
+
+static void
+on_pg_async_timeout(csilk_io_timer_t* timer)
+{
+    pg_async_op_t* op = (pg_async_op_t*)timer->data;
+    if (!op || op->state == PG_ASYNC_CLOSING) {
+        return;
+    }
+
+    if (op->conn && op->conn->db) {
+        PGcancel* cancel = PQgetCancel(op->conn->db);
+        if (cancel) {
+            char errbuf[256];
+            (void)PQcancel(cancel, errbuf, sizeof(errbuf));
+            PQfreeCancel(cancel);
+        }
+    }
+    pg_async_finish(op, NULL, CSILK_DB_ERR_TIMEOUT, -1, false);
+}
+
+static void
+on_pg_async_poll(csilk_io_poll_t* handle, int status, int events)
+{
+    (void)events;
+    pg_async_op_t* op = (pg_async_op_t*)handle->data;
+    if (!op || op->state == PG_ASYNC_CLOSING) {
+        return;
+    }
+
+    if (status < 0) {
+        pg_async_finish(op, NULL, CSILK_DB_ERR_CONN, -1, false);
+        return;
+    }
+
+    if (op->state == PG_ASYNC_FLUSHING) {
+        int flush_rc = PQflush(op->conn->db);
+        if (flush_rc < 0) {
+            pg_async_finish(op, NULL, CSILK_DB_ERR_CONN, -1, false);
+            return;
+        }
+        if (flush_rc == 0) {
+            op->state = PG_ASYNC_READING;
+            csilk_io_poll_start(&op->poll, CSILK_IO_READABLE, on_pg_async_poll);
+            return;
+        }
+        return;
+    }
+
+    if (op->state == PG_ASYNC_READING) {
+        if (PQconsumeInput(op->conn->db) == 0) {
+            pg_async_finish(op, NULL, CSILK_DB_ERR_CONN, -1, false);
+            return;
+        }
+        if (PQisBusy(op->conn->db)) {
+            return;
+        }
+
+        PGresult* last_res = NULL;
+        while (1) {
+            PGresult* r = PQgetResult(op->conn->db);
+            if (!r) {
+                break;
+            }
+            if (last_res) {
+                PQclear(last_res);
+            }
+            last_res = r;
+        }
+
+        csilk_json_t*  json = NULL;
+        csilk_db_err_t err = CSILK_DB_OK;
+        int            rc = -1;
+
+        if (last_res) {
+            ExecStatusType st = PQresultStatus(last_res);
+            if (st == PGRES_TUPLES_OK) {
+                if (op->is_query) {
+                    json = pg_result_to_json(last_res);
+                }
+                rc = 0;
+            } else if (st == PGRES_COMMAND_OK) {
+                rc = 0;
+            } else {
+                err = CSILK_DB_ERR_SQL;
+            }
+            PQclear(last_res);
+        } else {
+            err = CSILK_DB_ERR_CONN;
+        }
+
+        pg_async_finish(op, json, err, rc, err != CSILK_DB_ERR_CONN);
+    }
+}
+
+static int
+postgres_submit_async_op(csilk_db_pool_t*        pool,
+                         const char*             sql,
+                         const char**            params,
+                         csilk_io_loop_t*        loop,
+                         bool                    is_query,
+                         csilk_db_query_async_cb query_cb,
+                         csilk_db_exec_async_cb  exec_cb,
+                         void*                   user_data)
+{
+    if (!pool || !sql) {
+        return -1;
+    }
+    if (is_query && !query_cb) {
+        return -1;
+    }
+    if (!is_query && !exec_cb) {
         return -1;
     }
 
     void* raw_conn = NULL;
-    if (csilk_db_pool_acquire(pool, &raw_conn) != 0 || !raw_conn) {
-        cb(NULL, CSILK_DB_ERR_CONN, user_data);
+    int   lease_id = 0;
+    if (csilk_db_pool_acquire_async(pool, &raw_conn, &lease_id) != 0 || !raw_conn) {
+        if (is_query) {
+            query_cb(NULL, CSILK_DB_ERR_CONN, user_data);
+        } else {
+            exec_cb(-1, user_data);
+        }
         return -1;
     }
 
@@ -766,8 +952,12 @@ postgres_query_async(csilk_db_pool_t*        pool,
         int   pcount = 0;
         char* rw = pg_rewrite_placeholders(sql, &pcount);
         if (!rw) {
-            csilk_db_pool_put(pool, raw_conn);
-            cb(NULL, CSILK_DB_ERR_OOM, user_data);
+            csilk_db_pool_put_async(pool, raw_conn, lease_id, true);
+            if (is_query) {
+                query_cb(NULL, CSILK_DB_ERR_OOM, user_data);
+            } else {
+                exec_cb(-1, user_data);
+            }
             return -1;
         }
         ok = PQsendQueryParams(conn->db, rw, pcount, NULL, params, NULL, NULL, 0);
@@ -777,61 +967,82 @@ postgres_query_async(csilk_db_pool_t*        pool,
     }
 
     if (!ok) {
-        csilk_db_pool_put(pool, raw_conn);
-        cb(NULL, CSILK_DB_ERR_SQL, user_data);
+        csilk_db_pool_put_async(pool, raw_conn, lease_id, false);
+        if (is_query) {
+            query_cb(NULL, CSILK_DB_ERR_SQL, user_data);
+        } else {
+            exec_cb(-1, user_data);
+        }
         return -1;
     }
 
+    pg_async_op_t* op = calloc(1, sizeof(*op));
+    if (!op) {
+        csilk_db_pool_put_async(pool, raw_conn, lease_id, true);
+        if (is_query) {
+            query_cb(NULL, CSILK_DB_ERR_OOM, user_data);
+        } else {
+            exec_cb(-1, user_data);
+        }
+        return -1;
+    }
+
+    op->pool = pool;
+    op->raw_conn = raw_conn;
+    op->lease_id = lease_id;
+    op->conn = conn;
+    op->loop = loop ? loop : csilk_io_default_loop();
+    op->is_query = is_query;
+    op->query_cb = query_cb;
+    op->exec_cb = exec_cb;
+    op->user_data = user_data;
+
     int sock = PQsocket(conn->db);
-    while (1) {
-        int flush_rc = PQflush(conn->db);
-        if (flush_rc <= 0) {
-            break;
+    if (sock < 0) {
+        csilk_db_pool_put_async(pool, raw_conn, lease_id, false);
+        free(op);
+        if (is_query) {
+            query_cb(NULL, CSILK_DB_ERR_CONN, user_data);
+        } else {
+            exec_cb(-1, user_data);
         }
-        struct pollfd pfd = {.fd = sock, .events = POLLOUT};
-        (void)poll(&pfd, 1, 100);
+        return -1;
     }
 
-    while (PQisBusy(conn->db)) {
-        struct pollfd pfd = {.fd = sock, .events = POLLIN};
-        int           pr = poll(&pfd, 1, 100);
-        if (pr > 0 && (pfd.revents & POLLIN)) {
-            if (PQconsumeInput(conn->db) == 0) {
-                break;
-            }
-        }
+    csilk_io_poll_init_socket(op->loop, &op->poll, sock);
+    op->poll.data = op;
+
+    csilk_io_timer_init(op->loop, &op->timer);
+    op->timer.data = op;
+    csilk_io_timer_start(&op->timer, on_pg_async_timeout, 30000, 0);
+    op->timer_started = true;
+
+    int flush_rc = PQflush(conn->db);
+    if (flush_rc < 0) {
+        pg_async_finish(op, NULL, CSILK_DB_ERR_CONN, -1, false);
+        return 0;
     }
 
-    PGresult* last_res = NULL;
-    while (1) {
-        PGresult* r = PQgetResult(conn->db);
-        if (!r) {
-            break;
-        }
-        if (last_res) {
-            PQclear(last_res);
-        }
-        last_res = r;
-    }
-
-    csilk_json_t*  json = NULL;
-    csilk_db_err_t err = CSILK_DB_OK;
-
-    if (last_res) {
-        ExecStatusType st = PQresultStatus(last_res);
-        if (st == PGRES_TUPLES_OK) {
-            json = pg_result_to_json(last_res);
-        } else if (st != PGRES_COMMAND_OK) {
-            err = CSILK_DB_ERR_SQL;
-        }
-        PQclear(last_res);
+    if (flush_rc > 0) {
+        op->state = PG_ASYNC_FLUSHING;
+        csilk_io_poll_start(&op->poll, CSILK_IO_WRITABLE, on_pg_async_poll);
     } else {
-        err = CSILK_DB_ERR_CONN;
+        op->state = PG_ASYNC_READING;
+        csilk_io_poll_start(&op->poll, CSILK_IO_READABLE, on_pg_async_poll);
     }
-
-    csilk_db_pool_put(pool, raw_conn);
-    cb(json, err, user_data);
+    op->poll_started = true;
     return 0;
+}
+
+static int
+postgres_query_async(csilk_db_pool_t*        pool,
+                     const char*             sql,
+                     const char**            params,
+                     csilk_io_loop_t*        loop,
+                     csilk_db_query_async_cb cb,
+                     void*                   user_data)
+{
+    return postgres_submit_async_op(pool, sql, params, loop, true, cb, NULL, user_data);
 }
 
 static int
@@ -842,85 +1053,7 @@ postgres_exec_async(csilk_db_pool_t*       pool,
                     csilk_db_exec_async_cb cb,
                     void*                  user_data)
 {
-    (void)loop;
-    if (!pool || !sql || !cb) {
-        return -1;
-    }
-
-    void* raw_conn = NULL;
-    if (csilk_db_pool_acquire(pool, &raw_conn) != 0 || !raw_conn) {
-        cb(-1, user_data);
-        return -1;
-    }
-
-    pg_conn_t* conn = (pg_conn_t*)raw_conn;
-    PQsetnonblocking(conn->db, 1);
-
-    int ok = 0;
-    if (params && params[0]) {
-        int   pcount = 0;
-        char* rw = pg_rewrite_placeholders(sql, &pcount);
-        if (!rw) {
-            csilk_db_pool_put(pool, raw_conn);
-            cb(-1, user_data);
-            return -1;
-        }
-        ok = PQsendQueryParams(conn->db, rw, pcount, NULL, params, NULL, NULL, 0);
-        free(rw);
-    } else {
-        ok = PQsendQuery(conn->db, sql);
-    }
-
-    if (!ok) {
-        csilk_db_pool_put(pool, raw_conn);
-        cb(-1, user_data);
-        return -1;
-    }
-
-    int sock = PQsocket(conn->db);
-    while (1) {
-        int flush_rc = PQflush(conn->db);
-        if (flush_rc <= 0) {
-            break;
-        }
-        struct pollfd pfd = {.fd = sock, .events = POLLOUT};
-        (void)poll(&pfd, 1, 100);
-    }
-
-    while (PQisBusy(conn->db)) {
-        struct pollfd pfd = {.fd = sock, .events = POLLIN};
-        int           pr = poll(&pfd, 1, 100);
-        if (pr > 0 && (pfd.revents & POLLIN)) {
-            if (PQconsumeInput(conn->db) == 0) {
-                break;
-            }
-        }
-    }
-
-    int       rc = -1;
-    PGresult* last_res = NULL;
-    while (1) {
-        PGresult* r = PQgetResult(conn->db);
-        if (!r) {
-            break;
-        }
-        if (last_res) {
-            PQclear(last_res);
-        }
-        last_res = r;
-    }
-
-    if (last_res) {
-        ExecStatusType st = PQresultStatus(last_res);
-        if (st == PGRES_COMMAND_OK || st == PGRES_TUPLES_OK) {
-            rc = 0;
-        }
-        PQclear(last_res);
-    }
-
-    csilk_db_pool_put(pool, raw_conn);
-    cb(rc, user_data);
-    return 0;
+    return postgres_submit_async_op(pool, sql, params, loop, false, NULL, cb, user_data);
 }
 
 /* -----------------------------------------------------------------------

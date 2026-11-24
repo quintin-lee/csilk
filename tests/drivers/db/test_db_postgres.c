@@ -37,6 +37,35 @@ test_sql_rewrite_placeholders_unit(void)
     printf("test_sql_rewrite_placeholders_unit: PASS\n");
 }
 
+#ifdef HAS_POSTGRES
+typedef struct {
+    int  count;
+    bool done;
+} pg_async_test_state_t;
+
+static void
+on_async_exec_cb(int res_rc, void* udata)
+{
+    int* ed = (int*)udata;
+    assert(res_rc == 0);
+    *ed = 1;
+}
+
+static void
+on_async_query_cb(csilk_json_t* res, csilk_db_err_t err, void* udata)
+{
+    pg_async_test_state_t* st = (pg_async_test_state_t*)udata;
+    assert(err == CSILK_DB_OK);
+    assert(res != nullptr);
+    assert(csilk_json_array_size(res) >= 1);
+    csilk_json_free(res);
+    st->count++;
+    if (st->count == 10) {
+        st->done = true;
+    }
+}
+#endif
+
 void
 test_postgres_real_connection(void)
 {
@@ -133,7 +162,33 @@ test_postgres_real_connection(void)
     assert(rc == 0);
     assert(csilk_db_is_nonblocking(pool) == 0);
 
-    /* 8. Clean up */
+    /* 8. Async query & exec tests */
+    csilk_io_loop_t* loop = csilk_io_default_loop();
+    int              exec_done = 0;
+    rc = csilk_db_exec_async(pool,
+                             "INSERT INTO test_pg_items (name, score) VALUES ('AsyncUser', 88)",
+                             nullptr,
+                             loop,
+                             on_async_exec_cb,
+                             &exec_done);
+    assert(rc == 0);
+    while (!exec_done) {
+        csilk_io_run(loop, CSILK_IO_RUN_ONCE);
+    }
+    assert(exec_done == 1);
+
+    pg_async_test_state_t astate = {.count = 0, .done = false};
+    for (int i = 0; i < 10; i++) {
+        rc = csilk_db_query_async(
+            pool, "SELECT 1 AS num", nullptr, loop, on_async_query_cb, &astate);
+        assert(rc == 0);
+    }
+    while (!astate.done) {
+        csilk_io_run(loop, CSILK_IO_RUN_ONCE);
+    }
+    assert(astate.count == 10);
+
+    /* 9. Clean up */
     csilk_db_exec(pool, "DROP TABLE test_pg_items");
     csilk_db_pool_free(pool);
     printf("test_db_postgres: PASS\n");
