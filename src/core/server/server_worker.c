@@ -41,6 +41,8 @@ typedef struct {
 } csilk_dispatch_tls_cache_t;
 
 static _Thread_local csilk_dispatch_tls_cache_t g_dispatch_tls_cache = {.count = 0};
+static _Thread_local bool                       g_dispatch_tls_registered = false;
+static _Thread_local char                       g_h3_worker_recv_buf[65536];
 
 static csilk_key_t  g_dispatch_tls_key;
 static csilk_once_t g_dispatch_tls_once = CSILK_ONCE_INIT;
@@ -61,9 +63,6 @@ dispatch_init_tls_key(void)
     csilk_key_create(&g_dispatch_tls_key, dispatch_tls_cleanup);
     atexit(_csilk_dispatch_pool_cleanup);
 }
-
-static _Thread_local bool g_dispatch_tls_registered = false;
-static _Thread_local char g_h3_worker_recv_buf[65536];
 
 static inline void
 ensure_dispatch_tls_registered(void)
@@ -367,9 +366,11 @@ on_worker_h3_uv_recv(csilk_io_udp_t*        handle,
     }
     socklen_t addrlen =
         (addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
-    extern int _h3_process_datagram(
-        void* t, const uint8_t* buf, size_t len, const struct sockaddr* from, socklen_t fromlen);
-    _h3_process_datagram(wp->h3_transport, (const uint8_t*)buf->base, (size_t)nread, addr, addrlen);
+    _h3_process_datagram((struct csilk_h3_transport_s*)wp->h3_transport,
+                         (const uint8_t*)buf->base,
+                         (size_t)nread,
+                         addr,
+                         addrlen);
 }
 #else
 static void
@@ -387,9 +388,11 @@ on_worker_h3_recv_uring(csilk_io_udp_t*        handle,
     }
     socklen_t addrlen =
         (addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
-    extern int _h3_process_datagram(
-        void* t, const uint8_t* buf, size_t len, const struct sockaddr* from, socklen_t fromlen);
-    _h3_process_datagram(wp->h3_transport, (const uint8_t*)buf->base, nread, addr, addrlen);
+    _h3_process_datagram((struct csilk_h3_transport_s*)wp->h3_transport,
+                         (const uint8_t*)buf->base,
+                         nread,
+                         addr,
+                         addrlen);
 }
 #endif
 
@@ -447,8 +450,6 @@ _csilk_worker_init_h3(csilk_server_t* server, worker_pool_t* wp, csilk_io_loop_t
         return -1;
     }
 
-    extern void* csilk_h3_worker_transport_new(
-        csilk_server_t * server, worker_pool_t * wp, int udp_fd);
     wp->h3_transport = csilk_h3_worker_transport_new(server, wp, fd);
     if (!wp->h3_transport) {
         close(fd);
@@ -492,8 +493,7 @@ _csilk_worker_stop_h3(worker_pool_t* wp)
         wp->h3_udp_active = false;
     }
     if (wp->h3_transport) {
-        extern void csilk_h3_worker_transport_destroy(void* t);
-        csilk_h3_worker_transport_destroy(wp->h3_transport);
+        csilk_h3_worker_transport_destroy((struct csilk_h3_transport_s*)wp->h3_transport);
         wp->h3_transport = NULL;
     }
 }

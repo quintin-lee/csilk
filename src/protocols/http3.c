@@ -807,6 +807,23 @@ _h3_init_crypto_vtable(void)
     return 0;
 }
 
+#else  /* !CSILK_HAS_NGTCP2 */
+
+CSILK_INTERNAL int
+_h3_process_datagram(csilk_h3_transport_t*  t,
+                     const uint8_t*         buf,
+                     size_t                 len,
+                     const struct sockaddr* from,
+                     socklen_t              fromlen)
+{
+    (void)t;
+    (void)buf;
+    (void)len;
+    (void)from;
+    (void)fromlen;
+    return -1;
+}
+
 #endif /* CSILK_HAS_NGTCP2 */
 
 /* ===================================================================
