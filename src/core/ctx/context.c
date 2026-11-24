@@ -900,3 +900,23 @@ csilk_ctx_set_cipher_driver(csilk_ctx_t* c, csilk_cipher_driver_t* driver)
         c->cipher_driver = driver;
     }
 }
+
+csilk_io_loop_t*
+csilk_ctx_get_loop(const csilk_ctx_t* ctx)
+{
+    if (ctx && ctx->_internal_client) {
+        const csilk_client_t* cl = (const csilk_client_t*)ctx->_internal_client;
+        if (cl->owner_pool) {
+            return cl->owner_pool->loop_ptr ? cl->owner_pool->loop_ptr
+                                            : (csilk_io_loop_t*)&cl->owner_pool->loop;
+        }
+        if (cl->server && cl->server->loop) {
+            return cl->server->loop;
+        }
+    }
+    worker_pool_t* current_wp = _csilk_worker_get_current_pool();
+    if (current_wp) {
+        return current_wp->loop_ptr ? current_wp->loop_ptr : &current_wp->loop;
+    }
+    return csilk_io_default_loop();
+}

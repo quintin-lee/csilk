@@ -99,4 +99,6 @@ char* csilk_mysql_interpolate_params(void* mysql, const char* sql, const char** 
 
 int csilk_db_pool_queue_waiter(csilk_db_pool_t* pool, csilk_db_async_resume_fn fn, void* arg);
 
+csilk_io_loop_t* _csilk_worker_get_current_loop(void);
+
 #endif

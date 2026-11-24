@@ -1486,6 +1486,13 @@ db_async_submit_ex(db_async_op_t           op,
         return -1;
     }
 
+    if (!target_loop) {
+        target_loop = _csilk_worker_get_current_loop();
+    }
+    if (!target_loop) {
+        target_loop = csilk_io_default_loop();
+    }
+
     if (pool->is_nonblocking) {
         if (op == DB_ASYNC_QUERY_EX && pool->driver && pool->driver->query_async) {
             return pool->driver->query_async(

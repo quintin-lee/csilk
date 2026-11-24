@@ -94,6 +94,16 @@ _csilk_worker_get_current_pool(void)
     return g_current_worker_pool;
 }
 
+csilk_io_loop_t*
+_csilk_worker_get_current_loop(void)
+{
+    if (g_current_worker_pool) {
+        return g_current_worker_pool->loop_ptr ? g_current_worker_pool->loop_ptr
+                                               : &g_current_worker_pool->loop;
+    }
+    return NULL;
+}
+
 /* Recycle dispatch task payload */
 typedef struct {
     csilk_client_t* client;

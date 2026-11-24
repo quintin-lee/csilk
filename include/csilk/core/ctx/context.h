@@ -11,6 +11,7 @@
  * @copyright MIT License
  */
 
+#include "csilk/core/sys_io.h"
 #include "csilk/core/types.h"
 #include "csilk/crypto/crypto.h"
 
@@ -462,6 +463,17 @@ int csilk_ctx_is_closed(csilk_ctx_t* c);
  * @param arg Opaque argument passed to the callback.
  */
 void csilk_dispatch(csilk_ctx_t* c, void (*cb)(void* arg), void* arg);
+
+/**
+ * @brief Get the event loop associated with the request context.
+ *
+ * Resolves the event loop of the worker thread servicing this context.
+ * Falls back to csilk_io_default_loop() if the context has no bound worker.
+ *
+ * @param ctx The request context.
+ * @return Pointer to the active csilk_io_loop_t.
+ */
+csilk_io_loop_t* csilk_ctx_get_loop(const csilk_ctx_t* ctx);
 
 /**
  * @brief Get the index of the currently executing handler in the chain.

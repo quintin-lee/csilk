@@ -226,6 +226,7 @@ CSILK_INTERNAL void _csilk_client_atomics_init(csilk_client_t* client);
 
 CSILK_INTERNAL void                   _csilk_worker_set_current_pool(worker_pool_t* wp);
 CSILK_INTERNAL worker_pool_t*         _csilk_worker_get_current_pool(void);
+CSILK_INTERNAL csilk_io_loop_t*       _csilk_worker_get_current_loop(void);
 CSILK_INTERNAL csilk_dispatch_task_t* _csilk_dispatch_task_alloc(void);
 CSILK_INTERNAL void                   _csilk_dispatch_task_free(csilk_dispatch_task_t* task);
 

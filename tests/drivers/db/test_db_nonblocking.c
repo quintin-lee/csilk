@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "csilk/core/ctx/context.h"
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
 #include "drivers/db/db_internal.h"
@@ -15,10 +16,12 @@ extern csilk_db_driver_t csilk_db_postgres_driver;
 extern csilk_db_driver_t csilk_db_mysql_driver;
 #endif
 
-static int  s_mock_set_nb_called = 0;
-static int  s_mock_query_async_called = 0;
-static int  s_mock_exec_async_called = 0;
-static bool s_mock_nb_enabled = false;
+static int              s_mock_set_nb_called = 0;
+static int              s_mock_query_async_called = 0;
+static int              s_mock_exec_async_called = 0;
+static bool             s_mock_nb_enabled = false;
+static csilk_io_loop_t* s_mock_query_async_loop_received = NULL;
+static csilk_io_loop_t* s_mock_exec_async_loop_received = NULL;
 
 static int
 mock_connect(csilk_db_pool_t* pool, const char* dsn)
@@ -78,7 +81,7 @@ mock_query_async(csilk_db_pool_t*        pool,
     (void)pool;
     (void)sql;
     (void)params;
-    (void)loop;
+    s_mock_query_async_loop_received = loop;
     s_mock_query_async_called++;
     csilk_json_t* arr = csilk_json_array();
     csilk_json_t* obj = csilk_json_object();
@@ -99,7 +102,7 @@ mock_exec_async(csilk_db_pool_t*       pool,
     (void)pool;
     (void)sql;
     (void)params;
-    (void)loop;
+    s_mock_exec_async_loop_received = loop;
     s_mock_exec_async_called++;
     cb(0, user_data);
     return 0;
@@ -365,6 +368,38 @@ test_poisoned_connection_eviction(void)
     printf("test_poisoned_connection_eviction: PASS\n");
 }
 
+static void
+test_ctx_get_loop_and_auto_resolution(void)
+{
+    /* 1. NULL context returns default loop */
+    csilk_io_loop_t* l1 = csilk_ctx_get_loop(NULL);
+    assert(l1 != NULL);
+    assert(l1 == csilk_io_default_loop());
+
+    /* 2. Mock query_async automatically receives non-null loop even when caller passes NULL */
+    csilk_db_init();
+    csilk_db_pool_t* pool = csilk_db_pool_new("mock_nb", "dummy_dsn");
+    assert(pool != NULL);
+    assert(csilk_db_set_nonblocking(pool, 1) == 0);
+
+    s_mock_query_async_loop_received = NULL;
+    int cb_called = 0;
+    int rc = csilk_db_query_async(pool, "SELECT 1", NULL, NULL, on_async_query_done, &cb_called);
+    assert(rc == 0);
+    assert(s_mock_query_async_loop_received != NULL);
+    assert(s_mock_query_async_loop_received == csilk_io_default_loop());
+
+    s_mock_exec_async_loop_received = NULL;
+    int exec_called = 0;
+    rc = csilk_db_exec_param_async(pool, "UPDATE foo", NULL, on_async_exec_done, &exec_called);
+    assert(rc == 0);
+    assert(s_mock_exec_async_loop_received != NULL);
+    assert(s_mock_exec_async_loop_received == csilk_io_default_loop());
+
+    csilk_db_pool_free(pool);
+    printf("test_ctx_get_loop_and_auto_resolution: PASS\n");
+}
+
 int
 main(void)
 {
@@ -374,5 +409,6 @@ main(void)
     test_concurrent_async_leases_same_thread();
     test_async_pool_fifo_queue();
     test_poisoned_connection_eviction();
+    test_ctx_get_loop_and_auto_resolution();
     return 0;
 }
