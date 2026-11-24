@@ -653,6 +653,114 @@ csilk_db_pool_put(csilk_db_pool_t* pool, void* conn)
     return 0;
 }
 
+int
+csilk_db_pool_acquire_async(csilk_db_pool_t* pool, void** conn, int* lease_id)
+{
+    if (!pool || !conn || !lease_id) {
+        return -1;
+    }
+    *conn = NULL;
+    *lease_id = 0;
+
+    csilk_mutex_lock(&pool->mutex);
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
+
+    for (int i = 0; i < n; i++) {
+        if (!pool->connections[i]) {
+            continue;
+        }
+        if (!pool->conn_holder_flags[i] && pool->conn_async_lease[i] == 0) {
+            uint32_t lid = ++pool->next_async_lease_id;
+            if (lid == 0) {
+                lid = ++pool->next_async_lease_id;
+            }
+            pool->conn_async_lease[i] = lid;
+            pool->conn_holder_flags[i] = true;
+            *conn = pool->connections[i];
+            *lease_id = (int)lid;
+            csilk_mutex_unlock(&pool->mutex);
+            return 0;
+        }
+    }
+
+    csilk_mutex_unlock(&pool->mutex);
+    return -1;
+}
+
+void
+csilk_db_pool_put_async(csilk_db_pool_t* pool, void* conn, int lease_id, bool is_healthy)
+{
+    if (!pool || !conn || lease_id <= 0) {
+        return;
+    }
+
+    csilk_mutex_lock(&pool->mutex);
+    int n = pool->max_conns > 0 ? pool->max_conns : 1;
+
+    for (int i = 0; i < n; i++) {
+        if (pool->connections[i] == conn && pool->conn_async_lease[i] == (uint32_t)lease_id) {
+            if (!is_healthy) {
+                if (pool->driver && pool->driver->disconnect) {
+                    pool->connection = pool->connections[i];
+                    pool->driver->disconnect(pool);
+                }
+                pool->connections[i] = NULL;
+                CSILK_LOG_W("csilk_db_pool_put_async: evicted poisoned connection in slot %d", i);
+            }
+            /* If healthy, pop the next waiter from FIFO queue */
+            if (is_healthy && pool->connections[i] && pool->async_wait_head) {
+                csilk_db_async_waiter_t* waiter = pool->async_wait_head;
+                pool->async_wait_head = waiter->next;
+                if (!pool->async_wait_head) {
+                    pool->async_wait_tail = NULL;
+                }
+                uint32_t lid = ++pool->next_async_lease_id;
+                if (lid == 0) {
+                    lid = ++pool->next_async_lease_id;
+                }
+                pool->conn_async_lease[i] = lid;
+                csilk_mutex_unlock(&pool->mutex);
+                waiter->resume_fn(waiter->arg, pool->connections[i], (int)lid);
+                free(waiter);
+                return;
+            }
+            pool->conn_async_lease[i] = 0;
+            pool->conn_holder_flags[i] = false;
+            csilk_cond_broadcast(&pool->pool_cond);
+            csilk_mutex_unlock(&pool->mutex);
+            return;
+        }
+    }
+
+    csilk_mutex_unlock(&pool->mutex);
+}
+
+int
+csilk_db_pool_queue_waiter(csilk_db_pool_t* pool, csilk_db_async_resume_fn fn, void* arg)
+{
+    if (!pool || !fn) {
+        return -1;
+    }
+    csilk_db_async_waiter_t* w = malloc(sizeof(csilk_db_async_waiter_t));
+    if (!w) {
+        return -1;
+    }
+    w->resume_fn = fn;
+    w->arg = arg;
+    w->next = NULL;
+
+    csilk_mutex_lock(&pool->mutex);
+    if (pool->async_wait_tail) {
+        pool->async_wait_tail->next = w;
+        pool->async_wait_tail = w;
+    } else {
+        pool->async_wait_head = w;
+        pool->async_wait_tail = w;
+    }
+    csilk_mutex_unlock(&pool->mutex);
+    return 0;
+}
+
 /** @brief Callback signature for csilk_db_with_conn().
  *
  * @param conn     The raw driver-level connection handle.
@@ -983,6 +1091,13 @@ csilk_db_pool_free(csilk_db_pool_t* pool)
      * so they can observe pool_closing and return -1 promptly. */
     csilk_mutex_lock(&pool->mutex);
     pool->pool_closing = 1;
+    while (pool->async_wait_head) {
+        csilk_db_async_waiter_t* w = pool->async_wait_head;
+        pool->async_wait_head = w->next;
+        w->resume_fn(w->arg, NULL, 0);
+        free(w);
+    }
+    pool->async_wait_tail = NULL;
     csilk_cond_broadcast(&pool->pool_cond);
     csilk_mutex_unlock(&pool->mutex);
 

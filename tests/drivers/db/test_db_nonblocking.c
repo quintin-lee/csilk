@@ -239,11 +239,140 @@ test_driver_vtables(void)
     printf("test_driver_vtables: PASS\n");
 }
 
+static void
+test_concurrent_async_leases_same_thread(void)
+{
+    csilk_db_init();
+    csilk_db_pool_t* pool = csilk_db_pool_new("mock_nb", "dummy_dsn");
+    assert(pool != NULL);
+
+    /* Populate multi-connections in mock pool */
+    pool->max_conns = 3;
+    pool->connections[0] = (void*)0x1001;
+    pool->connections[1] = (void*)0x1002;
+    pool->connections[2] = (void*)0x1003;
+
+    void* c1 = NULL;
+    int   l1 = 0;
+    int   rc1 = csilk_db_pool_acquire_async(pool, &c1, &l1);
+    assert(rc1 == 0 && c1 == (void*)0x1001 && l1 > 0);
+
+    void* c2 = NULL;
+    int   l2 = 0;
+    int   rc2 = csilk_db_pool_acquire_async(pool, &c2, &l2);
+    assert(rc2 == 0 && c2 == (void*)0x1002 && l2 > 0);
+    assert(c1 != c2);
+    assert(l1 != l2);
+
+    void* c3 = NULL;
+    int   l3 = 0;
+    int   rc3 = csilk_db_pool_acquire_async(pool, &c3, &l3);
+    assert(rc3 == 0 && c3 == (void*)0x1003 && l3 > 0);
+    assert(c2 != c3);
+
+    /* Pool full: 4th acquire should fail */
+    void* c4 = NULL;
+    int   l4 = 0;
+    int   rc4 = csilk_db_pool_acquire_async(pool, &c4, &l4);
+    assert(rc4 == -1 && c4 == NULL);
+
+    /* Return c2 and re-acquire */
+    csilk_db_pool_put_async(pool, c2, l2, true);
+
+    void* c5 = NULL;
+    int   l5 = 0;
+    int   rc5 = csilk_db_pool_acquire_async(pool, &c5, &l5);
+    assert(rc5 == 0 && c5 == (void*)0x1002 && l5 > 0);
+
+    /* Clean up */
+    csilk_db_pool_put_async(pool, c1, l1, true);
+    csilk_db_pool_put_async(pool, c3, l3, true);
+    csilk_db_pool_put_async(pool, c5, l5, true);
+
+    csilk_db_pool_free(pool);
+    printf("test_concurrent_async_leases_same_thread: PASS\n");
+}
+
+static void* s_resumed_conn = NULL;
+static int   s_resumed_lease = 0;
+
+static void
+on_async_resumed(void* arg, void* raw_conn, int lease_id)
+{
+    int* flag = (int*)arg;
+    *flag = 1;
+    s_resumed_conn = raw_conn;
+    s_resumed_lease = lease_id;
+}
+
+static void
+test_async_pool_fifo_queue(void)
+{
+    csilk_db_init();
+    csilk_db_pool_t* pool = csilk_db_pool_new("mock_nb", "dummy_dsn");
+    assert(pool != NULL);
+
+    pool->max_conns = 1;
+    pool->connections[0] = (void*)0x2001;
+
+    void* c1 = NULL;
+    int   l1 = 0;
+    assert(csilk_db_pool_acquire_async(pool, &c1, &l1) == 0);
+    assert(c1 == (void*)0x2001);
+
+    /* Queue a waiter when pool is exhausted */
+    int resume_called = 0;
+    s_resumed_conn = NULL;
+    s_resumed_lease = 0;
+    assert(csilk_db_pool_queue_waiter(pool, on_async_resumed, &resume_called) == 0);
+
+    /* Release c1; waiter should be immediately popped and dispatched */
+    csilk_db_pool_put_async(pool, c1, l1, true);
+
+    assert(resume_called == 1);
+    assert(s_resumed_conn == (void*)0x2001);
+    assert(s_resumed_lease > 0);
+    assert(s_resumed_lease != l1);
+
+    /* Release the resumed lease */
+    csilk_db_pool_put_async(pool, s_resumed_conn, s_resumed_lease, true);
+
+    csilk_db_pool_free(pool);
+    printf("test_async_pool_fifo_queue: PASS\n");
+}
+
+static void
+test_poisoned_connection_eviction(void)
+{
+    csilk_db_init();
+    csilk_db_pool_t* pool = csilk_db_pool_new("mock_nb", "dummy_dsn");
+    assert(pool != NULL);
+
+    pool->max_conns = 1;
+    pool->connections[0] = (void*)0x3001;
+
+    void* c1 = NULL;
+    int   l1 = 0;
+    assert(csilk_db_pool_acquire_async(pool, &c1, &l1) == 0);
+
+    /* Return as unhealthy */
+    csilk_db_pool_put_async(pool, c1, l1, false);
+
+    /* Slot should be evicted (connections[0] == NULL) */
+    assert(pool->connections[0] == NULL);
+
+    csilk_db_pool_free(pool);
+    printf("test_poisoned_connection_eviction: PASS\n");
+}
+
 int
 main(void)
 {
     test_null_and_default_state();
     test_mock_driver_nonblocking();
     test_driver_vtables();
+    test_concurrent_async_leases_same_thread();
+    test_async_pool_fifo_queue();
+    test_poisoned_connection_eviction();
     return 0;
 }

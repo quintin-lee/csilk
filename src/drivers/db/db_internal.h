@@ -22,6 +22,15 @@
 /** @brief Maximum connections per pool (csilk#6). */
 #define CSILK_DB_POOL_MAX_CONNS 32
 
+typedef struct csilk_db_async_waiter_s csilk_db_async_waiter_t;
+typedef void (*csilk_db_async_resume_fn)(void* arg, void* raw_conn, int lease_id);
+
+struct csilk_db_async_waiter_s {
+    csilk_db_async_resume_fn resume_fn;
+    void*                    arg;
+    csilk_db_async_waiter_t* next;
+};
+
 struct csilk_db_pool_s {
     csilk_db_driver_t* driver;
     void*              connections[CSILK_DB_POOL_MAX_CONNS]; /**< Connection array (csilk#6). */
@@ -42,6 +51,11 @@ struct csilk_db_pool_s {
     bool           conn_holder_set; /**< True when connections[0] is held. */
     csilk_thread_t conn_holders[CSILK_DB_POOL_MAX_CONNS]; /**< Per-conn holder (multi-conn mode). */
     bool           conn_holder_flags[CSILK_DB_POOL_MAX_CONNS]; /**< Per-conn held flag. */
+    uint32_t       conn_async_lease
+        [CSILK_DB_POOL_MAX_CONNS]; /**< Per-conn async lease ID (0 = sync / idle). */
+    uint32_t                        next_async_lease_id; /**< Monotonic async lease ID counter. */
+    struct csilk_db_async_waiter_s* async_wait_head; /**< FIFO wait queue head for async queries */
+    struct csilk_db_async_waiter_s* async_wait_tail; /**< FIFO wait queue tail for async queries */
     /*
      * Most recent error category (csilk#8).  Set by the core layer when a
      * high-level call (csilk_db_exec / csilk_db_query_json / ...) fails,
@@ -73,5 +87,7 @@ struct csilk_stmt_s {
  * @return Heap-allocated rewritten SQL string (caller frees), or NULL on OOM.
  */
 char* csilk_sql_rewrite_placeholders(const char* sql, int* out_param_count);
+
+int csilk_db_pool_queue_waiter(csilk_db_pool_t* pool, csilk_db_async_resume_fn fn, void* arg);
 
 #endif

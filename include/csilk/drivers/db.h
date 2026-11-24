@@ -201,6 +201,31 @@ int csilk_db_pool_acquire_timeout(csilk_db_pool_t* pool, void** conn, uint64_t t
  */
 int csilk_db_pool_put(csilk_db_pool_t* pool, void* conn);
 
+/**
+ * @brief Acquire an independent connection lease for an asynchronous query.
+ *
+ * Unlike csilk_db_pool_acquire() which enforces thread-affinity idempotence,
+ * this function allocates an independent connection slot marked by a unique
+ * @p lease_id, enabling a single event-loop thread to run multiple concurrent
+ * asynchronous queries without connection collision.
+ *
+ * @param pool      Connection pool.
+ * @param conn      [out] Receives raw connection handle.
+ * @param lease_id  [out] Receives unique lease ID to pass to csilk_db_pool_put_async().
+ * @return 0 on success, -1 if pool is exhausted or invalid.
+ */
+int csilk_db_pool_acquire_async(csilk_db_pool_t* pool, void** conn, int* lease_id);
+
+/**
+ * @brief Release an asynchronous connection lease back to the pool.
+ *
+ * @param pool        Connection pool.
+ * @param conn        Raw connection handle returned by acquire.
+ * @param lease_id    Lease ID returned by csilk_db_pool_acquire_async().
+ * @param is_healthy  True if connection is healthy, false if poisoned/disconnected.
+ */
+void csilk_db_pool_put_async(csilk_db_pool_t* pool, void* conn, int lease_id, bool is_healthy);
+
 /** @brief Callback signature for csilk_db_with_conn(). */
 typedef int (*csilk_db_with_conn_fn)(void* conn, void* user_ctx);
 
