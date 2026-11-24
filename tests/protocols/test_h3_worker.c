@@ -11,6 +11,27 @@
 #include "protocols/http3_internal.h"
 
 static void
+drain_wp_pools(worker_pool_t* wp)
+{
+    if (!wp) {
+        return;
+    }
+    int client_cnt = atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
+    for (int i = 0; i < client_cnt; i++) {
+        free(wp->client_pool[i]);
+        wp->client_pool[i] = NULL;
+    }
+    atomic_store_explicit(&wp->client_pool_count, 0, memory_order_relaxed);
+
+    int arena_cnt = atomic_load_explicit(&wp->arena_pool_count, memory_order_relaxed);
+    for (int i = 0; i < arena_cnt; i++) {
+        csilk_arena_free(wp->arena_pool[i]);
+        wp->arena_pool[i] = NULL;
+    }
+    atomic_store_explicit(&wp->arena_pool_count, 0, memory_order_relaxed);
+}
+
+static void
 test_worker_pool_h3_fields_and_reset(void)
 {
     printf("Testing worker_pool_t HTTP/3 fields and hot-state reset...\n");
@@ -54,6 +75,7 @@ test_worker_pool_h3_fields_and_reset(void)
     assert(recycled->h3_conn == NULL);
 
     pool_put(&wp, recycled);
+    drain_wp_pools(&wp);
     csilk_server_free(server);
 
     printf("test_worker_pool_h3_fields_and_reset: PASS\n");
@@ -113,6 +135,7 @@ test_h3_conn_pool_lifecycle(void)
     assert(wp.client_pool[0] == cl);
 
     _csilk_worker_set_current_pool(NULL);
+    drain_wp_pools(&wp);
     csilk_server_free(server);
 
     printf("test_h3_conn_pool_lifecycle: PASS\n");
@@ -174,6 +197,8 @@ test_h3_multi_worker_udp_reuseport(void)
     }
     csilk_io_loop_close(&loop1);
 
+    drain_wp_pools(&wp0);
+    drain_wp_pools(&wp1);
     csilk_server_free(server);
     printf("test_h3_multi_worker_udp_reuseport: PASS\n");
 }
@@ -229,6 +254,7 @@ test_h3_shutdown_drain_active_clients(void)
     csilk_io_loop_close(&loop);
 
     _csilk_worker_set_current_pool(NULL);
+    drain_wp_pools(&wp);
     csilk_server_free(server);
 
     printf("test_h3_shutdown_drain_active_clients: PASS\n");
