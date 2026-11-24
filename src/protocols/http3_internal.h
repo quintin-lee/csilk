@@ -95,11 +95,11 @@ struct csilk_h3_conn_s {
 
 /** @brief QUIC transport handle. */
 struct csilk_h3_transport_s {
+    int  udp_fd;
+    int  udp_nonblocking;
+    char addr[64];
 #ifdef CSILK_HAS_NGTCP2
-    int      udp_fd;
-    int      udp_nonblocking;
     SSL_CTX* ssl_ctx;
-    char     addr[64];
     /* Recv buffer (reused across recvfrom calls). */
     uint8_t recv_buf[65536];
 #endif

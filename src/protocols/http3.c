@@ -1127,11 +1127,11 @@ csilk_h3_transport_destroy(csilk_h3_transport_t* t)
         SSL_CTX_free(t->ssl_ctx);
         t->ssl_ctx = NULL;
     }
+#endif
     if (t->udp_fd >= 0) {
         close(t->udp_fd);
         t->udp_fd = -1;
     }
-#endif
 
     free(t);
 }
@@ -1165,12 +1165,12 @@ csilk_h3_worker_transport_destroy(csilk_h3_transport_t* t)
     while (t->conn_count > 0) {
         _h3_del_conn(t, t->conns[t->conn_count - 1]);
     }
+#endif
     t->conn_count = 0;
     if (t->udp_fd >= 0) {
         close(t->udp_fd);
         t->udp_fd = -1;
     }
-#endif
     free(t);
 }
 
