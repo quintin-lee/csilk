@@ -8,14 +8,19 @@
 #include "csilk/protocols/h3.h"
 #include "csilk/test/test.h"
 #include "core/internal/srv_internal.h"
+#include "core/internal/srv_impl.h"
+#include "core/ctx/ctx_internal.h"
+#include "protocols/http3_internal.h"
 
 #ifdef CSILK_HAS_NGTCP2
 #include <openssl/ssl.h>
 #endif
 
-static int  g_h3_handler_invoked = 0;
-static char g_h3_received_body[128] = {0};
-static char g_h3_received_auth[128] = {0};
+static int   g_h3_handler_invoked = 0;
+static char  g_h3_received_body[128] = {0};
+static char  g_h3_received_auth[128] = {0};
+static int   g_h3_drain_callback_called = 0;
+static void* g_h3_drain_callback_data = NULL;
 
 static void
 _test_h3_order_handler(csilk_ctx_t* c)
@@ -36,6 +41,14 @@ _test_h3_order_handler(csilk_ctx_t* c)
     }
     csilk_set_header(c, "Content-Type", "application/json");
     csilk_string(c, 201, "{\"status\":\"order_created\"}");
+}
+
+static void
+_test_h3_drain_cb(csilk_ctx_t* c, void* user_data)
+{
+    (void)c;
+    g_h3_drain_callback_called++;
+    g_h3_drain_callback_data = user_data;
 }
 
 static void
@@ -501,6 +514,258 @@ test_h3_session_send_response_and_body(void)
 }
 
 static void
+test_h3_stream_mux(void)
+{
+    printf("Testing HTTP/3 RFC 9114 concurrent stream multiplexing...\n");
+
+    struct csilk_h3_conn_s conn;
+    memset(&conn, 0, sizeof(conn));
+
+    /* Stream map management */
+    struct csilk_h3_stream_s* s0 = _h3_get_or_create_stream(&conn, 0);
+    struct csilk_h3_stream_s* s4 = _h3_get_or_create_stream(&conn, 4);
+    struct csilk_h3_stream_s* s8 = _h3_get_or_create_stream(&conn, 8);
+
+    assert(s0 != NULL && s0->stream_id == 0);
+    assert(s4 != NULL && s4->stream_id == 4);
+    assert(s8 != NULL && s8->stream_id == 8);
+    assert(_h3_get_stream(&conn, 0) == s0);
+    assert(_h3_get_stream(&conn, 4) == s4);
+    assert(_h3_get_stream(&conn, 8) == s8);
+    assert(_h3_get_stream(&conn, 12) == NULL);
+
+    _h3_remove_stream(&conn, 4);
+    assert(_h3_get_stream(&conn, 4) == NULL);
+    assert(_h3_get_stream(&conn, 0) == s0);
+    assert(_h3_get_stream(&conn, 8) == s8);
+
+    /* Router dispatch with concurrent stream contexts */
+    csilk_router_t* router = csilk_router_new();
+    csilk_handler_t handlers[] = {_test_h3_order_handler};
+    csilk_router_add(router, "POST", "/api/v1/h3_order", handlers, 1);
+
+    csilk_server_t* server = csilk_server_new(router);
+    assert(server != NULL);
+
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+    client.server = server;
+    client.protocol = CSILK_PROTO_HTTP3;
+    client.h3_conn = &conn;
+    conn.client = &client;
+
+    /* Concurrent stream 1: stream_id = 0 */
+    csilk_h3_stream_data_t* sd0 = csilk_h3_stream_data_new(0);
+    assert(sd0 != NULL);
+    csilk_ctx_t* ctx0 = calloc(1, sizeof(csilk_ctx_t));
+    assert(ctx0 != NULL);
+    ctx0->arena = csilk_arena_new(4096);
+    _csilk_stream_ctx_init(ctx0, &client, 0);
+    sd0->stream_ctx = ctx0;
+    sd0->stream_ctx_owned = 1;
+    snprintf(sd0->method, sizeof(sd0->method), "POST");
+    snprintf(sd0->path, sizeof(sd0->path), "/api/v1/h3_order");
+    const char* b0 = "{\"stream\":0}";
+    sd0->body_buf = strdup(b0);
+    sd0->body_len = (uint32_t)strlen(b0);
+    sd0->headers_complete = 1;
+
+    /* Concurrent stream 2: stream_id = 4 */
+    csilk_h3_stream_data_t* sd4 = csilk_h3_stream_data_new(4);
+    assert(sd4 != NULL);
+    csilk_ctx_t* ctx4 = calloc(1, sizeof(csilk_ctx_t));
+    assert(ctx4 != NULL);
+    ctx4->arena = csilk_arena_new(4096);
+    _csilk_stream_ctx_init(ctx4, &client, 4);
+    sd4->stream_ctx = ctx4;
+    sd4->stream_ctx_owned = 1;
+    snprintf(sd4->method, sizeof(sd4->method), "POST");
+    snprintf(sd4->path, sizeof(sd4->path), "/api/v1/h3_order");
+    const char* b4 = "{\"stream\":4}";
+    sd4->body_buf = strdup(b4);
+    sd4->body_len = (uint32_t)strlen(b4);
+    sd4->headers_complete = 1;
+
+    /* Dispatch both concurrent streams */
+    int rc0 = csilk_h3_dispatch_stream(&client, sd0);
+    assert(rc0 == 0);
+    assert(ctx0->response.status == 201);
+    assert(ctx0->stream_id == 0);
+
+    int rc4 = csilk_h3_dispatch_stream(&client, sd4);
+    assert(rc4 == 0);
+    assert(ctx4->response.status == 201);
+    assert(ctx4->stream_id == 4);
+
+    /* Verify stream contexts are independent and did not clobber each other */
+    assert(ctx0 != ctx4);
+    assert(ctx0->stream_id == 0);
+    assert(ctx4->stream_id == 4);
+
+    /* Destroying stream 0 does not invalidate stream 4 */
+    csilk_h3_stream_data_free(sd0);
+    assert(ctx4->response.status == 201);
+
+    csilk_h3_stream_data_free(sd4);
+
+    csilk_server_free(server);
+    csilk_router_free(router);
+
+    printf("test_h3_stream_mux: PASS\n");
+}
+
+static void
+test_h3_backpressure_null_guards(void)
+{
+    printf("Testing HTTP/3 response streaming and backpressure null guards...\n");
+
+    assert(csilk_h3_response_write(NULL, NULL, 0) == -1);
+    csilk_h3_response_end(NULL);
+    assert(csilk_h3_response_get_write_queue_size(NULL) == 0);
+    assert(csilk_h3_response_is_writable(NULL) == 0);
+    assert(_h3_get_stream(NULL, 0) == NULL);
+    assert(_h3_get_or_create_stream(NULL, 0) == NULL);
+    _h3_remove_stream(NULL, 0);
+
+    printf("test_h3_backpressure_null_guards: PASS\n");
+}
+
+#ifdef CSILK_HAS_NGTCP2
+static void
+test_h3_response_streaming_and_backpressure(void)
+{
+    printf("Testing HTTP/3 response streaming and backpressure...\n");
+
+    g_h3_drain_callback_called = 0;
+    g_h3_drain_callback_data = NULL;
+
+    struct csilk_h3_conn_s conn;
+    memset(&conn, 0, sizeof(conn));
+
+    /* 1. Create server session with user_data = &conn */
+    csilk_h3_session_t* s = csilk_h3_session_new(0, &conn);
+    assert(s != NULL);
+    conn.nghttp3_conn = s;
+
+    csilk_client_t client;
+    memset(&client, 0, sizeof(client));
+    client.protocol = CSILK_PROTO_HTTP3;
+    client.h3_conn = &conn;
+    conn.client = &client;
+
+    /* 2. Create client session to feed a request on stream 0 */
+    nghttp3_conn*     cl = NULL;
+    nghttp3_callbacks cl_cb = {0};
+    nghttp3_settings  cl_st;
+    nghttp3_settings_default(&cl_st);
+    int rc = nghttp3_conn_client_new(&cl, &cl_cb, &cl_st, NULL, NULL);
+    assert(rc == 0);
+    assert(cl != NULL);
+
+    nghttp3_conn_bind_control_stream(cl, 2);
+    nghttp3_conn_bind_qpack_streams(cl, 6, 10);
+
+    nghttp3_nv req_nv[] = {
+        {(uint8_t*)":method",    (uint8_t*)"GET",       7,  3, NGHTTP3_NV_FLAG_NONE},
+        {(uint8_t*)":scheme",    (uint8_t*)"https",     7,  5, NGHTTP3_NV_FLAG_NONE},
+        {(uint8_t*)":authority", (uint8_t*)"localhost", 10, 9, NGHTTP3_NV_FLAG_NONE},
+        {(uint8_t*)":path",      (uint8_t*)"/stream",   5,  7, NGHTTP3_NV_FLAG_NONE},
+    };
+    rc = nghttp3_conn_submit_request(cl, 0, req_nv, 4, NULL, NULL);
+    assert(rc == 0);
+
+    /* Pump client frames to server session */
+    int64_t     stream_id = -1;
+    int         fin = 0;
+    nghttp3_vec vec[16];
+    while (1) {
+        nghttp3_ssize nvec = nghttp3_conn_writev_stream(cl, &stream_id, &fin, vec, 16);
+        if (nvec <= 0) {
+            break;
+        }
+        size_t total_written = 0;
+        for (nghttp3_ssize i = 0; i < nvec; i++) {
+            nghttp3_conn_read_stream(s, stream_id, vec[i].base, vec[i].len, fin);
+            total_written += vec[i].len;
+        }
+        nghttp3_conn_add_write_offset(cl, stream_id, total_written);
+    }
+
+    csilk_h3_stream_data_t* sd = (csilk_h3_stream_data_t*)nghttp3_conn_get_stream_user_data(s, 0);
+    assert(sd != NULL);
+    assert(sd->stream_ctx != NULL);
+    csilk_ctx_t* ctx = sd->stream_ctx;
+
+    /* Configure backpressure: High=100 bytes, Low=40 bytes, Max=500 bytes */
+    csilk_response_set_watermarks(ctx, 100, 40, 500);
+    int custom_data = 12345;
+    csilk_response_on_drain(ctx, _test_h3_drain_cb, &custom_data);
+
+    assert(csilk_response_is_writable(ctx) == 1);
+    assert(csilk_response_get_write_queue_size(ctx) == 0);
+
+    /* Write 50 bytes (below 100 HWM) */
+    uint8_t chunk1[50];
+    memset(chunk1, 'X', sizeof(chunk1));
+    rc = csilk_response_write(ctx, chunk1, sizeof(chunk1));
+    assert(rc == 1); /* writable */
+    assert(ctx->write_paused == 0);
+    assert(csilk_response_is_writable(ctx) == 1);
+    assert(csilk_response_get_write_queue_size(ctx) == 50);
+
+    /* Write 60 bytes (total 110 >= 100 HWM -> backpressure triggered!) */
+    uint8_t chunk2[60];
+    memset(chunk2, 'Y', sizeof(chunk2));
+    rc = csilk_response_write(ctx, chunk2, sizeof(chunk2));
+    assert(rc == 0); /* backpressure active! */
+    assert(ctx->write_paused == 1);
+    assert(csilk_response_is_writable(ctx) == 0);
+    assert(csilk_response_get_write_queue_size(ctx) == 110);
+    assert(g_h3_drain_callback_called == 0);
+
+    /* Attempt to write 400 bytes (110 + 400 = 510 > 500 max limit) -> rejected */
+    uint8_t big_chunk[400];
+    memset(big_chunk, 'Z', sizeof(big_chunk));
+    rc = csilk_response_write(ctx, big_chunk, sizeof(big_chunk));
+    assert(rc == -1); /* rejected by max_write_buffer_size */
+    assert(csilk_response_get_write_queue_size(ctx) == 110);
+
+    /* Consume frames on server session via writev_stream */
+    while (1) {
+        nghttp3_ssize nvec = nghttp3_conn_writev_stream(s, &stream_id, &fin, vec, 16);
+        if (nvec <= 0) {
+            break;
+        }
+        size_t total_written = 0;
+        for (nghttp3_ssize i = 0; i < nvec; i++) {
+            total_written += vec[i].len;
+        }
+        nghttp3_conn_add_write_offset(s, stream_id, total_written);
+    }
+
+    /* Simulate peer ACK: remote ACKed 80 bytes of QUIC stream 0 (8 bytes framing + 72 bytes payload) */
+    rc = nghttp3_conn_add_ack_offset(s, 0, 80);
+    assert(rc == 0);
+
+    /* Queue drops to 38 (<= 40 Low Water Mark): drain callback must trigger */
+    assert(csilk_response_get_write_queue_size(ctx) == 38);
+    assert(ctx->write_paused == 0);
+    assert(csilk_response_is_writable(ctx) == 1);
+    assert(g_h3_drain_callback_called == 1);
+    assert(g_h3_drain_callback_data == &custom_data);
+
+    /* End the streaming response */
+    csilk_response_end(ctx);
+    assert(sd->resp_ended == 1);
+
+    nghttp3_conn_del(cl);
+    csilk_h3_session_destroy(s);
+
+    printf("test_h3_response_streaming_and_backpressure: PASS\n");
+}
+#endif
+
+static void
 test_h3_0rtt_early_data(void)
 {
     printf("Testing HTTP/3 0-RTT early data configuration...\n");
@@ -537,9 +802,12 @@ main()
     test_h3_set_enabled();
     test_h3_dispatch_guard();
     test_h3_router_dispatch();
+    test_h3_stream_mux();
+    test_h3_backpressure_null_guards();
 #ifdef CSILK_HAS_NGTCP2
     test_h3_quic_tls();
     test_h3_session_send_response_and_body();
+    test_h3_response_streaming_and_backpressure();
     test_h3_0rtt_early_data();
 #endif
     printf("All HTTP/3 protocol tests passed successfully!\n");

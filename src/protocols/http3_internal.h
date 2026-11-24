@@ -128,6 +128,19 @@ CSILK_INTERNAL csilk_h3_transport_t*
 CSILK_INTERNAL void csilk_h3_worker_transport_destroy(csilk_h3_transport_t* t);
 CSILK_INTERNAL void csilk_h3_conn_close(csilk_client_t* client);
 
+/* HTTP/3 Streaming response & backpressure */
+CSILK_INTERNAL int    csilk_h3_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len);
+CSILK_INTERNAL void   csilk_h3_response_end(csilk_ctx_t* c);
+CSILK_INTERNAL size_t csilk_h3_response_get_write_queue_size(csilk_ctx_t* c);
+CSILK_INTERNAL int    csilk_h3_response_is_writable(csilk_ctx_t* c);
+
+/* Stream mux tracking */
+CSILK_INTERNAL struct csilk_h3_stream_s* _h3_get_or_create_stream(struct csilk_h3_conn_s* c,
+                                                                  int64_t stream_id);
+CSILK_INTERNAL struct csilk_h3_stream_s* _h3_get_stream(struct csilk_h3_conn_s* c,
+                                                        int64_t                 stream_id);
+CSILK_INTERNAL void _h3_remove_stream(struct csilk_h3_conn_s* c, int64_t stream_id);
+
 #ifdef __cplusplus
 }
 #endif

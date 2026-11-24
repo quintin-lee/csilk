@@ -672,6 +672,11 @@ csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len)
     if (client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
         return -1;
     }
+
+    if (client->protocol == CSILK_PROTO_HTTP3) {
+        return csilk_h3_response_write(c, data, len);
+    }
+
     csilk_conn_set_state(client, CSILK_CONN_STREAMING);
     size_t q = _csilk_client_get_write_queue_size(client);
 
@@ -716,7 +721,11 @@ csilk_response_get_write_queue_size(csilk_ctx_t* c)
     if (!c || !c->_internal_client) {
         return 0;
     }
-    return _csilk_client_get_write_queue_size((csilk_client_t*)c->_internal_client);
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (client->protocol == CSILK_PROTO_HTTP3) {
+        return csilk_h3_response_get_write_queue_size(c);
+    }
+    return _csilk_client_get_write_queue_size(client);
 }
 
 /** @brief Check if the connection is currently writable (below high water mark).
@@ -731,6 +740,10 @@ csilk_response_is_writable(csilk_ctx_t* c)
     }
     if (c->write_paused) {
         return 0;
+    }
+    csilk_client_t* client = (csilk_client_t*)c->_internal_client;
+    if (client->protocol == CSILK_PROTO_HTTP3) {
+        return csilk_h3_response_is_writable(c);
     }
     size_t q = csilk_response_get_write_queue_size(c);
     return (c->write_high_water_mark == 0 || q < c->write_high_water_mark);
@@ -797,6 +810,11 @@ csilk_response_end(csilk_ctx_t* c)
 
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
     if (!client || client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+        return;
+    }
+
+    if (client->protocol == CSILK_PROTO_HTTP3) {
+        csilk_h3_response_end(c);
         return;
     }
 

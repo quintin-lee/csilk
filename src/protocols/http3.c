@@ -234,6 +234,28 @@ _h3_delete_cipher_ctx(ngtcp2_conn* conn, ngtcp2_crypto_cipher_ctx* cipher_ctx, v
     ngtcp2_crypto_delete_crypto_cipher_ctx_cb(conn, cipher_ctx, user_data);
 }
 
+static int
+_h3_acked_stream_data_offset(ngtcp2_conn* conn,
+                             int64_t      stream_id,
+                             uint64_t     offset,
+                             uint64_t     datalen,
+                             void*        user_data,
+                             void*        stream_user_data)
+{
+    (void)conn;
+    (void)offset;
+    (void)stream_user_data;
+    struct csilk_h3_conn_s* c = (struct csilk_h3_conn_s*)user_data;
+    if (c && c->nghttp3_conn && datalen > 0) {
+        int rv = nghttp3_conn_add_ack_offset(c->nghttp3_conn, stream_id, datalen);
+        if (rv != 0) {
+            CSILK_LOG_W("H3: nghttp3_conn_add_ack_offset failed: %s", nghttp3_strerror(rv));
+            return NGTCP2_ERR_CALLBACK_FAILURE;
+        }
+    }
+    return 0;
+}
+
 /**
  * @brief Build the ngtcp2_callbacks struct for this H3 engine.
  *
@@ -249,6 +271,7 @@ _h3_callbacks(void)
     cbs.recv_crypto_data = ngtcp2_crypto_recv_crypto_data_cb;
     cbs.handshake_completed = _h3_handshake_completed;
     cbs.recv_stream_data = _h3_recv_stream_data;
+    cbs.acked_stream_data_offset = _h3_acked_stream_data_offset;
     cbs.update_key = ngtcp2_crypto_update_key_cb;
     cbs.rand = _h3_rand;
     cbs.get_new_connection_id2 = _h3_get_new_connection_id2;
@@ -440,6 +463,24 @@ _h3_del_conn(csilk_h3_transport_t* t, struct csilk_h3_conn_s* c)
         c->client = NULL;
     }
 
+    /* Clean up active stream contexts. */
+    for (int i = 0; i < CSILK_H3_MAX_STREAMS; i++) {
+        if (c->streams[i].state != 0) {
+            csilk_ctx_t* sctx = (csilk_ctx_t*)c->streams[i].ctx;
+            if (sctx) {
+                csilk_ctx_cleanup(sctx);
+                if (sctx->arena) {
+                    csilk_arena_free(sctx->arena);
+                    sctx->arena = NULL;
+                }
+                free(sctx);
+                c->streams[i].ctx = NULL;
+            }
+            c->streams[i].state = 0;
+        }
+    }
+    c->stream_count = 0;
+
     /* Remove from transport's connection table. */
     for (int i = 0; i < t->conn_count; i++) {
         if (t->conns[i] == c) {
@@ -563,7 +604,16 @@ _h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn)
                                                                  NULL,
                                                                  0,
                                                                  csilk_io_hrtime());
-                (void)written;
+                if (written > 0 && conn->transport && conn->transport->udp_fd >= 0 &&
+                    conn->remote_len > 0) {
+                    sendto(conn->transport->udp_fd,
+                           pktbuf,
+                           (size_t)written,
+                           0,
+                           (struct sockaddr*)&conn->remote,
+                           conn->remote_len);
+                    ngtcp2_conn_update_pkt_tx_time(conn->ngtcp2_conn, csilk_io_hrtime());
+                }
                 nghttp3_conn_add_write_offset(conn->nghttp3_conn, stream_id, 0);
             }
             break;
@@ -598,6 +648,17 @@ _h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn)
 
         if (pdatalen > 0) {
             nghttp3_conn_add_write_offset(conn->nghttp3_conn, stream_id, (size_t)pdatalen);
+        }
+
+        if (written > 0 && conn->transport && conn->transport->udp_fd >= 0 &&
+            conn->remote_len > 0) {
+            sendto(conn->transport->udp_fd,
+                   pktbuf,
+                   (size_t)written,
+                   0,
+                   (struct sockaddr*)&conn->remote,
+                   conn->remote_len);
+            ngtcp2_conn_update_pkt_tx_time(conn->ngtcp2_conn, csilk_io_hrtime());
         }
     }
     return 0;

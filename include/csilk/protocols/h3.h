@@ -230,6 +230,16 @@ typedef struct csilk_h3_stream_data_s {
     const uint8_t* resp_body;
     size_t         resp_body_len;
     size_t         resp_body_offset;
+    /* RFC 9114 Streams & Backpressure */
+    csilk_ctx_t* stream_ctx;
+    int          stream_ctx_owned;
+    void*        h3_conn;           /**< Owning csilk_h3_conn_s* */
+    size_t       write_queue_size;  /**< Unacknowledged outbound stream bytes */
+    uint8_t*     stream_write_buf;  /**< Streaming response buffer */
+    size_t       stream_write_len;  /**< Valid bytes in stream_write_buf */
+    size_t       stream_write_cap;  /**< Allocated capacity of stream_write_buf */
+    int          resp_headers_sent; /**< 1 if response headers submitted */
+    int          resp_ended;        /**< 1 if csilk_response_end called */
 } csilk_h3_stream_data_t;
 
 /* --- HTTP/3 Session (nghttp3) — v1.2+ --- */

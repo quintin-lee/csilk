@@ -236,8 +236,12 @@ CSILK_INTERNAL void _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop
 CSILK_INTERNAL void _csilk_worker_drain_dispatch(worker_pool_t* wp);
 CSILK_INTERNAL int
 _csilk_worker_init_h3(csilk_server_t* server, worker_pool_t* wp, csilk_io_loop_t* loop);
-CSILK_INTERNAL void _csilk_worker_stop_h3(worker_pool_t* wp);
-CSILK_INTERNAL void csilk_h3_conn_close(csilk_client_t* client);
+CSILK_INTERNAL void   _csilk_worker_stop_h3(worker_pool_t* wp);
+CSILK_INTERNAL void   csilk_h3_conn_close(csilk_client_t* client);
+CSILK_INTERNAL int    csilk_h3_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len);
+CSILK_INTERNAL void   csilk_h3_response_end(csilk_ctx_t* c);
+CSILK_INTERNAL size_t csilk_h3_response_get_write_queue_size(csilk_ctx_t* c);
+CSILK_INTERNAL int    csilk_h3_response_is_writable(csilk_ctx_t* c);
 struct csilk_h3_transport_s;
 CSILK_INTERNAL struct csilk_h3_transport_s*
                     csilk_h3_worker_transport_new(csilk_server_t* server, void* wp, int udp_fd);
