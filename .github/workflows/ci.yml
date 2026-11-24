@@ -203,11 +203,11 @@ jobs:
       uses: ./.github/actions/setup-apt
       with:
         packages: >-
-          cmake clang-19 libyaml-dev zlib1g-dev libcurl4-openssl-dev
+          cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev
           libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Configure
-      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang-19 -DUSE_ASAN=ON -DUSE_FUZZER=ON
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DUSE_ASAN=ON -DUSE_FUZZER=ON
 
     - name: Build Fuzzers
       run: cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc fuzz_mcp fuzz_sql_rewrite fuzz_wasm fuzz_h3 -j$(nproc)
