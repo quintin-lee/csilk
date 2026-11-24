@@ -117,6 +117,15 @@ CSILK_INTERNAL struct csilk_h3_conn_s* _h3_new_conn(csilk_h3_transport_t*  t,
                                                     const struct sockaddr* remote,
                                                     socklen_t              remote_len);
 CSILK_INTERNAL void _h3_del_conn(csilk_h3_transport_t* t, struct csilk_h3_conn_s* c);
+CSILK_INTERNAL int  _h3_process_datagram(csilk_h3_transport_t*  t,
+                                         const uint8_t*         buf,
+                                         size_t                 len,
+                                         const struct sockaddr* from,
+                                         socklen_t              fromlen);
+CSILK_INTERNAL csilk_h3_transport_t*
+                    csilk_h3_worker_transport_new(csilk_server_t* server, void* wp, int udp_fd);
+CSILK_INTERNAL void csilk_h3_worker_transport_destroy(csilk_h3_transport_t* t);
+CSILK_INTERNAL void csilk_h3_conn_close(csilk_client_t* client);
 #endif
 
 #ifdef __cplusplus

@@ -10,7 +10,7 @@
 void
 _csilk_client_stop_timers(csilk_client_t* client)
 {
-    if (!client) {
+    if (!client || client->protocol == CSILK_PROTO_HTTP3) {
         return;
     }
 

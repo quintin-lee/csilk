@@ -93,7 +93,9 @@ close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
     while (client) {
         csilk_client_t* next = client->next;
         count++;
-        if (client->ctx.is_websocket) {
+        if (client->protocol == CSILK_PROTO_HTTP3) {
+            csilk_h3_conn_close(client);
+        } else if (client->ctx.is_websocket) {
             /* The WS close-echo path (csilk_ws_parse_frame opcode 0x8) may
              * already be closing this handle — uv_close() asserts on a
              * handle that is closing, so check first. */
@@ -163,6 +165,10 @@ on_stop_async(csilk_io_async_t* handle)
         csilk_io_async_send(&server->worker_pools[i].stop_async);
     }
 
+    if (server->worker_pools && server->worker_pools[0].h3_udp_active) {
+        _csilk_worker_stop_h3(&server->worker_pools[0]);
+    }
+
     csilk_io_stop(server->loop);
 }
 
@@ -214,6 +220,10 @@ on_worker_stop_async(csilk_io_async_t* handle)
 
     if (!csilk_io_is_closing((csilk_io_handle_t*)handle)) {
         csilk_io_close((csilk_io_handle_t*)handle, NULL);
+    }
+
+    if (server->worker_pools[worker_idx].h3_udp_active) {
+        _csilk_worker_stop_h3(&server->worker_pools[worker_idx]);
     }
 
     csilk_io_stop(loop);

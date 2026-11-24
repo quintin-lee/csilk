@@ -39,6 +39,7 @@
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
 #include "csilk/messaging/mq.h"
+#include "csilk/protocols/h3.h"
 
 /* --- Centralized Atomic Initializers --- */
 
@@ -297,6 +298,11 @@ csilk_server_free(csilk_server_t* server)
                 csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
             }
         }
+    }
+
+    if (server->h3_transport) {
+        csilk_h3_transport_destroy((csilk_h3_transport_t*)server->h3_transport);
+        server->h3_transport = NULL;
     }
 
     free(server->spa_doc_root);
@@ -633,6 +639,10 @@ csilk_server_run(csilk_server_t* server, int port)
     _csilk_worker_init_arena_pool(&server->worker_pools[0]);
     _csilk_worker_init_read_buf_pool(&server->worker_pools[0]);
     _csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
+
+    if (server->h3_port > 0) {
+        _csilk_worker_init_h3(server, &server->worker_pools[0], server->loop);
+    }
 
     if (server->config.tcp_keepalive > 0) {
         csilk_io_tcp_keepalive(&server->server_handle, 1, server->config.tcp_keepalive);

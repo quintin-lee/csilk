@@ -613,7 +613,7 @@ _h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn)
  * @param fromlen Sender address length.
  * @return 0 on success, -1 on error.
  */
-static int
+CSILK_INTERNAL int
 _h3_process_datagram(csilk_h3_transport_t*  t,
                      const uint8_t*         buf,
                      size_t                 len,
@@ -844,6 +844,9 @@ csilk_h3_transport_new(int port, const char* cert_pem, const char* key_pem)
 
     int reuse = 1;
     setsockopt(t->udp_fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+#ifdef SO_REUSEPORT
+    setsockopt(t->udp_fd, SOL_SOCKET, SO_REUSEPORT, &reuse, sizeof(reuse));
+#endif
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
@@ -1133,6 +1136,58 @@ csilk_h3_transport_destroy(csilk_h3_transport_t* t)
     free(t);
 }
 
+CSILK_INTERNAL csilk_h3_transport_t*
+csilk_h3_worker_transport_new(csilk_server_t* server, void* wp, int udp_fd)
+{
+    csilk_h3_transport_t* t = calloc(1, sizeof(csilk_h3_transport_t));
+    if (!t) {
+        return NULL;
+    }
+    t->server = server;
+    t->wp = wp;
+    t->udp_fd = udp_fd;
+#ifdef CSILK_HAS_NGTCP2
+    t->udp_nonblocking = 1;
+    if (server) {
+        t->ssl_ctx = (SSL_CTX*)server->h3_ssl_ctx;
+    }
+#endif
+    return t;
+}
+
+CSILK_INTERNAL void
+csilk_h3_worker_transport_destroy(csilk_h3_transport_t* t)
+{
+    if (!t) {
+        return;
+    }
+#ifdef CSILK_HAS_NGTCP2
+    while (t->conn_count > 0) {
+        _h3_del_conn(t, t->conns[t->conn_count - 1]);
+    }
+    t->conn_count = 0;
+    if (t->udp_fd >= 0) {
+        close(t->udp_fd);
+        t->udp_fd = -1;
+    }
+#endif
+    free(t);
+}
+
+CSILK_INTERNAL void
+csilk_h3_conn_close(csilk_client_t* client)
+{
+    if (!client || !client->h3_conn) {
+        return;
+    }
+#ifdef CSILK_HAS_NGTCP2
+    struct csilk_h3_conn_s* c = (struct csilk_h3_conn_s*)client->h3_conn;
+    if (c->transport) {
+        _h3_del_conn(c->transport, c);
+    }
+#endif
+}
+
 /* ===================================================================
  * TLS setup helper
  * =================================================================== */
@@ -1280,7 +1335,8 @@ csilk_h3_set_enabled(void* server, int port)
     if (!server || port <= 0) {
         return -1;
     }
-    csilk_server_t*               srv = (csilk_server_t*)server;
+    csilk_server_t* srv = (csilk_server_t*)server;
+    srv->h3_port = port;
     static csilk_quic_transport_t h3_vtable = {
         .name = "ngtcp2",
         .on_stream_recv = _h3_on_stream_recv,
@@ -1291,6 +1347,9 @@ csilk_h3_set_enabled(void* server, int port)
     if (t) {
         t->server = srv;
         srv->h3_transport = t;
+#ifdef CSILK_HAS_NGTCP2
+        srv->h3_ssl_ctx = t->ssl_ctx;
+#endif
     }
     CSILK_LOG_I("HTTP/3: enabled on server, UDP port %d", port);
     return 0;

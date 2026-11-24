@@ -63,6 +63,7 @@ dispatch_init_tls_key(void)
 }
 
 static _Thread_local bool g_dispatch_tls_registered = false;
+static _Thread_local char g_h3_worker_recv_buf[65536];
 
 static inline void
 ensure_dispatch_tls_registered(void)
@@ -337,6 +338,166 @@ bind_and_listen(csilk_io_loop_t* loop,
     return csilk_io_listen((csilk_io_stream_t*)out_handle, backlog, on_new_connection);
 }
 
+/* --- HTTP/3 Worker UDP socket & transport --- */
+
+#ifndef CSILK_USE_URING
+static void
+on_worker_h3_uv_alloc(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* buf)
+{
+    (void)handle;
+    (void)suggested_size;
+    buf->base = g_h3_worker_recv_buf;
+    buf->len = sizeof(g_h3_worker_recv_buf);
+}
+
+static void
+on_worker_h3_uv_recv(csilk_io_udp_t*        handle,
+                     ssize_t                nread,
+                     const csilk_io_buf_t*  buf,
+                     const struct sockaddr* addr,
+                     unsigned int           flags)
+{
+    (void)flags;
+    if (nread <= 0 || !addr || !buf || !buf->base) {
+        return;
+    }
+    worker_pool_t* wp = (worker_pool_t*)handle->data;
+    if (!wp || !wp->h3_transport) {
+        return;
+    }
+    socklen_t addrlen =
+        (addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+    extern int _h3_process_datagram(
+        void* t, const uint8_t* buf, size_t len, const struct sockaddr* from, socklen_t fromlen);
+    _h3_process_datagram(wp->h3_transport, (const uint8_t*)buf->base, (size_t)nread, addr, addrlen);
+}
+#else
+static void
+on_worker_h3_recv_uring(csilk_io_udp_t*        handle,
+                        size_t                 nread,
+                        const csilk_io_buf_t*  buf,
+                        const struct sockaddr* addr)
+{
+    if (nread == 0 || !addr || !buf || !buf->base) {
+        return;
+    }
+    worker_pool_t* wp = (worker_pool_t*)handle->data;
+    if (!wp || !wp->h3_transport) {
+        return;
+    }
+    socklen_t addrlen =
+        (addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+    extern int _h3_process_datagram(
+        void* t, const uint8_t* buf, size_t len, const struct sockaddr* from, socklen_t fromlen);
+    _h3_process_datagram(wp->h3_transport, (const uint8_t*)buf->base, nread, addr, addrlen);
+}
+#endif
+
+CSILK_INTERNAL int
+_csilk_worker_init_h3(csilk_server_t* server, worker_pool_t* wp, csilk_io_loop_t* loop)
+{
+    if (!server || server->h3_port <= 0 || !wp || !loop) {
+        return 0;
+    }
+#ifndef _WIN32
+    int fd;
+#ifdef __APPLE__
+    fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd >= 0) {
+        int flags = fcntl(fd, F_GETFL, 0);
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+    }
+#else
+    fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+#endif
+    if (fd < 0) {
+        CSILK_LOG_E("Server: worker %d failed to create HTTP/3 UDP socket: %s",
+                    wp->worker_index,
+                    strerror(errno));
+        return -1;
+    }
+
+    int on = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+#ifdef SO_REUSEPORT
+    setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+#endif
+
+#if defined(__linux__) && defined(SO_INCOMING_CPU)
+    if (wp->worker_index >= 0) {
+        long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+        if (num_cores > 0) {
+            int cpu = (int)(wp->worker_index % num_cores);
+            setsockopt(fd, SOL_SOCKET, SO_INCOMING_CPU, &cpu, sizeof(cpu));
+        }
+    }
+#endif
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)server->h3_port);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        CSILK_LOG_E("Server: worker %d failed to bind HTTP/3 UDP port %d: %s",
+                    wp->worker_index,
+                    server->h3_port,
+                    strerror(errno));
+        close(fd);
+        return -1;
+    }
+
+    extern void* csilk_h3_worker_transport_new(
+        csilk_server_t * server, worker_pool_t * wp, int udp_fd);
+    wp->h3_transport = csilk_h3_worker_transport_new(server, wp, fd);
+    if (!wp->h3_transport) {
+        close(fd);
+        return -1;
+    }
+
+#ifdef CSILK_USE_URING
+    csilk_io_udp_init(loop, &wp->h3_udp_handle);
+    wp->h3_udp_handle.data = wp;
+    csilk_io_udp_open(&wp->h3_udp_handle, fd);
+    csilk_io_udp_recv_start(&wp->h3_udp_handle, on_worker_h3_recv_uring);
+#else
+    csilk_io_udp_init(loop, &wp->h3_udp_handle);
+    wp->h3_udp_handle.data = wp;
+    csilk_io_udp_open(&wp->h3_udp_handle, (csilk_io_os_sock_t)fd);
+    csilk_io_udp_recv_start_raw(&wp->h3_udp_handle, on_worker_h3_uv_alloc, on_worker_h3_uv_recv);
+#endif
+    wp->h3_udp_active = true;
+    CSILK_LOG_I(
+        "Server: worker %d listening for HTTP/3 on UDP port %d", wp->worker_index, server->h3_port);
+    return 0;
+#else
+    return 0;
+#endif
+}
+
+CSILK_INTERNAL void
+_csilk_worker_stop_h3(worker_pool_t* wp)
+{
+    if (!wp) {
+        return;
+    }
+    if (wp->h3_udp_active) {
+#ifdef CSILK_USE_URING
+        csilk_io_udp_recv_stop(&wp->h3_udp_handle);
+        csilk_io_udp_close(&wp->h3_udp_handle);
+#else
+        csilk_io_udp_recv_stop(&wp->h3_udp_handle);
+        csilk_io_close((csilk_io_handle_t*)&wp->h3_udp_handle, NULL);
+#endif
+        wp->h3_udp_active = false;
+    }
+    if (wp->h3_transport) {
+        extern void csilk_h3_worker_transport_destroy(void* t);
+        csilk_h3_worker_transport_destroy(wp->h3_transport);
+        wp->h3_transport = NULL;
+    }
+}
+
 /* --- Worker thread --- */
 
 /** @brief Worker thread entry point for multi-threaded SO_REUSEPORT mode. */
@@ -388,6 +549,10 @@ worker_thread(void* arg)
         return;
     }
 
+    if (server->h3_port > 0) {
+        _csilk_worker_init_h3(server, wp, loop_ptr);
+    }
+
     atomic_store_explicit(&data->success, 1, memory_order_release);
     if (barrier) {
         csilk_barrier_wait(barrier);
@@ -405,6 +570,9 @@ worker_thread(void* arg)
      * the loop closes and csilk_server_free() releases pool entries. */
     _csilk_worker_cleanup_leftover_clients(server, wp, loop_ptr);
     _csilk_worker_drain_dispatch(wp);
+    if (wp->h3_udp_active) {
+        _csilk_worker_stop_h3(wp);
+    }
     csilk_arena_flush_free_list();
     csilk_body_pool_cleanup();
     csilk_io_loop_close(loop_ptr);

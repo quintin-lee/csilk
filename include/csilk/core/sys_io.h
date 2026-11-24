@@ -860,6 +860,13 @@ _csilk_udp_close(csilk_io_udp_t* handle, uv_close_cb cb)
     uv_close((uv_handle_t*)handle, cb);
 }
 
+#define csilk_io_udp_init(loop, handle) _csilk_udp_init(loop, handle)
+#define csilk_io_udp_open(handle, sock) _csilk_udp_open(handle, sock)
+#define csilk_io_udp_bind(handle, addr) _csilk_udp_bind(handle, addr)
+#define csilk_io_udp_recv_stop(handle) _csilk_udp_recv_stop(handle)
+#define csilk_io_udp_recv_start_raw(handle, alloc_cb, recv_cb)                                     \
+    uv_udp_recv_start((handle), (alloc_cb), (recv_cb))
+
 /** @brief libuv UDP recv bridge (definition). */
 static void
 _csilk_udp_recv_bridge(uv_udp_t*              handle,
@@ -882,6 +889,9 @@ _csilk_udp_recv_bridge(uv_udp_t*              handle,
     csbuf.len = (size_t)nread;
     ctx->user_cb((csilk_io_udp_t*)handle, (size_t)nread, &csbuf, addr);
     (void)flags;
+    if (buf && buf->base) {
+        free(buf->base);
+    }
 }
 /** @brief Filesystem-event callback type (libuv fs-event callback). */
 typedef uv_fs_event_cb csilk_io_fs_event_cb;

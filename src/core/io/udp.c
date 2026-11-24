@@ -142,6 +142,9 @@ csilk_io_udp_bind(csilk_io_udp_t* handle, const struct sockaddr* addr)
         }
         int on = 1;
         setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+#ifdef SO_REUSEPORT
+        setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+#endif
         if (family == AF_INET6) {
             /* Allow dual-stack: accept both IPv4-mapped and native IPv6. */
             int v6only = 0;
