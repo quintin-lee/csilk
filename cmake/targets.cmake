@@ -1,7 +1,9 @@
 # cmake/targets.cmake — modular csilk targets and compatibility aliases
 
 # ── Common target setup ───────────────────────────────────────────────────
-function(csilk_target_setup TARGET VISIBILITY TYPE)
+# Shared compile-time setup: flags, definitions, include dirs, PCH.
+# Eliminates duplication between the target and object setup functions.
+function(csilk_compile_setup TARGET)
   target_compile_options(${TARGET} PRIVATE
       "${CSILK_COMMON_FLAGS}"
       "${CSILK_RELEASE_FLAGS}"
@@ -41,6 +43,23 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
       "CSILK_TLS_DISPATCH_CAPACITY=${CSILK_TLS_DISPATCH_CAPACITY}"
       "CSILK_WF_CLUSTER_MAX_BINDINGS=${CSILK_WF_CLUSTER_MAX_BINDINGS}"
   )
+  target_include_directories(${TARGET} PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+      $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}>
+      $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}/src>
+  )
+  if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
+    target_precompile_headers(${TARGET} PRIVATE
+        <stdio.h> <stdlib.h> <string.h> <stdint.h> <time.h> <errno.h>
+    )
+  endif()
+endfunction()
+
+function(csilk_target_setup TARGET VISIBILITY TYPE)
+
+  csilk_compile_setup(${TARGET})
+
   target_link_options(${TARGET} PUBLIC
       "$<$<BOOL:${USE_COVERAGE}>:--coverage>"
       "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
@@ -94,80 +113,22 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
   endif()
 
   target_include_directories(${TARGET} PUBLIC
-      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-      $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
       $<INSTALL_INTERFACE:include>
-      $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}>
-      $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}/src>
   )
-
-  if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
-    target_precompile_headers(${TARGET} PRIVATE
-        <stdio.h> <stdlib.h> <string.h> <stdint.h> <time.h> <errno.h>
-    )
-  endif()
 endfunction()
 
 # Object libraries are the single compilation owner for each module. Static
 # and shared wrappers reuse these objects, so CSILK_BUILD_SHARED does not
 # compile the same source files twice.
 function(csilk_object_setup TARGET)
-  target_compile_options(${TARGET} PRIVATE
-      "${CSILK_COMMON_FLAGS}"
-      "${CSILK_RELEASE_FLAGS}"
-      "${CSILK_DEBUG_FLAGS}"
-      "${CSILK_AVX2_FLAGS}"
-      "$<$<BOOL:${CSILK_HAS_AVX512}>:-DCSILK_HAS_AVX512>"
-      "$<$<BOOL:${USE_COVERAGE}>:--coverage;-O0;-g>"
-      "$<$<BOOL:${USE_ASAN}>:${CSILK_ASAN_FLAGS}>"
-      "$<$<BOOL:${USE_TSAN}>:${CSILK_TSAN_FLAGS}>"
-  )
-  target_compile_definitions(${TARGET} PRIVATE
-      CSILK_SWAGGER_UI_DIR="${CMAKE_CURRENT_SOURCE_DIR}/share/swagger-ui"
-      "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
-      "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
-      "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
-      "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
-      "$<$<BOOL:${CSILK_HAS_WAMR}>:HAS_WAMR>"
-      "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
-      "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
-  )
-  target_compile_definitions(${TARGET} PUBLIC
-      _GNU_SOURCE
-      "$<$<BOOL:${CSILK_HAS_MYSQL}>:HAS_MYSQL>"
-      "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
-      "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
-      "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
-      "$<$<BOOL:${CSILK_HAS_WAMR}>:HAS_WAMR>"
-      "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
-      "$<$<BOOL:${CSILK_ENABLE_EXPERIMENTAL_STUBS}>:CSILK_ENABLE_EXPERIMENTAL_STUBS=1>"
-      "$<$<NOT:$<BOOL:${CSILK_ENABLE_EXPERIMENTAL_STUBS}>>:CSILK_ENABLE_EXPERIMENTAL_STUBS=0>"
-      "CSILK_HEADER_BUCKETS=${CSILK_HEADER_BUCKETS}"
-      "CSILK_MAX_PARAMS=${CSILK_MAX_PARAMS}"
-      "CSILK_MAX_STORAGE=${CSILK_MAX_STORAGE}"
-      "CSILK_DEFAULT_ARENA_SIZE=${CSILK_DEFAULT_ARENA_SIZE}"
-      "CSILK_ARENA_TIER_COUNT=${CSILK_ARENA_TIER_COUNT}"
-      "CSILK_MAX_TLS_CHUNKS=${CSILK_MAX_TLS_CHUNKS}"
-      "CSILK_TLS_DISPATCH_CAPACITY=${CSILK_TLS_DISPATCH_CAPACITY}"
-      "CSILK_WF_CLUSTER_MAX_BINDINGS=${CSILK_WF_CLUSTER_MAX_BINDINGS}"
-  )
-  target_include_directories(${TARGET} PUBLIC
-      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-      $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-      $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}>
-      $<BUILD_INTERFACE:${yyjson_SOURCE_DIR}/src>
-  )
+
+  csilk_compile_setup(${TARGET})
+
   if(CMAKE_INCLUDE_PATH)
     target_include_directories(${TARGET} PRIVATE ${CMAKE_INCLUDE_PATH})
   endif()
-  # Internal umbrella headers (include/csilk/core/internal.h,
-  # src/core/internal/srv_internal.h) are included across module boundaries and
-  # pull in <uv.h>, <llhttp.h>, and <nghttp2/nghttp2.h>, while module sources
-  # pull in <openssl/*.h>, <yaml.h>, <zlib.h>, <sqlite3.h>, and <curl/curl.h>.
   # Give every module OBJECT library PRIVATE visibility to all discovered
-  # third-party targets so non-default include roots (e.g. Homebrew keg-only
-  # prefixes on macOS) are always present on the compile line without altering
-  # the public link interface of exported archives.
+  # third-party targets so non-default include roots are always present.
   if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
     foreach(_ext_dep
         Threads::Threads
@@ -186,17 +147,9 @@ function(csilk_object_setup TARGET)
       endif()
     endforeach()
   endif()
-  # OPTIMIZE_DEPENDENCIES drops the build-order edges that linking the module
-  # dependencies (csilk_link_module) would otherwise add, so module objects
-  # still compile in parallel instead of waiting for upstream archives.
   set_target_properties(${TARGET} PROPERTIES
       POSITION_INDEPENDENT_CODE ON
       OPTIMIZE_DEPENDENCIES ON)
-  if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
-    target_precompile_headers(${TARGET} PRIVATE
-        <stdio.h> <stdlib.h> <string.h> <stdint.h> <time.h> <errno.h>
-    )
-  endif()
 endfunction()
 
 set(CSILK_AVX2_FLAGS "")
