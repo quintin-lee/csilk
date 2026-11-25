@@ -195,10 +195,13 @@ csilk_mcp_msg_create_error(csilk_json_t* id, int code, const char* message)
  * @brief Build a success-response csilk_mcp_msg_t from an id and result.
  *
  * Always allocates from the heap (never an arena). Produces a frame with
- * jsonrpc "2.0", an optional copied id, and a copied "result" payload.
+ * jsonrpc "2.0", an optional copied id, and the result payload (ownership
+ * transferred to the message).
  *
  * @param[in] id     Request id to echo (may be NULL for notifications).
- * @param[in] result Result payload to copy (may be NULL).
+ * @param[in] result Result payload; ownership transferred to the returned
+ *                   message (NULL allowed).  On failure the caller must
+ *                   free @p result itself.
  * @return A newly allocated csilk_mcp_msg_t, or NULL on allocation failure.
  *         The caller frees it with free().
  */
@@ -207,6 +210,9 @@ csilk_mcp_msg_create_response(csilk_json_t* id, csilk_json_t* result)
 {
     csilk_mcp_msg_t* msg = (csilk_mcp_msg_t*)calloc(1, sizeof(csilk_mcp_msg_t));
     if (!msg) {
+        if (result) {
+            csilk_json_free(result);
+        }
         return NULL;
     }
 
@@ -214,9 +220,7 @@ csilk_mcp_msg_create_response(csilk_json_t* id, csilk_json_t* result)
     if (id) {
         msg->id = csilk_json_copy(id);
     }
-    if (result) {
-        msg->result = csilk_json_copy(result);
-    }
+    msg->result = result; /* ownership transferred */
 
     return msg;
 }

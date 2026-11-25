@@ -104,7 +104,7 @@ _otlp_state_ensure(void)
         st->cap = OTLP_SPAN_BUF_CAP;
         atomic_init(&st->sample_rate, OTLP_SAMPLE_RATE_DEFAULT);
         atomic_init(&st->total_spans, 0);
-        st->init_once = CSILK_ONCE_INIT;
+        csilk_once_init(&st->init_once);
         g_otlp_state = st;
     }
     csilk_once(&g_otlp_state->init_once, _otlp_init_once_cb);
@@ -129,7 +129,7 @@ _otlp_state_ensure_server(csilk_server_t* server)
         st->cap = OTLP_SPAN_BUF_CAP;
         atomic_init(&st->sample_rate, OTLP_SAMPLE_RATE_DEFAULT);
         atomic_init(&st->total_spans, 0);
-        st->init_once = CSILK_ONCE_INIT;
+        csilk_once_init(&st->init_once);
         server->otlp_state = st;
     }
     /* Initialize this server's buffers (buffer/sidecar only; hooks stay global). */

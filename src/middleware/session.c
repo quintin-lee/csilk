@@ -127,7 +127,7 @@ session_store_ensure(void)
             CSILK_LOG_E("Session: failed to allocate session store");
             return NULL;
         }
-        store->init_once = CSILK_ONCE_INIT;
+        csilk_once_init(&store->init_once);
         atomic_init(&store->session_count, 0);
         atomic_init(&store->session_max, SESSION_MAX_DEFAULT);
         g_session_store = store;
@@ -154,7 +154,7 @@ session_store_ensure_server(csilk_server_t* server)
             CSILK_LOG_E("Session: failed to allocate per-server session store");
             return NULL;
         }
-        store->init_once = CSILK_ONCE_INIT;
+        csilk_once_init(&store->init_once);
         atomic_init(&store->session_count, 0);
         atomic_init(&store->session_max, SESSION_MAX_DEFAULT);
         server->session_store = store;

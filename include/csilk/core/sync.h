@@ -26,6 +26,17 @@ typedef pthread_once_t csilk_once_t;
 #define CSILK_ONCE_INIT PTHREAD_ONCE_INIT
 
 /**
+ * @brief Portable initialization of a csilk_once_t.
+ * @param[in,out] o Once control to initialize.
+ */
+static inline void
+csilk_once_init(csilk_once_t* o)
+{
+    static const csilk_once_t init = PTHREAD_ONCE_INIT;
+    *o = init;
+}
+
+/**
  * @brief Initialize a mutex.
  * @param[in,out] m Mutex to initialize.
  * @return 0 on success, or a pthread error number on failure.
@@ -302,6 +313,17 @@ typedef uv_thread_t csilk_thread_t;
 typedef uv_once_t csilk_once_t;
 /** @brief Initializer for a csilk_once_t. */
 #define CSILK_ONCE_INIT UV_ONCE_INIT
+
+/**
+ * @brief Portable initialization of a csilk_once_t.
+ * @param[in,out] o Once control to initialize.
+ */
+static inline void
+csilk_once_init(csilk_once_t* o)
+{
+    static const csilk_once_t init = UV_ONCE_INIT;
+    *o = init;
+}
 
 /**
  * @brief Initialize a mutex.
