@@ -17,8 +17,45 @@
 
 #include "csilk/protocols/mcp.h"
 #include "csilk/protocols/websocket.h"
+#include "csilk/app/app.h"
 #include "mcp_internal.h"
 #include "workflow/workflow_internal.h"
+#include "csilk/core/ctx/context.h"
+#include "core/internal/srv_internal.h"
+
+/**
+ * @brief Resolve the per-server MCP server for a request context.
+ *
+ * The HTTP/SSE and WebSocket handlers registered by csilk_mcp_server_bind_app()
+ * carry no per-request server pointer in their signature.  bind_app() stashes
+ * the csilk_mcp_server_t* in the owning HTTP server's per-server mcp_server
+ * slot, so a handler recovers it via csilk_ctx_get_server(c)->mcp_server.
+ * Falls back to the legacy csilk_get_param(c, "_mcp_server") path-param and
+ * the csilk_get(c, "_mcp_server") ctx-storage path for compatibility with
+ * callers that inject the server manually (e.g. tests, raw handlers).
+ *
+ * @param c The request context.
+ * @return The bound csilk_mcp_server_t*, or NULL if none was bound.
+ */
+static csilk_mcp_server_t*
+_csilk_mcp_server_for_ctx(csilk_ctx_t* c)
+{
+    if (!c) {
+        return NULL;
+    }
+    csilk_server_t* srv = csilk_ctx_get_server(c);
+    if (srv) {
+        csilk_mcp_server_t* mcp = (csilk_mcp_server_t*)srv->mcp_server;
+        if (mcp) {
+            return mcp;
+        }
+    }
+    csilk_mcp_server_t* via_param = (csilk_mcp_server_t*)csilk_get_param(c, "_mcp_server");
+    if (via_param) {
+        return via_param;
+    }
+    return (csilk_mcp_server_t*)csilk_get(c, "_mcp_server");
+}
 
 /**
  * @brief Create a new MCP server instance.
@@ -568,7 +605,7 @@ csilk_mcp_server_start_stdio(csilk_mcp_server_t* server)
 static void
 mcp_sse_post_handler(csilk_ctx_t* c)
 {
-    csilk_mcp_server_t* server = (csilk_mcp_server_t*)csilk_get_param(c, "_mcp_server");
+    csilk_mcp_server_t* server = _csilk_mcp_server_for_ctx(c);
     size_t              body_len = 0;
     const char*         body = csilk_get_body(c, &body_len);
 
@@ -588,15 +625,22 @@ mcp_sse_post_handler(csilk_ctx_t* c)
     }
 
     csilk_mcp_msg_t* resp = handle_mcp_request(server, req);
-    char*            out = resp ? csilk_mcp_msg_serialize(resp, NULL) : strdup("{}");
+    char*            out = resp ? csilk_mcp_msg_serialize(resp, NULL) : NULL;
     const char*      payload = out ? out : "{}";
+    size_t           payload_len = strlen(payload);
 
     csilk_set_status(c, 200);
-    csilk_set_request_header(c, "Content-Type", "application/json");
-    csilk_set_response_body(c, payload, strlen(payload), 0);
+    csilk_set_header(c, "Content-Type", "application/json");
+    if (out) {
+        /* Heap-owned: ctx takes ownership and frees it when the arena resets. */
+        csilk_set_response_body(c, payload, payload_len, 1);
+    } else {
+        /* Static literal: borrowed, no free needed. */
+        csilk_set_response_body(c, payload, payload_len, 0);
+    }
 
     if (out) {
-        free(out);
+        /* Ownership transferred to ctx above; do not free here. */
     }
     if (resp) {
         if (resp->id) {
@@ -647,10 +691,7 @@ mcp_ws_on_message(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode
     if (!c || !payload || len == 0) {
         return;
     }
-    csilk_mcp_server_t* server = (csilk_mcp_server_t*)csilk_get_param(c, "_mcp_server");
-    if (!server) {
-        server = (csilk_mcp_server_t*)csilk_get(c, "_mcp_server");
-    }
+    csilk_mcp_server_t* server = _csilk_mcp_server_for_ctx(c);
     if (!server) {
         const char* err =
             "{\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32603,\"message\":\"Invalid server\"}}";
@@ -714,6 +755,9 @@ csilk_mcp_server_bind_ws(csilk_mcp_server_t* server, csilk_app_t* app, const cha
     if (!server || !app) {
         return -1;
     }
+    if (csilk_app_server(app)) {
+        csilk_app_server(app)->mcp_server = server;
+    }
     const char* path = (ws_path && ws_path[0] != '\0') ? ws_path : "/mcp/ws";
     csilk_app_add_route(app, "GET", path, mcp_ws_handler);
     return 0;
@@ -738,6 +782,16 @@ csilk_mcp_server_bind_app(csilk_mcp_server_t* server, csilk_app_t* app, const ch
 {
     if (!server || !app) {
         return -1;
+    }
+
+    /* Stash the MCP server in the owning HTTP server's per-server slot so the
+     * registered handlers can recover it at request time via
+     * csilk_ctx_get_server(c)->mcp_server (the handler signature carries no
+     * per-request server pointer).  csilk_app_server() returns the app's HTTP
+     * server, which exists after csilk_app_new(). */
+    csilk_server_t* http_srv = csilk_app_server(app);
+    if (http_srv) {
+        http_srv->mcp_server = server;
     }
 
     const char* pfx = route_prefix ? route_prefix : "/mcp";

@@ -277,6 +277,7 @@ struct csilk_server_s {
     void* ws_room_mgr;   /**< WebSocket room manager (ws_room_manager_t, NULL until first join). */
     void* session_store; /**< Per-server session store (session_store_t*, NULL until first use). */
     void* otlp_state;    /**< Per-server OTLP tracer state (otlp_state_t*, NULL until first use). */
+    void* mcp_server;    /**< Per-server MCP server (csilk_mcp_server_t*, NULL unless bind_app). */
 };
 
 #define CSILK_H2_INLINE_BUCKETS 16
