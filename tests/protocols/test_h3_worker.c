@@ -39,10 +39,12 @@ test_worker_pool_h3_fields_and_reset(void)
     csilk_server_t* server = csilk_server_new(NULL);
     assert(server != NULL);
 
-    /* Verify server H3 fields exist */
-    server->h3_port = 4433;
-    assert(server->h3_port == 4433);
-    assert(server->h3_ssl_ctx == NULL);
+    /* Verify server H3 state fields exist */
+    server->h3_state = calloc(1, sizeof(csilk_h3_state_t));
+    assert(server->h3_state != NULL);
+    server->h3_state->port = 4433;
+    assert(server->h3_state->port == 4433);
+    assert(server->h3_state->ssl_ctx == NULL);
 
     /* Setup a dummy worker pool */
     worker_pool_t wp;
@@ -148,7 +150,9 @@ test_h3_multi_worker_udp_reuseport(void)
 
     csilk_server_t* server = csilk_server_new(NULL);
     assert(server != NULL);
-    server->h3_port = 24433;
+    server->h3_state = calloc(1, sizeof(csilk_h3_state_t));
+    assert(server->h3_state != NULL);
+    server->h3_state->port = 24433;
 
     csilk_io_loop_t loop0;
     csilk_io_loop_init(&loop0);
@@ -210,7 +214,9 @@ test_h3_shutdown_drain_active_clients(void)
 
     csilk_server_t* server = csilk_server_new(NULL);
     assert(server != NULL);
-    server->h3_port = 24434;
+    server->h3_state = calloc(1, sizeof(csilk_h3_state_t));
+    assert(server->h3_state != NULL);
+    server->h3_state->port = 24434;
 
     csilk_io_loop_t loop;
     csilk_io_loop_init(&loop);

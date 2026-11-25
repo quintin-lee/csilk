@@ -1226,8 +1226,8 @@ csilk_h3_worker_transport_new(csilk_server_t* server, void* wp, int udp_fd)
     t->udp_fd = udp_fd;
 #ifdef CSILK_HAS_NGTCP2
     t->udp_nonblocking = 1;
-    if (server) {
-        t->ssl_ctx = (SSL_CTX*)server->h3_ssl_ctx;
+    if (server && server->h3_state) {
+        t->ssl_ctx = (SSL_CTX*)server->h3_state->ssl_ctx;
     }
 #endif
     return t;
@@ -1351,11 +1351,11 @@ csilk_h3_quic_tls_new(SSL_CTX* ssl_ctx)
 static int
 _h3_on_stream_recv(csilk_server_t* server, int64_t stream_id, const uint8_t* data, size_t len)
 {
-    if (!server || !server->h3_transport) {
+    if (!server || !server->h3_state || !server->h3_state->transport) {
         return 0;
     }
 #ifdef CSILK_HAS_NGTCP2
-    csilk_h3_transport_t* t = (csilk_h3_transport_t*)server->h3_transport;
+    csilk_h3_transport_t* t = (csilk_h3_transport_t*)server->h3_state->transport;
     for (int i = 0; i < t->conn_count; i++) {
         struct csilk_h3_conn_s* c = t->conns[i];
         if (c && c->nghttp3_conn) {
@@ -1378,11 +1378,11 @@ _h3_on_stream_recv(csilk_server_t* server, int64_t stream_id, const uint8_t* dat
 static int
 _h3_on_stream_send(csilk_server_t* server, int64_t stream_id, const uint8_t* data, size_t len)
 {
-    if (!server || !server->h3_transport) {
+    if (!server || !server->h3_state || !server->h3_state->transport) {
         return 0;
     }
 #ifdef CSILK_HAS_NGTCP2
-    csilk_h3_transport_t* t = (csilk_h3_transport_t*)server->h3_transport;
+    csilk_h3_transport_t* t = (csilk_h3_transport_t*)server->h3_state->transport;
     for (int i = 0; i < t->conn_count; i++) {
         struct csilk_h3_conn_s* c = t->conns[i];
         if (c && c->nghttp3_conn) {
@@ -1414,19 +1414,23 @@ csilk_h3_set_enabled(void* server, int port)
         return -1;
     }
     csilk_server_t* srv = (csilk_server_t*)server;
-    srv->h3_port = port;
+    /* csilk_server_set_quic_transport ensures h3_state exists before writing. */
     static csilk_quic_transport_t h3_vtable = {
         .name = "ngtcp2",
         .on_stream_recv = _h3_on_stream_recv,
         .on_stream_send = _h3_on_stream_send,
     };
     csilk_server_set_quic_transport(srv, &h3_vtable);
+    if (!srv->h3_state) {
+        return -1;
+    }
+    srv->h3_state->port = port;
     csilk_h3_transport_t* t = csilk_h3_transport_new(port, NULL, NULL);
     if (t) {
         t->server = srv;
-        srv->h3_transport = t;
+        srv->h3_state->transport = t;
 #ifdef CSILK_HAS_NGTCP2
-        srv->h3_ssl_ctx = t->ssl_ctx;
+        srv->h3_state->ssl_ctx = t->ssl_ctx;
 #endif
     }
     CSILK_LOG_I("HTTP/3: enabled on server, UDP port %d", port);

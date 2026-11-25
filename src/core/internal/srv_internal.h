@@ -219,6 +219,21 @@ typedef struct csilk_runtime_config_s {
 } csilk_runtime_config_t;
 
 /**
+/**
+ * @brief HTTP/3 (QUIC) transport state, consolidated on the server.
+ *
+ * Holds the H3/QUIC fields that were previously scattered as independent
+ * members of csilk_server_s. Lazily allocated when HTTP/3 is enabled and
+ * freed at server teardown. Worker-local transports live on worker_pool_t.
+ */
+typedef struct {
+    int   port;        /**< Configured HTTP/3 UDP port (e.g. 443), 0 = disabled. */
+    void* transport;   /**< Shared csilk_h3_transport_t* (main loop; NULL until enabled). */
+    void* ssl_ctx;     /**< Shared OpenSSL SSL_CTX* for QUIC across workers. */
+    void* quic_vtable; /**< QUIC transport vtable (API stub; actual H3 I/O uses transport). */
+} csilk_h3_state_t;
+
+/**
  * @brief Main Server structure — represents the core HTTP server instance.
  *
  * Manages the I/O event loop (libuv or io_uring), HTTP listener, configuration, global
@@ -257,11 +272,8 @@ struct csilk_server_s {
     _Atomic(csilk_hook_array_t*) hooks[CSILK_HOOK_COUNT]; /**< Registered immutable hook arrays. */
     csilk_mutex_t                hook_mutex;   /**< Protects hook registration/removal CoW. */
     csilk_mutex_t                config_mutex; /**< Protects runtime config updates. */
-    void* quic_vtable;   /**< QUIC transport vtable (API stub; actual H3 I/O uses h3_transport). */
-    void* h3_transport;  /**< Active csilk_h3_transport_t instance (if HTTP/3 enabled). */
-    int   h3_port;       /**< Configured HTTP/3 UDP port (e.g. 443). */
-    void* h3_ssl_ctx;    /**< Shared OpenSSL SSL_CTX* for QUIC across workers. */
-    void* app;           /**< Back-reference to owning csilk_app_t (NULL for bare servers). */
+    csilk_h3_state_t* h3_state; /**< Consolidated HTTP/3/QUIC state (NULL unless H3 enabled). */
+    void*             app; /**< Back-reference to owning csilk_app_t (NULL for bare servers). */
     void* ws_room_mgr;   /**< WebSocket room manager (ws_room_manager_t, NULL until first join). */
     void* session_store; /**< Per-server session store (session_store_t*, NULL until first use). */
 };

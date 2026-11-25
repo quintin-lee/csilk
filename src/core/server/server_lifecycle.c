@@ -300,9 +300,12 @@ csilk_server_free(csilk_server_t* server)
         }
     }
 
-    if (server->h3_transport) {
-        csilk_h3_transport_destroy((csilk_h3_transport_t*)server->h3_transport);
-        server->h3_transport = NULL;
+    if (server->h3_state) {
+        if (server->h3_state->transport) {
+            csilk_h3_transport_destroy((csilk_h3_transport_t*)server->h3_state->transport);
+        }
+        free(server->h3_state);
+        server->h3_state = NULL;
     }
 
     free(server->spa_doc_root);
@@ -662,7 +665,7 @@ csilk_server_run(csilk_server_t* server, int port)
     _csilk_worker_init_read_buf_pool(&server->worker_pools[0]);
     _csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
 
-    if (server->h3_port > 0) {
+    if (server->h3_state && server->h3_state->port > 0) {
         _csilk_worker_init_h3(server, &server->worker_pools[0], server->loop);
     }
 

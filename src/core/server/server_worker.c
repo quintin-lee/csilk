@@ -396,7 +396,7 @@ on_worker_h3_recv_uring(csilk_io_udp_t*        handle,
 CSILK_INTERNAL int
 _csilk_worker_init_h3(csilk_server_t* server, worker_pool_t* wp, csilk_io_loop_t* loop)
 {
-    if (!server || server->h3_port <= 0 || !wp || !loop) {
+    if (!server || !server->h3_state || server->h3_state->port <= 0 || !wp || !loop) {
         return 0;
     }
 #ifndef _WIN32
@@ -436,12 +436,12 @@ _csilk_worker_init_h3(csilk_server_t* server, worker_pool_t* wp, csilk_io_loop_t
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)server->h3_port);
+    addr.sin_port = htons((uint16_t)server->h3_state->port);
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         CSILK_LOG_E("Server: worker %d failed to bind HTTP/3 UDP port %d: %s",
                     wp->worker_index,
-                    server->h3_port,
+                    server->h3_state->port,
                     strerror(errno));
         close(fd);
         return -1;
@@ -465,8 +465,9 @@ _csilk_worker_init_h3(csilk_server_t* server, worker_pool_t* wp, csilk_io_loop_t
     csilk_io_udp_recv_start_raw(&wp->h3_udp_handle, on_worker_h3_uv_alloc, on_worker_h3_uv_recv);
 #endif
     wp->h3_udp_active = true;
-    CSILK_LOG_I(
-        "Server: worker %d listening for HTTP/3 on UDP port %d", wp->worker_index, server->h3_port);
+    CSILK_LOG_I("Server: worker %d listening for HTTP/3 on UDP port %d",
+                wp->worker_index,
+                server->h3_state->port);
     return 0;
 #else
     return 0;
@@ -546,7 +547,7 @@ worker_thread(void* arg)
         return;
     }
 
-    if (server->h3_port > 0) {
+    if (server->h3_state && server->h3_state->port > 0) {
         _csilk_worker_init_h3(server, wp, loop_ptr);
     }
 
