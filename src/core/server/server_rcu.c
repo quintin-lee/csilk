@@ -430,27 +430,15 @@ _csilk_reload_try_reclaim(csilk_server_t* server)
     atomic_store_explicit(&mgr->reclaim_lock, 0, memory_order_release);
 }
 
-void
-csilk_server_set_router_full(csilk_server_t* server,
-                             csilk_router_t* router,
-                             void*           dl_handle,
-                             const char*     tmp_path)
+/* Shared core: advance epoch, enqueue a retired record, trigger reclaim.
+ * Caller must hold server->config_mutex. */
+static void
+_csilk_publish_retired(csilk_server_t* server,
+                       csilk_router_t* old_router,
+                       void*           dl_handle,
+                       const char*     tmp_path)
 {
-    if (!server || !router) {
-        return;
-    }
-
-    if (server->middleware_count > 0) {
-        csilk_router_compile(router, server->middlewares, (size_t)server->middleware_count);
-    }
-
     csilk_reload_mgr_t* mgr = &server->reload_mgr;
-
-    csilk_mutex_lock(&server->config_mutex);
-
-    /* Atomically swap new router into place */
-    csilk_router_t* old_router =
-        atomic_exchange_explicit(&server->router, router, memory_order_acq_rel);
 
     /* Monotonically advance global reload epoch */
     uint64_t retired_epoch = atomic_fetch_add_explicit(&mgr->global_epoch, 1, memory_order_acq_rel);
@@ -477,6 +465,29 @@ csilk_server_set_router_full(csilk_server_t* server,
 
     /* Opportunistic non-blocking reclamation */
     _csilk_reload_try_reclaim(server);
+}
+
+void
+csilk_server_set_router_full(csilk_server_t* server,
+                             csilk_router_t* router,
+                             void*           dl_handle,
+                             const char*     tmp_path)
+{
+    if (!server || !router) {
+        return;
+    }
+
+    if (server->middleware_count > 0) {
+        csilk_router_compile(router, server->middlewares, (size_t)server->middleware_count);
+    }
+
+    csilk_mutex_lock(&server->config_mutex);
+
+    /* Atomically swap new router into place */
+    csilk_router_t* old_router =
+        atomic_exchange_explicit(&server->router, router, memory_order_acq_rel);
+
+    _csilk_publish_retired(server, old_router, dl_handle, tmp_path);
 
     csilk_mutex_unlock(&server->config_mutex);
 }
@@ -507,8 +518,6 @@ csilk_hot_update(csilk_server_t* server, const csilk_hot_update_bundle_t* bundle
     if (bundle->router && server->middleware_count > 0) {
         csilk_router_compile(bundle->router, server->middlewares, (size_t)server->middleware_count);
     }
-
-    csilk_reload_mgr_t* mgr = &server->reload_mgr;
 
     csilk_mutex_lock(&server->config_mutex);
 
@@ -546,31 +555,7 @@ csilk_hot_update(csilk_server_t* server, const csilk_hot_update_bundle_t* bundle
         }
     }
 
-    /* Monotonically advance global reload epoch */
-    uint64_t retired_epoch = atomic_fetch_add_explicit(&mgr->global_epoch, 1, memory_order_acq_rel);
-
-    if (old_router || bundle->wasm_handle || bundle->tmp_wasm_path) {
-        csilk_retired_router_t* rec = calloc(1, sizeof(csilk_retired_router_t));
-        if (rec) {
-            rec->router = old_router;
-            rec->dl_handle = bundle->wasm_handle;
-            rec->tmp_path = bundle->tmp_wasm_path ? strdup(bundle->tmp_wasm_path) : NULL;
-            rec->retired_epoch = retired_epoch;
-            atomic_init(&rec->retired_next, NULL);
-
-            csilk_retired_router_t* old_head =
-                atomic_load_explicit(&mgr->retired_head, memory_order_relaxed);
-            do {
-                atomic_store_explicit(&rec->retired_next, old_head, memory_order_relaxed);
-            } while (!atomic_compare_exchange_weak_explicit(
-                &mgr->retired_head, &old_head, rec, memory_order_release, memory_order_relaxed));
-
-            atomic_fetch_add_explicit(&mgr->retired_count, 1, memory_order_relaxed);
-        }
-    }
-
-    /* Opportunistic non-blocking reclamation */
-    _csilk_reload_try_reclaim(server);
+    _csilk_publish_retired(server, old_router, bundle->wasm_handle, bundle->tmp_wasm_path);
 
     csilk_mutex_unlock(&server->config_mutex);
     return 0;
