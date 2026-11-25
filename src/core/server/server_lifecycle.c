@@ -369,6 +369,31 @@ csilk_server_free(csilk_server_t* server)
 
 /* --- Server stats --- */
 
+/**
+ * @brief Authoritative active-connection count.
+ *
+ * Pool-level counters are the source of truth when worker pools exist
+ * (maintained on every acquire / release in pool_get / pool_put).
+ * Fall back to the server-level atomic only in single-thread / no-pool mode.
+ * Both get_stats() and check_backpressure() call this so they always agree.
+ */
+static int
+_csilk_server_active_total(const csilk_server_t* server)
+{
+    if (!server) {
+        return 0;
+    }
+    if (server->worker_pools && server->worker_pool_count > 0) {
+        int total = 0;
+        for (int w = 0; w < server->worker_pool_count; w++) {
+            total += atomic_load_explicit(&server->worker_pools[w].active_connections,
+                                          memory_order_relaxed);
+        }
+        return total;
+    }
+    return atomic_load_explicit(&server->active_connections, memory_order_relaxed);
+}
+
 /** @brief Read the server's live connection statistics. */
 void
 csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_conn)
@@ -376,18 +401,14 @@ csilk_server_get_stats(csilk_server_t* server, int* active_conn, int* pooled_con
     if (!server) {
         return;
     }
-    int active_total = 0;
+    int active_total = _csilk_server_active_total(server);
     int pooled_total = 0;
-    int n = server->worker_pool_count;
 
-    if (server->worker_pools && n > 0) {
-        for (int w = 0; w < n; w++) {
-            worker_pool_t* wp = &server->worker_pools[w];
-            pooled_total += atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
-            active_total += atomic_load_explicit(&wp->active_connections, memory_order_relaxed);
+    if (server->worker_pools && server->worker_pool_count > 0) {
+        for (int w = 0; w < server->worker_pool_count; w++) {
+            pooled_total += atomic_load_explicit(&server->worker_pools[w].client_pool_count,
+                                                 memory_order_relaxed);
         }
-    } else {
-        active_total = atomic_load_explicit(&server->active_connections, memory_order_relaxed);
     }
 
     if (active_conn) {
@@ -500,8 +521,7 @@ csilk_server_check_backpressure(csilk_server_t* server)
     size_t limit = atomic_load_explicit(&server->runtime_config.backpressure_max_queue_depth,
                                         memory_order_relaxed);
     if (limit > 0) {
-        size_t total_active =
-            (size_t)atomic_load_explicit(&server->active_connections, memory_order_relaxed);
+        size_t total_active = (size_t)_csilk_server_active_total(server);
         if (total_active > limit) {
             return 1;
         }
