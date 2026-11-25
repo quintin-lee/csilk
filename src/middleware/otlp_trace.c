@@ -26,14 +26,6 @@
 #define CSILK_OTLP_SIDECAR_CAP 1024
 
 typedef struct {
-    csilk_otlp_span_t* spans;
-    size_t             cap; /* capacity of spans array (power of 2) */
-    size_t             head;
-    size_t             count;
-    csilk_mutex_t      mutex;
-} csilk_otlp_buffer_t;
-
-typedef struct {
     char trace_id[33];
     char span_id[17];
 } csilk_trace_ctx_node_t;
@@ -44,45 +36,74 @@ typedef struct {
     bool          in_use;
 } csilk_otlp_sidecar_entry_t;
 
-static csilk_otlp_buffer_t g_otlp_buffer = {
-    .spans = NULL,
-    .cap = OTLP_SPAN_BUF_CAP,
-    .head = 0,
-    .count = 0,
-};
-static csilk_once_t     g_otlp_init_once = CSILK_ONCE_INIT;
-static atomic_int       g_otlp_init = 0;
-static _Atomic int      g_otlp_sample_rate = OTLP_SAMPLE_RATE_DEFAULT;
-static _Atomic uint64_t g_otlp_total_spans = 0; /* total spans received (for sampling decision) */
+/**
+ * @brief Converged OTLP tracer state.
+ *
+ * Holds every piece of process-level OTLP tracer state that was previously
+ * scattered as independent statics (the span ring buffer, sample rate, total
+ * span counter, and the sidecar attribute table). Lazily allocated once via
+ * g_otlp_state; the pointer persists for the process lifetime. The
+ * thread-local trace stack is intentionally kept separate (per-thread state
+ * that cannot be shared across threads).
+ */
+typedef struct {
+    csilk_once_t               init_once;
+    csilk_otlp_span_t*         spans; /* span ring buffer */
+    size_t                     cap;   /* capacity of spans array */
+    size_t                     head;
+    size_t                     count;
+    csilk_mutex_t              buffer_mutex;
+    _Atomic int                sample_rate;
+    _Atomic uint64_t           total_spans; /* total spans received (for sampling decision) */
+    csilk_otlp_sidecar_entry_t sidecar_table[CSILK_OTLP_SIDECAR_CAP];
+    csilk_mutex_t              sidecar_mutex;
+} otlp_state_t;
 
-static csilk_otlp_sidecar_entry_t s_sidecar_table[CSILK_OTLP_SIDECAR_CAP];
-static csilk_mutex_t              s_sidecar_mutex;
-static csilk_once_t               s_sidecar_once = CSILK_ONCE_INIT;
+/** @brief Single global pointer to the lazily-initialized OTLP tracer state. */
+static otlp_state_t* g_otlp_state = NULL;
 
 static _Thread_local csilk_trace_ctx_node_t tls_trace_stack[CSILK_MAX_TRACE_DEPTH];
 static _Thread_local int                    tls_trace_depth = 0;
 
 static void
-_sidecar_init_once_cb(void)
-{
-    csilk_mutex_init(&s_sidecar_mutex);
-}
-
-static void
 _otlp_init_once_cb(void)
 {
-    csilk_mutex_init(&g_otlp_buffer.mutex);
-    if (!g_otlp_buffer.spans) {
-        size_t cap = g_otlp_buffer.cap > 0 ? g_otlp_buffer.cap : OTLP_SPAN_BUF_CAP;
-        g_otlp_buffer.cap = cap;
-        g_otlp_buffer.spans = calloc(cap, sizeof(csilk_otlp_span_t));
-    }
+    otlp_state_t* st = g_otlp_state;
+    csilk_mutex_init(&st->buffer_mutex);
+    size_t cap = st->cap > 0 ? st->cap : OTLP_SPAN_BUF_CAP;
+    st->cap = cap;
+    st->spans = calloc(cap, sizeof(csilk_otlp_span_t));
+    csilk_mutex_init(&st->sidecar_mutex);
+
     csilk_tracer_hooks_t hooks = {
         .start_span = (void* (*)(const char*, const char*))csilk_otlp_tracer_start_span,
         .end_span = (void (*)(void*, int))csilk_otlp_tracer_end_span,
     };
     csilk_tracer_set_hooks(&hooks);
-    atomic_store_explicit(&g_otlp_init, 1, memory_order_release);
+}
+
+/**
+ * @brief Lazily obtain the global OTLP tracer state, allocating and
+ * initializing it on first use. The state persists for the process lifetime.
+ *
+ * @return The global OTLP tracer state (never NULL on success).
+ */
+static otlp_state_t*
+_otlp_state_ensure(void)
+{
+    if (!g_otlp_state) {
+        otlp_state_t* st = calloc(1, sizeof(otlp_state_t));
+        if (!st) {
+            return NULL;
+        }
+        st->cap = OTLP_SPAN_BUF_CAP;
+        atomic_init(&st->sample_rate, OTLP_SAMPLE_RATE_DEFAULT);
+        atomic_init(&st->total_spans, 0);
+        st->init_once = CSILK_ONCE_INIT;
+        g_otlp_state = st;
+    }
+    csilk_once(&g_otlp_state->init_once, _otlp_init_once_cb);
+    return g_otlp_state;
 }
 
 static void
@@ -196,7 +217,7 @@ csilk_trace_middleware(csilk_ctx_t* c)
         return;
     }
 
-    csilk_once(&g_otlp_init_once, _otlp_init_once_cb);
+    _otlp_state_ensure();
 
     const char* tp = csilk_get_header(c, "traceparent");
     char        trace_id_buf[33] = {0};
@@ -314,7 +335,7 @@ csilk_ctx_get_span_id(csilk_ctx_t* c)
 csilk_otlp_span_t*
 csilk_otlp_tracer_start_span(const char* name, const char* parent_span_id)
 {
-    csilk_once(&g_otlp_init_once, _otlp_init_once_cb);
+    _otlp_state_ensure();
 
     csilk_otlp_span_t* span = calloc(1, sizeof(csilk_otlp_span_t));
     if (!span) {
@@ -380,7 +401,7 @@ csilk_otlp_tracer_start_span_ctx(csilk_ctx_t* c, const char* name)
  * @brief Finalize a span and append it to the global trace buffer.
  *
  * Records the end timestamp and status code, copies the span into the
- * ring-buffer of completed spans (g_otlp_buffer) under the buffer mutex, then
+ * ring-buffer of completed spans (g_otlp_state->spans) under the buffer mutex, then
  * frees the caller's span object.
  *
  * @param[in,out] span        The span returned by
@@ -403,26 +424,28 @@ csilk_otlp_tracer_end_span(csilk_otlp_span_t* span, int status_code)
         tls_trace_depth--;
     }
 
-    uint64_t total = atomic_fetch_add_explicit(&g_otlp_total_spans, 1, memory_order_relaxed) + 1;
+    uint64_t total =
+        atomic_fetch_add_explicit(&g_otlp_state->total_spans, 1, memory_order_relaxed) + 1;
 
-    /* If buffer is at capacity, apply sampling: record only every g_otlp_sample_rate-th span */
-    csilk_once(&g_otlp_init_once, _otlp_init_once_cb);
-    csilk_mutex_lock(&g_otlp_buffer.mutex);
-    if (g_otlp_buffer.spans && g_otlp_buffer.count < g_otlp_buffer.cap) {
-        g_otlp_buffer.spans[g_otlp_buffer.head] = *span;
-        g_otlp_buffer.head = (g_otlp_buffer.head + 1) % g_otlp_buffer.cap;
-        g_otlp_buffer.count++;
-    } else if (g_otlp_buffer.spans && g_otlp_buffer.cap > 0) {
+    /* If buffer is at capacity, apply sampling: record only every sample_rate-th span */
+    _otlp_state_ensure();
+    otlp_state_t* st = g_otlp_state;
+    csilk_mutex_lock(&st->buffer_mutex);
+    if (st->spans && st->count < st->cap) {
+        st->spans[st->head] = *span;
+        st->head = (st->head + 1) % st->cap;
+        st->count++;
+    } else if (st->spans && st->cap > 0) {
         /* Sampling path: only record if (total % sample_rate == 0) to keep stats representative */
-        int sr = atomic_load_explicit(&g_otlp_sample_rate, memory_order_relaxed);
+        int sr = atomic_load_explicit(&st->sample_rate, memory_order_relaxed);
         if (sr > 0 && (total % (uint64_t)sr) == 0) {
             /* Overwrite the oldest span (ring buffer) */
-            size_t idx = g_otlp_buffer.head;
-            g_otlp_buffer.spans[idx] = *span;
-            g_otlp_buffer.head = (idx + 1) % g_otlp_buffer.cap;
+            size_t idx = st->head;
+            st->spans[idx] = *span;
+            st->head = (idx + 1) % st->cap;
         }
     }
-    csilk_mutex_unlock(&g_otlp_buffer.mutex);
+    csilk_mutex_unlock(&st->buffer_mutex);
 
     free(span);
 }
@@ -434,15 +457,16 @@ csilk_otlp_apm_spans_handler(csilk_ctx_t* c)
         return;
     }
 
-    csilk_once(&g_otlp_init_once, _otlp_init_once_cb);
-    csilk_mutex_lock(&g_otlp_buffer.mutex);
+    _otlp_state_ensure();
+    otlp_state_t* st = g_otlp_state;
+    csilk_mutex_lock(&st->buffer_mutex);
     csilk_json_t* arr = csilk_json_array();
-    size_t        count = g_otlp_buffer.count;
-    size_t        cap = g_otlp_buffer.cap;
-    size_t        start = (g_otlp_buffer.head + cap - count) % cap;
+    size_t        count = st->count;
+    size_t        cap = st->cap;
+    size_t        start = (st->head + cap - count) % cap;
     for (size_t i = 0; i < count; i++) {
         size_t                   idx = (start + i) % cap;
-        const csilk_otlp_span_t* s = &g_otlp_buffer.spans[idx];
+        const csilk_otlp_span_t* s = &st->spans[idx];
         csilk_json_t*            obj = csilk_json_object();
         csilk_json_add_string(obj, "traceId", s->trace_id);
         csilk_json_add_string(obj, "spanId", s->span_id);
@@ -458,23 +482,22 @@ csilk_otlp_apm_spans_handler(csilk_ctx_t* c)
         csilk_json_add_number(obj, "durationMs", dur_ms);
         csilk_json_add_number(obj, "statusCode", s->status_code);
 
-        csilk_once(&s_sidecar_once, _sidecar_init_once_cb);
-        csilk_mutex_lock(&s_sidecar_mutex);
+        csilk_mutex_lock(&st->sidecar_mutex);
         for (size_t k = 0; k < CSILK_OTLP_SIDECAR_CAP; k++) {
-            if (s_sidecar_table[k].in_use &&
-                strncmp(s_sidecar_table[k].span_id, s->span_id, 16) == 0) {
-                if (s_sidecar_table[k].attributes) {
+            if (st->sidecar_table[k].in_use &&
+                strncmp(st->sidecar_table[k].span_id, s->span_id, 16) == 0) {
+                if (st->sidecar_table[k].attributes) {
                     csilk_json_add_object(
-                        obj, "attributes", csilk_json_copy(s_sidecar_table[k].attributes));
+                        obj, "attributes", csilk_json_copy(st->sidecar_table[k].attributes));
                 }
                 break;
             }
         }
-        csilk_mutex_unlock(&s_sidecar_mutex);
+        csilk_mutex_unlock(&st->sidecar_mutex);
 
         csilk_json_array_append(arr, obj);
     }
-    csilk_mutex_unlock(&g_otlp_buffer.mutex);
+    csilk_mutex_unlock(&st->buffer_mutex);
 
     char* json_str = csilk_json_serialize(arr, NULL);
     csilk_json_free(arr);
@@ -540,15 +563,22 @@ csilk_otlp_apm_ui_handler(csilk_ctx_t* c)
 void
 csilk_otlp_tracer_set_sample_rate(int rate)
 {
-    atomic_store_explicit(&g_otlp_sample_rate, rate, memory_order_relaxed);
+    otlp_state_t* st = _otlp_state_ensure();
+    if (!st) {
+        return;
+    }
+    atomic_store_explicit(&st->sample_rate, rate, memory_order_relaxed);
     CSILK_LOG_D("OTLP: sample rate set to %d", rate);
 }
 
 void
 csilk_otlp_tracer_set_buffer_size(size_t cap)
 {
-    if (cap > 0 && !atomic_load_explicit(&g_otlp_init, memory_order_acquire)) {
-        g_otlp_buffer.cap = cap;
+    if (cap > 0 && !atomic_load_explicit(&g_otlp_state->total_spans, memory_order_acquire)) {
+        otlp_state_t* st = g_otlp_state;
+        if (st && !st->spans) {
+            st->cap = cap;
+        }
         CSILK_LOG_D("OTLP: span buffer capacity set to %zu", cap);
     }
 }
@@ -586,21 +616,24 @@ csilk_otlp_span_bind_ai_trace(csilk_otlp_span_t* span, const struct csilk_ai_tra
     if (!span || !trace) {
         return -1;
     }
-    csilk_once(&s_sidecar_once, _sidecar_init_once_cb);
-    csilk_mutex_lock(&s_sidecar_mutex);
+    otlp_state_t* st = _otlp_state_ensure();
+    if (!st) {
+        return -1;
+    }
+    csilk_mutex_lock(&st->sidecar_mutex);
 
     csilk_otlp_sidecar_entry_t* target = NULL;
     for (size_t i = 0; i < CSILK_OTLP_SIDECAR_CAP; i++) {
-        if (s_sidecar_table[i].in_use &&
-            strncmp(s_sidecar_table[i].span_id, span->span_id, 16) == 0) {
-            target = &s_sidecar_table[i];
+        if (st->sidecar_table[i].in_use &&
+            strncmp(st->sidecar_table[i].span_id, span->span_id, 16) == 0) {
+            target = &st->sidecar_table[i];
             break;
         }
     }
     if (!target) {
         for (size_t i = 0; i < CSILK_OTLP_SIDECAR_CAP; i++) {
-            if (!s_sidecar_table[i].in_use) {
-                target = &s_sidecar_table[i];
+            if (!st->sidecar_table[i].in_use) {
+                target = &st->sidecar_table[i];
                 strncpy(target->span_id, span->span_id, sizeof(target->span_id) - 1);
                 target->span_id[sizeof(target->span_id) - 1] = '\0';
                 target->attributes = csilk_json_object();
@@ -610,7 +643,7 @@ csilk_otlp_span_bind_ai_trace(csilk_otlp_span_t* span, const struct csilk_ai_tra
         }
     }
     if (!target) {
-        target = &s_sidecar_table[0];
+        target = &st->sidecar_table[0];
         if (target->attributes) {
             csilk_json_free(target->attributes);
         }
@@ -640,7 +673,7 @@ csilk_otlp_span_bind_ai_trace(csilk_otlp_span_t* span, const struct csilk_ai_tra
         csilk_json_add_string(target->attributes, "gen_ai.system", trace->provider);
     }
 
-    csilk_mutex_unlock(&s_sidecar_mutex);
+    csilk_mutex_unlock(&st->sidecar_mutex);
 
     /* If tool_spans JSON is present and non-empty, create child spans for tool calls */
     if (trace->tool_spans[0] == '[' && trace->tool_spans[1] != ']') {
@@ -724,19 +757,22 @@ csilk_otlp_export_span_json(const csilk_otlp_span_t* span,
     csilk_json_add_number(obj, "statusCode", span->status_code);
 
     /* Lookup sidecar attributes if present */
-    csilk_once(&s_sidecar_once, _sidecar_init_once_cb);
-    csilk_mutex_lock(&s_sidecar_mutex);
+    otlp_state_t* st = _otlp_state_ensure();
+    if (!st) {
+        return -1;
+    }
+    csilk_mutex_lock(&st->sidecar_mutex);
     for (size_t i = 0; i < CSILK_OTLP_SIDECAR_CAP; i++) {
-        if (s_sidecar_table[i].in_use &&
-            strncmp(s_sidecar_table[i].span_id, span->span_id, 16) == 0) {
-            if (s_sidecar_table[i].attributes) {
+        if (st->sidecar_table[i].in_use &&
+            strncmp(st->sidecar_table[i].span_id, span->span_id, 16) == 0) {
+            if (st->sidecar_table[i].attributes) {
                 csilk_json_add_object(
-                    obj, "attributes", csilk_json_copy(s_sidecar_table[i].attributes));
+                    obj, "attributes", csilk_json_copy(st->sidecar_table[i].attributes));
             }
             break;
         }
     }
-    csilk_mutex_unlock(&s_sidecar_mutex);
+    csilk_mutex_unlock(&st->sidecar_mutex);
 
     size_t sz = 0;
     char*  str = csilk_json_serialize(obj, &sz);
