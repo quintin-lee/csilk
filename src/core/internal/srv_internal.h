@@ -262,6 +262,7 @@ struct csilk_server_s {
     int   h3_port;      /**< Configured HTTP/3 UDP port (e.g. 443). */
     void* h3_ssl_ctx;   /**< Shared OpenSSL SSL_CTX* for QUIC across workers. */
     void* app;          /**< Back-reference to owning csilk_app_t (NULL for bare servers). */
+    void* ws_room_mgr;  /**< WebSocket room manager (ws_room_manager_t, NULL until first join). */
 };
 
 #define CSILK_H2_INLINE_BUCKETS 16
@@ -403,5 +404,8 @@ CSILK_INTERNAL void _csilk_reload_try_reclaim(csilk_server_t* server);
 
 /** @brief Destroy the reload manager and force reclamation of all remaining records. */
 CSILK_INTERNAL void _csilk_reload_mgr_free(csilk_server_t* server);
+
+/** @brief Free the WebSocket room manager owned by a server instance. */
+CSILK_INTERNAL void _csilk_ws_room_mgr_free(csilk_server_t* server);
 
 #endif /* CSILK_SERVER_INTERNAL_H */

@@ -64,6 +64,7 @@ typedef struct csilk_mq_topic_s {
  */
 struct csilk_mq_s {
     csilk_io_loop_t* loop;          /**< Event loop */
+    csilk_server_t*  server;        /**< Owning server instance (NULL for standalone MQ). */
     csilk_io_async_t async_handle;  /**< Async handle for bridging worker-thread
                                  publishes into the main loop. */
     csilk_mutex_t    queue_mutex;   /**< Mutex guarding the message linked list. */
@@ -109,6 +110,7 @@ struct csilk_mq_s {
  */
 struct csilk_mq_ctx_s {
     csilk_mq_t*         mq;            /**< Owning MQ instance. */
+    csilk_server_t*     server;        /**< Owning server instance (convenience for callbacks). */
     csilk_mq_msg_t*     msg;           /**< The message being processed. */
     csilk_mq_handler_t* handlers;      /**< Combined handler array (global mw + topic
                                    mw + subscribers). */

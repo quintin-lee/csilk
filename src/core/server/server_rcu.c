@@ -33,6 +33,7 @@
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
 #include "csilk/messaging/mq.h"
+#include "../../messaging/mq_internal.h"
 
 #define CSILK_RCU_GEN_TABLE_SIZE 1024
 static _Atomic(uint32_t) g_active_server_gens[CSILK_RCU_GEN_TABLE_SIZE] = {0};
@@ -60,6 +61,9 @@ csilk_server_get_mq(csilk_server_t* server)
         mq = atomic_load_explicit(&server->mq, memory_order_relaxed);
         if (!mq) {
             mq = _csilk_mq_new(server->loop);
+            if (mq) {
+                mq->server = server;
+            }
             atomic_store_explicit(&server->mq, mq, memory_order_release);
         }
         csilk_mutex_unlock(&server->config_mutex);

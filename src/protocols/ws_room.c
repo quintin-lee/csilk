@@ -5,6 +5,11 @@
  * Implements a high-concurrency room broadcasting system for WebSockets using COW
  * snapshots to avoid lock holding during network writes.
  *
+ * The room manager is allocated on the csilk_server_t instance (ws_room_mgr
+ * field) and freed by csilk_server_free(). This eliminates the previous
+ * process-wide global + atexit pattern, giving each server its own
+ * independent room state.
+ *
  * @copyright MIT License
  */
 
@@ -14,6 +19,7 @@
 #include <string.h>
 #include "csilk/core/internal.h"
 #include "csilk/core/sync.h"
+#include "../messaging/mq_internal.h"
 #include "core/internal/srv_impl.h"
 
 typedef struct {
@@ -63,21 +69,16 @@ typedef struct {
     csilk_mutex_t mutex;
 } ws_room_manager_t;
 
-static ws_room_manager_t g_room_manager;
-static csilk_once_t      g_room_manager_once = CSILK_ONCE_INIT;
-static atomic_int        g_room_manager_ready = 0;
-
-/** @brief Tear down the global room manager and free all rooms, snapshots, names. */
+/** @brief Tear down a room manager and free all rooms, snapshots, names. */
 static void
-ws_room_manager_cleanup(void)
+ws_room_manager_free(ws_room_manager_t* mgr)
 {
-    if (!atomic_load_explicit(&g_room_manager_ready, memory_order_acquire)) {
+    if (!mgr) {
         return;
     }
-    atomic_store_explicit(&g_room_manager_ready, 0, memory_order_release);
-    csilk_mutex_lock(&g_room_manager.mutex);
-    for (int i = 0; i < g_room_manager.rooms_count; i++) {
-        ws_room_t* room = g_room_manager.rooms[i];
+    csilk_mutex_lock(&mgr->mutex);
+    for (int i = 0; i < mgr->rooms_count; i++) {
+        ws_room_t* room = mgr->rooms[i];
         if (room) {
             ws_room_snapshot_t* snap = atomic_load(&room->snapshot);
             /* At teardown all in-flight readers have completed, so the room's
@@ -88,37 +89,50 @@ ws_room_manager_cleanup(void)
             free(room);
         }
     }
-    free(g_room_manager.rooms);
-    g_room_manager.rooms = NULL;
-    g_room_manager.rooms_count = 0;
-    g_room_manager.rooms_capacity = 0;
-    csilk_mutex_unlock(&g_room_manager.mutex);
-    csilk_mutex_destroy(&g_room_manager.mutex);
+    free(mgr->rooms);
+    csilk_mutex_unlock(&mgr->mutex);
+    csilk_mutex_destroy(&mgr->mutex);
+    free(mgr);
 }
 
-static void
-ws_room_manager_init_once(void)
+/** @brief Lazy-init the room manager on the server instance. */
+static ws_room_manager_t*
+ws_room_manager_get(csilk_server_t* server)
 {
-    memset(&g_room_manager, 0, sizeof(ws_room_manager_t));
-    csilk_mutex_init(&g_room_manager.mutex);
-    atomic_store_explicit(&g_room_manager_ready, 1, memory_order_release);
-    atexit(ws_room_manager_cleanup);
+    if (!server) {
+        return NULL;
+    }
+    ws_room_manager_t* mgr = (ws_room_manager_t*)server->ws_room_mgr;
+    if (!mgr) {
+        mgr = calloc(1, sizeof(ws_room_manager_t));
+        if (!mgr) {
+            return NULL;
+        }
+        csilk_mutex_init(&mgr->mutex);
+        server->ws_room_mgr = mgr;
+    }
+    return mgr;
 }
 
-/** @brief Lazily initialize the global room manager and register an atexit cleanup. */
-static void
-ws_room_manager_init(void)
+/** @brief Get the room manager for the server owning @p c. */
+static ws_room_manager_t*
+ws_room_manager_from_ctx(csilk_ctx_t* c)
 {
-    csilk_once(&g_room_manager_once, ws_room_manager_init_once);
+    if (!c) {
+        return NULL;
+    }
+    return ws_room_manager_get(csilk_ctx_get_server(c));
 }
 
-/** @brief Linear search of the manager's rooms for one matching @p name. */
+/** @brief Linear search of the manager's rooms for one matching @p name.
+ *
+ *  Caller must hold mgr->mutex. */
 static ws_room_t*
-find_room(const char* name)
+find_room_locked(ws_room_manager_t* mgr, const char* name)
 {
-    for (int i = 0; i < g_room_manager.rooms_count; i++) {
-        if (strcmp(g_room_manager.rooms[i]->room_name, name) == 0) {
-            return g_room_manager.rooms[i];
+    for (int i = 0; i < mgr->rooms_count; i++) {
+        if (strcmp(mgr->rooms[i]->room_name, name) == 0) {
+            return mgr->rooms[i];
         }
     }
     return NULL;
@@ -156,10 +170,11 @@ typedef struct {
     int          cap;
 } ws_room_membership_t;
 
+/** @brief Remove @p c from @p room_name's snapshot. Caller must hold mgr->mutex. */
 static void
-_ws_room_remove_locked(csilk_ctx_t* c, const char* room_name)
+_ws_room_remove_locked(ws_room_manager_t* mgr, csilk_ctx_t* c, const char* room_name)
 {
-    ws_room_t* room = find_room(room_name);
+    ws_room_t* room = find_room_locked(mgr, room_name);
     if (!room) {
         return;
     }
@@ -209,16 +224,16 @@ ws_room_membership_cleanup(void* data)
     if (!mem) {
         return;
     }
-    if (atomic_load_explicit(&g_room_manager_ready, memory_order_acquire)) {
-        csilk_mutex_lock(&g_room_manager.mutex);
-        if (atomic_load_explicit(&g_room_manager_ready, memory_order_acquire)) {
-            for (int i = 0; i < mem->count; i++) {
-                if (mem->rooms[i]) {
-                    _ws_room_remove_locked(mem->c, mem->rooms[i]);
-                }
+    csilk_server_t*    server = csilk_ctx_get_server(mem->c);
+    ws_room_manager_t* mgr = server ? (ws_room_manager_t*)server->ws_room_mgr : NULL;
+    if (mgr) {
+        csilk_mutex_lock(&mgr->mutex);
+        for (int i = 0; i < mem->count; i++) {
+            if (mem->rooms[i]) {
+                _ws_room_remove_locked(mgr, mem->c, mem->rooms[i]);
             }
         }
-        csilk_mutex_unlock(&g_room_manager.mutex);
+        csilk_mutex_unlock(&mgr->mutex);
     }
     for (int i = 0; i < mem->count; i++) {
         free(mem->rooms[i]);
@@ -275,13 +290,14 @@ ws_room_track_leave(csilk_ctx_t* c, const char* room_name)
     }
 }
 
-/** @brief MQ callback: broadcast a "ws.room.<name>" payload to that room's snapshot. */
+/** @brief MQ callback: broadcast a "ws.room.<name>" payload to that room's snapshot.
+ *
+ *  The MQ belongs to a csilk_server_t instance. The room manager is stored
+ *  on the server (ws_room_mgr field), so we retrieve it via the MQ's owning
+ *  server. The server pointer is obtained from the MQ context's client. */
 static void
 on_room_message(csilk_mq_ctx_t* ctx)
 {
-    if (!atomic_load_explicit(&g_room_manager_ready, memory_order_acquire)) {
-        return;
-    }
     const char*    topic = csilk_mq_get_topic(ctx);
     size_t         payload_len;
     const uint8_t* payload = (const uint8_t*)csilk_mq_get_payload(ctx, &payload_len);
@@ -292,8 +308,20 @@ on_room_message(csilk_mq_ctx_t* ctx)
 
     const char* room_name = topic + 8;
 
-    csilk_mutex_lock(&g_room_manager.mutex);
-    ws_room_t*          room = find_room(room_name);
+    /* The MQ callback runs on the server's event loop. The room manager is
+     * stored on the server instance (ws_room_mgr field). We retrieve the
+     * server via the MQ's back-pointer. */
+    csilk_server_t* server = NULL;
+    if (ctx && ctx->mq) {
+        server = ctx->mq->server;
+    }
+    ws_room_manager_t* mgr = server ? (ws_room_manager_t*)server->ws_room_mgr : NULL;
+    if (!mgr) {
+        return;
+    }
+
+    csilk_mutex_lock(&mgr->mutex);
+    ws_room_t*          room = find_room_locked(mgr, room_name);
     ws_room_snapshot_t* snap = NULL;
     if (room) {
         snap = atomic_load(&room->snapshot);
@@ -302,7 +330,7 @@ on_room_message(csilk_mq_ctx_t* ctx)
          * snapshot before we finish walking it. */
         ws_room_snap_acquire(snap);
     }
-    csilk_mutex_unlock(&g_room_manager.mutex);
+    csilk_mutex_unlock(&mgr->mutex);
 
     /* Broadcast using the COW snapshot without holding the manager lock. */
     if (snap && snap->clients) {
@@ -348,12 +376,29 @@ on_room_message(csilk_mq_ctx_t* ctx)
 }
 
 /**
+ * @brief Free the WebSocket room manager owned by a server instance.
+ *
+ * Called from csilk_server_free() to tear down the per-server room state.
+ * In-flight broadcasts complete before this is reached (all workers joined).
+ */
+CSILK_INTERNAL void
+_csilk_ws_room_mgr_free(csilk_server_t* server)
+{
+    if (!server) {
+        return;
+    }
+    ws_room_manager_free((ws_room_manager_t*)server->ws_room_mgr);
+    server->ws_room_mgr = NULL;
+}
+
+/**
  * @brief Add a context (client connection) to a named WebSocket room.
  *
- * Lazily initializes the room manager and creates the room on first use,
- * subscribing the connection's MQ to the "ws.room.<name>" topic. Membership
- * is tracked via a Copy-On-Write atomic snapshot so broadcasts avoid holding
- * the room lock. Re-joining an already-joined room is a no-op.
+ * Lazily initializes the room manager on the server instance and creates the
+ * room on first use, subscribing the connection's MQ to the "ws.room.<name>"
+ * topic. Membership is tracked via a Copy-On-Write atomic snapshot so
+ * broadcasts avoid holding the room lock. Re-joining an already-joined room
+ * is a no-op.
  *
  * @param[in,out] c          The client context to add.
  * @param[in]     room_name  Name of the room to join.
@@ -365,22 +410,23 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
         return;
     }
 
-    ws_room_manager_init();
-    csilk_mutex_lock(&g_room_manager.mutex);
+    ws_room_manager_t* mgr = ws_room_manager_from_ctx(c);
+    if (!mgr) {
+        return;
+    }
+    csilk_mutex_lock(&mgr->mutex);
 
-    ws_room_t* room = find_room(room_name);
+    ws_room_t* room = find_room_locked(mgr, room_name);
     if (!room) {
-        if (g_room_manager.rooms_count >= g_room_manager.rooms_capacity) {
-            int new_cap =
-                g_room_manager.rooms_capacity == 0 ? 16 : g_room_manager.rooms_capacity * 2;
-            ws_room_t** next_rooms =
-                realloc(g_room_manager.rooms, sizeof(ws_room_t*) * (size_t)new_cap);
+        if (mgr->rooms_count >= mgr->rooms_capacity) {
+            int         new_cap = mgr->rooms_capacity == 0 ? 16 : mgr->rooms_capacity * 2;
+            ws_room_t** next_rooms = realloc(mgr->rooms, sizeof(ws_room_t*) * (size_t)new_cap);
             if (!next_rooms) {
-                csilk_mutex_unlock(&g_room_manager.mutex);
+                csilk_mutex_unlock(&mgr->mutex);
                 return;
             }
-            g_room_manager.rooms = next_rooms;
-            g_room_manager.rooms_capacity = new_cap;
+            mgr->rooms = next_rooms;
+            mgr->rooms_capacity = new_cap;
         }
         room = calloc(1, sizeof(ws_room_t));
         char*               rname = strdup(room_name);
@@ -389,7 +435,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
             free(empty_snap);
             free(rname);
             free(room);
-            csilk_mutex_unlock(&g_room_manager.mutex);
+            csilk_mutex_unlock(&mgr->mutex);
             return;
         }
         room->room_name = rname;
@@ -399,7 +445,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
         atomic_init(&empty_snap->refs, 1);
         atomic_init(&room->snapshot, empty_snap);
 
-        g_room_manager.rooms[g_room_manager.rooms_count++] = room;
+        mgr->rooms[mgr->rooms_count++] = room;
 
         char topic[256];
         snprintf(topic, sizeof(topic), "ws.room.%s", room_name);
@@ -421,7 +467,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
     for (int i = 0; i < count; i++) {
         if (old_snap->clients[i] == c) {
             csilk_mutex_unlock(&room->mutex);
-            csilk_mutex_unlock(&g_room_manager.mutex);
+            csilk_mutex_unlock(&mgr->mutex);
             return;
         }
     }
@@ -430,7 +476,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
     ws_room_snapshot_t* new_snap = calloc(1, sizeof(ws_room_snapshot_t));
     if (!new_snap) {
         csilk_mutex_unlock(&room->mutex);
-        csilk_mutex_unlock(&g_room_manager.mutex);
+        csilk_mutex_unlock(&mgr->mutex);
         return;
     }
     new_snap->count = count + 1;
@@ -438,7 +484,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
     if (!new_snap->clients) {
         free(new_snap);
         csilk_mutex_unlock(&room->mutex);
-        csilk_mutex_unlock(&g_room_manager.mutex);
+        csilk_mutex_unlock(&mgr->mutex);
         return;
     }
     atomic_init(&new_snap->refs, 1);
@@ -454,7 +500,7 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
     ws_room_snap_release(old_snap);
 
     csilk_mutex_unlock(&room->mutex);
-    csilk_mutex_unlock(&g_room_manager.mutex);
+    csilk_mutex_unlock(&mgr->mutex);
     ws_room_track_join(c, room_name);
 }
 
@@ -474,10 +520,13 @@ csilk_ws_leave_room(csilk_ctx_t* c, const char* room_name)
         return;
     }
 
-    ws_room_manager_init();
-    csilk_mutex_lock(&g_room_manager.mutex);
-    _ws_room_remove_locked(c, room_name);
-    csilk_mutex_unlock(&g_room_manager.mutex);
+    ws_room_manager_t* mgr = ws_room_manager_from_ctx(c);
+    if (!mgr) {
+        return;
+    }
+    csilk_mutex_lock(&mgr->mutex);
+    _ws_room_remove_locked(mgr, c, room_name);
+    csilk_mutex_unlock(&mgr->mutex);
     ws_room_track_leave(c, room_name);
 }
 

@@ -369,7 +369,8 @@ on_mq_async(csilk_io_async_t* handle)
                             "for topic '%s'",
                             total_handlers,
                             msg->topic);
-                csilk_mq_ctx_t ctx = {mq, msg, chain, total_handlers, -1, 0};
+                csilk_mq_ctx_t ctx = {
+                    mq, mq ? mq->server : NULL, msg, chain, total_handlers, -1, 0};
                 csilk_mq_next(&ctx);
                 free(chain);
             } else {
