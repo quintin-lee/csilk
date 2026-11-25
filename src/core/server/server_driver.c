@@ -54,6 +54,6 @@ void
 csilk_server_set_quic_transport(csilk_server_t* server, csilk_quic_transport_t* transport)
 {
     if (server) {
-        server->quic_transport = (void*)transport;
+        server->quic_vtable = (void*)transport;
     }
 }
