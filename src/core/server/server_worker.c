@@ -88,9 +88,6 @@ _csilk_dispatch_task_alloc(void)
 
     /* Direct allocator fallback */
     csilk_dispatch_task_t* task = (csilk_dispatch_task_t*)malloc(sizeof(csilk_dispatch_task_t));
-    if (task) {
-        atomic_init(&task->pool_next, NULL);
-    }
     return task;
 }
 

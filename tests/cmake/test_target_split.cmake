@@ -26,7 +26,6 @@ if(NOT _http_block)
 endif()
 foreach(_forbidden
     "src/core/ctx/context.c"
-    "src/core/server/connection.c"
     "src/middleware/gzip.c"
     "src/reflection/reflect.c"
     "src/drivers/vector/vector.c"

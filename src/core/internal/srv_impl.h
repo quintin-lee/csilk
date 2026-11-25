@@ -320,7 +320,6 @@ CSILK_INTERNAL int  bind_and_listen(csilk_io_loop_t* loop,
                                     int              worker_index);
 CSILK_INTERNAL void worker_thread(void* arg);
 CSILK_INTERNAL int  csilk_spawn_workers(csilk_server_t* server, int workers, int port);
-CSILK_INTERNAL void csilk_spawn_workers_fini(void);
 CSILK_INTERNAL void _csilk_worker_init_dispatch(worker_pool_t* wp, csilk_io_loop_t* loop);
 CSILK_INTERNAL void _csilk_worker_cleanup_leftover_clients(csilk_server_t*  server,
                                                            worker_pool_t*   wp,

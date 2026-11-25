@@ -50,7 +50,6 @@ enum { CSILK_DEFAULT_MAX_HEADER_SIZE = 64UL * 1024UL };
 enum { CSILK_DEFAULT_MAX_URL_SIZE = 8192 };
 /** @brief Default TCP listen backlog. */
 enum { CSILK_DEFAULT_LISTEN_BACKLOG = 128 };
-enum { MAX_TLS_CHUNKS_PER_TIER = 8 }; /* Max cached chunks per tier */
 /** @brief Client connection object pool capacity.
  *
  * Controls the maximum number of idle client objects cached for reuse.
@@ -68,7 +67,6 @@ enum {
     CSILK_READ_BUF_64KB = 65536,
     CSILK_READ_BUF_POOL_SIZE = 64 /**< Per-tier pool depth. */
 };
-enum { CSILK_DISPATCH_TASK_SLAB_SIZE = 256 };
 
 /** @brief Immutable contiguous array of lifecycle hook handlers. */
 typedef struct csilk_hook_array_s {
@@ -102,11 +100,10 @@ typedef struct csilk_client_s csilk_client_t;
 
 /** @brief Task node for cross-thread dispatching. */
 typedef struct csilk_dispatch_task_s {
-    csilk_lfq_node_t                       lfq_node;  /**< Lock-free queue node (must be first). */
-    _Atomic(struct csilk_dispatch_task_s*) pool_next; /**< Lock-free task pool next pointer. */
+    csilk_lfq_node_t lfq_node; /**< Lock-free queue node (must be first). */
     void (*cb)(void* arg);
     void*           arg;
-    csilk_client_t* client; /**< Associated client connection for lifetime safety. */
+    csilk_client_t* client;    /**< Associated client connection for lifetime safety. */
 } csilk_dispatch_task_t;
 
 /** @brief Payload for worker stop async notification. */
