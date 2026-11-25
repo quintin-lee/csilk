@@ -11,6 +11,13 @@
  * - Lock-free atomic updates using a fixed-size hash table.
  * - System-wide telemetry (CPU, Memory, MQ, AI, DB, Security).
  *
+ * All metrics state (aggregated counters, security counters, and the
+ * dimensional route table) is converged into a single heap-allocated
+ * metrics_state_t reached via one global pointer (g_metrics_state). The
+ * pointer is lazily initialized on first use and persists for the process
+ * lifetime — matching the process-wide aggregation semantics of a metrics
+ * subsystem while eliminating the scattering of independent statics.
+ *
  * @copyright MIT License
  */
 
@@ -37,21 +44,6 @@ enum { CSILK_METRICS_BUCKET_COUNT = 6 };
 static const double CSILK_METRICS_BUCKETS[CSILK_METRICS_BUCKET_COUNT] = {
     0.01, 0.05, 0.1, 0.5, 1.0, 5.0};
 
-/* --- Global Metrics (Aggregated) --- */
-
-/** @brief Atomic counter for total HTTP requests across all workers. */
-static _Atomic uint64_t http_requests_total = 0;
-
-/** @brief Atomic counter for cumulative request duration in microseconds. */
-static _Atomic uint64_t http_request_duration_microseconds = 0;
-
-/* --- Security-specific Atomic Counters --- */
-static _Atomic uint64_t security_rate_limit_blocks = 0;
-static _Atomic uint64_t security_csrf_violations = 0;
-static _Atomic uint64_t security_auth_failures = 0;
-
-/* --- Dimensional Metrics Storage --- */
-
 /**
  * @brief Data structure for a specific combination of labels.
  *
@@ -69,12 +61,44 @@ typedef struct CSILK_CACHE_ALIGNED {
 } csilk_route_metric_t;
 
 /**
- * @brief Fixed-size hash table for route metrics using open addressing.
+ * @brief Converged metrics state.
  *
- * Statically allocated to ensure zero heap allocation during request
- * processing. Initialized to zero (all slots available).
+ * Holds every piece of process-level metrics state that was previously
+ * scattered as independent statics (aggregated counters, security counters,
+ * and the dimensional route table). Lazily allocated once via g_metrics_state.
  */
-static csilk_route_metric_t route_metrics[CSILK_METRICS_MAX_ENTRIES] = {0};
+typedef struct {
+    _Atomic uint64_t     http_requests_total;
+    _Atomic uint64_t     http_request_duration_microseconds;
+    _Atomic uint64_t     security_rate_limit_blocks;
+    _Atomic uint64_t     security_csrf_violations;
+    _Atomic uint64_t     security_auth_failures;
+    csilk_route_metric_t route_metrics[CSILK_METRICS_MAX_ENTRIES];
+} metrics_state_t;
+
+/** @brief Single global pointer to the lazily-initialized metrics state. */
+static metrics_state_t* g_metrics_state = NULL;
+
+/**
+ * @brief Lazily obtain the global metrics state, allocating and zeroing it on
+ * first use. The state persists for the process lifetime.
+ *
+ * @return The global metrics state (never NULL on success).
+ */
+static metrics_state_t*
+metrics_state_ensure(void)
+{
+    metrics_state_t* st = g_metrics_state;
+    if (!st) {
+        st = calloc(1, sizeof(metrics_state_t));
+        if (!st) {
+            CSILK_LOG_E("Metrics: failed to allocate metrics state");
+            return NULL;
+        }
+        g_metrics_state = st;
+    }
+    return st;
+}
 
 /* --- Internal Helper Functions --- */
 
@@ -116,12 +140,16 @@ metrics_hash(const char* method, const char* route, int status)
 static csilk_route_metric_t*
 get_metric_slot(const char* method, const char* route, int status)
 {
+    metrics_state_t* st = metrics_state_ensure();
+    if (!st) {
+        return NULL;
+    }
     uint32_t start_idx = metrics_hash(method, route, status);
 
     /* Linear probing for open addressing */
     for (uint32_t i = 0; i < CSILK_METRICS_MAX_ENTRIES; i++) {
         uint32_t              idx = (start_idx + i) % CSILK_METRICS_MAX_ENTRIES;
-        csilk_route_metric_t* slot = &route_metrics[idx];
+        csilk_route_metric_t* slot = &st->route_metrics[idx];
 
         int state = atomic_load_explicit(&slot->in_use, memory_order_acquire);
         if (state == 0) {
@@ -167,9 +195,13 @@ csilk_security_get_stats(csilk_security_stats_t* stats)
     if (!stats) {
         return;
     }
-    stats->rate_limit_blocks = atomic_load(&security_rate_limit_blocks);
-    stats->csrf_violations = atomic_load(&security_csrf_violations);
-    stats->auth_failures = atomic_load(&security_auth_failures);
+    metrics_state_t* st = metrics_state_ensure();
+    if (!st) {
+        return;
+    }
+    stats->rate_limit_blocks = atomic_load(&st->security_rate_limit_blocks);
+    stats->csrf_violations = atomic_load(&st->security_csrf_violations);
+    stats->auth_failures = atomic_load(&st->security_auth_failures);
 }
 
 /**
@@ -205,22 +237,34 @@ csilk_process_get_stats(csilk_process_stats_t* stats)
 CSILK_INTERNAL void
 _csilk_metrics_inc_rate_limit_blocks(void)
 {
+    metrics_state_t* st = metrics_state_ensure();
+    if (!st) {
+        return;
+    }
     CSILK_LOG_D("Metrics: incrementing security_rate_limit_blocks");
-    atomic_fetch_add(&security_rate_limit_blocks, 1);
+    atomic_fetch_add(&st->security_rate_limit_blocks, 1);
 }
 
 CSILK_INTERNAL void
 _csilk_metrics_inc_csrf_violations(void)
 {
+    metrics_state_t* st = metrics_state_ensure();
+    if (!st) {
+        return;
+    }
     CSILK_LOG_D("Metrics: incrementing security_csrf_violations");
-    atomic_fetch_add(&security_csrf_violations, 1);
+    atomic_fetch_add(&st->security_csrf_violations, 1);
 }
 
 CSILK_INTERNAL void
 _csilk_metrics_inc_auth_failures(void)
 {
+    metrics_state_t* st = metrics_state_ensure();
+    if (!st) {
+        return;
+    }
     CSILK_LOG_D("Metrics: incrementing security_auth_failures");
-    atomic_fetch_add(&security_auth_failures, 1);
+    atomic_fetch_add(&st->security_auth_failures, 1);
 }
 
 /* --- Middleware Implementation --- */
@@ -248,15 +292,20 @@ csilk_metrics_middleware(csilk_ctx_t* c, const char* arg)
     double   duration_sec = (double)duration_ns / 1e9;
     uint64_t duration_us = duration_ns / 1000;
 
+    metrics_state_t* st = metrics_state_ensure();
+    if (!st) {
+        return;
+    }
+
     /* 1. Update Global Aggregate Metrics (Fast path) */
-    atomic_fetch_add(&http_requests_total, 1);
-    atomic_fetch_add(&http_request_duration_microseconds, duration_us);
+    atomic_fetch_add(&st->http_requests_total, 1);
+    atomic_fetch_add(&st->http_request_duration_microseconds, duration_us);
 
     /* 2. Update Dimensional Route Metrics & Histograms */
     const char* method = csilk_get_method(c) ? csilk_get_method(c) : "UNKNOWN";
 
     /* Use the static route pattern (e.g., /users/:id) if available, otherwise
-   * fall back. */
+     * fall back. */
     const char* route = csilk_ctx_get_handler_path(c);
     if (!route) {
         route = "unmatched";
@@ -342,6 +391,10 @@ append_metric(char** buf, size_t* size, size_t* offset, const char* fmt, ...)
 void
 csilk_metrics_handler(csilk_ctx_t* c)
 {
+    metrics_state_t* st = metrics_state_ensure();
+    if (!st) {
+        return;
+    }
     char*  buf = NULL;
     size_t size = 0, offset = 0;
 
@@ -358,7 +411,7 @@ csilk_metrics_handler(csilk_ctx_t* c)
                   &size,
                   &offset,
                   "http_requests_total_agg %llu\n",
-                  (unsigned long long)atomic_load(&http_requests_total));
+                  (unsigned long long)atomic_load(&st->http_requests_total));
 
     append_metric(&buf,
                   &size,
@@ -370,7 +423,7 @@ csilk_metrics_handler(csilk_ctx_t* c)
                   &size,
                   &offset,
                   "http_request_duration_microseconds_agg %llu\n",
-                  (unsigned long long)atomic_load(&http_request_duration_microseconds));
+                  (unsigned long long)atomic_load(&st->http_request_duration_microseconds));
 
     /* --- Part 2: Dimensional HTTP Metrics (Labels + Histogram) --- */
     append_metric(&buf,
@@ -387,7 +440,7 @@ csilk_metrics_handler(csilk_ctx_t* c)
     append_metric(&buf, &size, &offset, "# TYPE http_request_duration_seconds histogram\n");
 
     for (int i = 0; i < CSILK_METRICS_MAX_ENTRIES; i++) {
-        csilk_route_metric_t* slot = &route_metrics[i];
+        csilk_route_metric_t* slot = &st->route_metrics[i];
         if (atomic_load_explicit(&slot->in_use, memory_order_acquire) == 2) {
             uint64_t count = atomic_load(&slot->count);
             double   dur_sec = (double)atomic_load(&slot->duration_us) / 1e6;
@@ -588,7 +641,11 @@ csilk_metrics_handler(csilk_ctx_t* c)
 uint64_t
 csilk_metrics_get_total_requests(void)
 {
-    return atomic_load(&http_requests_total);
+    metrics_state_t* st = metrics_state_ensure();
+    if (!st) {
+        return 0;
+    }
+    return atomic_load(&st->http_requests_total);
 }
 
 /** @brief Return the atomic global accumulated request duration.
@@ -597,5 +654,9 @@ csilk_metrics_get_total_requests(void)
 uint64_t
 csilk_metrics_get_total_duration(void)
 {
-    return atomic_load(&http_request_duration_microseconds);
+    metrics_state_t* st = metrics_state_ensure();
+    if (!st) {
+        return 0;
+    }
+    return atomic_load(&st->http_request_duration_microseconds);
 }
