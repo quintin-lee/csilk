@@ -26,6 +26,7 @@
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 #include "csilk/core/middleware.h"
+#include "core/internal/srv_internal.h"
 
 /** @brief Default session TTL in seconds. */
 enum { SESSION_TTL = 3600 };
@@ -136,6 +137,52 @@ session_store_ensure(void)
 }
 
 /**
+ * @brief Lazily obtain the per-server session store, allocating and
+ * initializing it on first use. The store is owned by the server and freed
+ * by _csilk_session_store_free() at server teardown.
+ *
+ * @param server  The owning server (must have a non-NULL session_store slot).
+ * @return The per-server session store (never NULL on success).
+ */
+static session_store_t*
+session_store_ensure_server(csilk_server_t* server)
+{
+    session_store_t* store = (session_store_t*)server->session_store;
+    if (!store) {
+        store = calloc(1, sizeof(session_store_t));
+        if (!store) {
+            CSILK_LOG_E("Session: failed to allocate per-server session store");
+            return NULL;
+        }
+        store->init_once = CSILK_ONCE_INIT;
+        atomic_init(&store->session_count, 0);
+        atomic_init(&store->session_max, SESSION_MAX_DEFAULT);
+        server->session_store = store;
+    }
+    csilk_once(&store->init_once, init_session_buckets);
+    return store;
+}
+
+/**
+ * @brief Resolve the session store for a given request context.
+ *
+ * Prefers the per-server store when the context is bound to a server, falling
+ * back to the process-level global store for server-less contexts (tests).
+ *
+ * @param c  The request context.
+ * @return The session store to use (never NULL on success).
+ */
+static session_store_t*
+session_store_for_ctx(csilk_ctx_t* c)
+{
+    csilk_server_t* server = csilk_ctx_get_server(c);
+    if (server) {
+        return session_store_ensure_server(server);
+    }
+    return session_store_ensure();
+}
+
+/**
  * @brief Compute the FNV-1a hash of a session ID string.
  *
  * Maps to a bucket index in [0, SESSION_BUCKET_COUNT).
@@ -239,10 +286,38 @@ _session_ctx_release(void* ptr)
     session_unref((csilk_session_t*)ptr);
 }
 
-static csilk_session_t*
-find_session_locked(const char* id)
+/**
+ * @brief Free a server's per-server session store. Called from csilk_server_free().
+ *
+ * Walks all buckets, unrefing each session (drops the store membership ref; the
+ * session is freed when its ref count reaches zero). Safe to call when the
+ * store is NULL (no-op). Must be called after all in-flight contexts have been
+ * drained so no context ref outlives the store.
+ */
+void
+_csilk_session_store_free(csilk_server_t* server)
 {
-    session_store_t* store = session_store_ensure();
+    session_store_t* store = (session_store_t*)server->session_store;
+    if (!store) {
+        return;
+    }
+    for (size_t i = 0; i < SESSION_BUCKET_COUNT; i++) {
+        csilk_session_t* session = store->buckets[i].head;
+        store->buckets[i].head = NULL;
+        while (session) {
+            csilk_session_t* next = session->next;
+            session->next = NULL;
+            session_unref(session); /* Drop store membership ref */
+            session = next;
+        }
+    }
+    free(store);
+    server->session_store = NULL;
+}
+
+static csilk_session_t*
+find_session_locked(session_store_t* store, const char* id)
+{
     if (!store) {
         return NULL;
     }
@@ -279,9 +354,8 @@ find_session_locked(const char* id)
 }
 
 static void
-add_session_locked(csilk_session_t* session)
+add_session_locked(session_store_t* store, csilk_session_t* session)
 {
-    session_store_t* store = session_store_ensure();
     if (!store) {
         return;
     }
@@ -352,9 +426,8 @@ add_session_locked(csilk_session_t* session)
 }
 
 static void
-remove_session_locked(csilk_session_t* session)
+remove_session_locked(session_store_t* store, csilk_session_t* session)
 {
-    session_store_t* store = session_store_ensure();
     if (!store) {
         return;
     }
@@ -381,9 +454,8 @@ remove_session_locked(csilk_session_t* session)
 }
 
 static void
-cleanup_expired(void)
+cleanup_expired(session_store_t* store)
 {
-    session_store_t* store = session_store_ensure();
     if (!store) {
         return;
     }
@@ -453,7 +525,30 @@ csilk_session_init(void)
         return;
     }
     CSILK_LOG_I("Session: Initializing session subsystem");
-    cleanup_expired();
+    cleanup_expired(store);
+}
+
+/**
+ * @brief Initialize the per-server session store for a specific server.
+ *
+ * Allocates the session store on the given server so that each server
+ * maintains independent session state. The store is freed at server
+ * teardown via _csilk_session_store_free().
+ *
+ * @param server  The server whose session store should be initialized.
+ */
+void
+csilk_session_init_server(csilk_server_t* server)
+{
+    if (!server) {
+        return;
+    }
+    session_store_t* store = session_store_ensure_server(server);
+    if (!store) {
+        return;
+    }
+    CSILK_LOG_I("Session: Initializing per-server session store for server %p", (void*)server);
+    cleanup_expired(store);
 }
 
 /**
@@ -487,8 +582,13 @@ csilk_session_start(csilk_ctx_t* c)
     const char*      sid = csilk_get_cookie(c, SESSION_COOKIE);
     csilk_session_t* session = NULL;
 
+    session_store_t* store = session_store_for_ctx(c);
+    if (!store) {
+        return;
+    }
+
     if (sid) {
-        session = find_session_locked(sid);
+        session = find_session_locked(store, sid);
     }
 
     if (!session) {
@@ -504,7 +604,7 @@ csilk_session_start(csilk_ctx_t* c)
         generate_session_id(c, session->id);
         session->expires_at = time(NULL) + SESSION_TTL;
 
-        add_session_locked(session);
+        add_session_locked(store, session);
 
         CSILK_LOG_D("Session: Created new session '%s' for request %p", session->id, (void*)c);
         csilk_set_cookie(c, SESSION_COOKIE, session->id, 60 * 60 * 24, "/", NULL, 1, 1);
@@ -774,7 +874,8 @@ csilk_session_destroy(csilk_ctx_t* c)
 
     CSILK_LOG_I("Session: Destroying session '%s' for request %p", session->id, (void*)c);
 
-    remove_session_locked(session);
+    session_store_t* store = session_store_for_ctx(c);
+    remove_session_locked(store, session);
     /* Clears "_session" and invokes _session_ctx_release() to drop context ref. */
     csilk_set_ex(c, "_session", NULL, NULL);
     csilk_set_cookie(c, SESSION_COOKIE, "", -1, "/", NULL, 0, 1);

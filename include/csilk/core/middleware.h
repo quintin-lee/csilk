@@ -365,6 +365,19 @@ const char* csilk_validate(csilk_ctx_t* c, const csilk_valid_rule_t* rules);
 void csilk_session_init(void);
 
 /**
+ * @brief Initialise the per-server session store for a specific server.
+ *
+ * Allocates the session store on the given server so that each server
+ * maintains independent session state.  Safe to call multiple times; the
+ * store is allocated lazily on first use and freed at server teardown.
+ * Server-less contexts (tests) automatically fall back to a process-level
+ * store.
+ *
+ * @param server  The server whose session store should be initialized.
+ */
+void csilk_session_init_server(csilk_server_t* server);
+
+/**
  * @brief Start or resume a session for the current request.
  *
  * If the client sent a session cookie, the existing session is loaded.
