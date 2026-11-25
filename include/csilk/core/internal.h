@@ -82,10 +82,20 @@ enum { CSILK_UUID_BUF_SIZE = 37 };
  * ================================================================ */
 
 typedef struct csilk_tracer_hooks_s {
-    void* (*start_span)(const char* name, const char* parent_span_id);
-    void (*end_span)(void* span, int status_code);
+    /**
+     * Start a new trace span. @p scope is an opaque owning-server handle
+     * (csilk_server_t*) used to route spans into the per-server trace buffer;
+     * pass NULL for process-level spans.
+     */
+    void* (*start_span)(const char* name, const char* parent_span_id, void* scope);
+    /** Finalize and record a span into the buffer owning @p scope (or global). */
+    void (*end_span)(void* span, int status_code, void* scope);
 } csilk_tracer_hooks_t;
 
 void  csilk_tracer_set_hooks(const csilk_tracer_hooks_t* hooks);
 void* csilk_trace_span_start(const char* name);
 void  csilk_trace_span_end(void* span, int status_code);
+/** @brief Start a span routed to the owning server's trace buffer. */
+void* csilk_trace_span_start_scoped(const char* name, const char* parent_span_id, void* scope);
+/** @brief Finalize a span into the owning server's trace buffer. */
+void csilk_trace_span_end_scoped(void* span, int status_code, void* scope);

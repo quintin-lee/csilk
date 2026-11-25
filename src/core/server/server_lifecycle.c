@@ -353,6 +353,7 @@ csilk_server_free(csilk_server_t* server)
 
     _csilk_ws_room_mgr_free(server);
     _csilk_session_store_free(server);
+    _csilk_otlp_state_free(server);
     csilk_dev_hot_reload_stop(server);
     _csilk_plugin_cleanup_server(server);
     csilk_server_wait_grace_period(server);

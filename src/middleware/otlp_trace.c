@@ -19,6 +19,7 @@
 #include "csilk/csilk.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/middleware/otlp_trace.h"
+#include "core/internal/srv_internal.h"
 
 #define OTLP_SPAN_BUF_CAP 2048 /* default; overridable via csilk_otlp_tracer_set_buffer_size */
 #define OTLP_SAMPLE_RATE_DEFAULT 1000 /* sample 1/1000 when buffer is full */
@@ -65,6 +66,10 @@ static otlp_state_t* g_otlp_state = NULL;
 static _Thread_local csilk_trace_ctx_node_t tls_trace_stack[CSILK_MAX_TRACE_DEPTH];
 static _Thread_local int                    tls_trace_depth = 0;
 
+/* Forward declarations for the scoped hook implementations registered below. */
+static void* _otlp_hook_start_span(const char* name, const char* parent_span_id, void* scope);
+static void  _otlp_hook_end_span(void* span, int status_code, void* scope);
+
 static void
 _otlp_init_once_cb(void)
 {
@@ -76,8 +81,8 @@ _otlp_init_once_cb(void)
     csilk_mutex_init(&st->sidecar_mutex);
 
     csilk_tracer_hooks_t hooks = {
-        .start_span = (void* (*)(const char*, const char*))csilk_otlp_tracer_start_span,
-        .end_span = (void (*)(void*, int))csilk_otlp_tracer_end_span,
+        .start_span = _otlp_hook_start_span,
+        .end_span = _otlp_hook_end_span,
     };
     csilk_tracer_set_hooks(&hooks);
 }
@@ -104,6 +109,78 @@ _otlp_state_ensure(void)
     }
     csilk_once(&g_otlp_state->init_once, _otlp_init_once_cb);
     return g_otlp_state;
+}
+
+/**
+ * @brief Lazily obtain the per-server OTLP tracer state. The state is owned
+ * by the server and freed by _csilk_otlp_state_free() at teardown. Hook
+ * registration remains process-level (see _otlp_init_once_cb); this only
+ * allocates an independent span ring buffer + sidecar table for the server.
+ */
+static otlp_state_t*
+_otlp_state_ensure_server(csilk_server_t* server)
+{
+    otlp_state_t* st = (otlp_state_t*)server->otlp_state;
+    if (!st) {
+        st = calloc(1, sizeof(otlp_state_t));
+        if (!st) {
+            return NULL;
+        }
+        st->cap = OTLP_SPAN_BUF_CAP;
+        atomic_init(&st->sample_rate, OTLP_SAMPLE_RATE_DEFAULT);
+        atomic_init(&st->total_spans, 0);
+        st->init_once = CSILK_ONCE_INIT;
+        server->otlp_state = st;
+    }
+    /* Initialize this server's buffers (buffer/sidecar only; hooks stay global). */
+    csilk_mutex_init(&st->buffer_mutex);
+    csilk_mutex_init(&st->sidecar_mutex);
+    size_t cap = st->cap > 0 ? st->cap : OTLP_SPAN_BUF_CAP;
+    st->spans = calloc(cap, sizeof(csilk_otlp_span_t));
+    st->cap = cap;
+    return st;
+}
+
+/**
+ * @brief Resolve the OTLP tracer state for a request context.
+ *
+ * Prefers the per-server state when the context is bound to a server, falling
+ * back to the process-level global state for server-less contexts (tests).
+ */
+static otlp_state_t*
+_otlp_state_for_ctx(csilk_ctx_t* c)
+{
+    csilk_server_t* server = csilk_ctx_get_server(c);
+    if (server) {
+        otlp_state_t* st = _otlp_state_ensure_server(server);
+        if (st) {
+            return st;
+        }
+    }
+    return _otlp_state_ensure();
+}
+
+/**
+ * @brief Free a server's per-server OTLP tracer state. Called from
+ * csilk_server_free(). Frees the span ring buffer and sidecar attributes.
+ */
+void
+_csilk_otlp_state_free(csilk_server_t* server)
+{
+    otlp_state_t* st = (otlp_state_t*)server->otlp_state;
+    if (!st) {
+        return;
+    }
+    if (st->spans) {
+        free(st->spans);
+    }
+    for (size_t i = 0; i < CSILK_OTLP_SIDECAR_CAP; i++) {
+        if (st->sidecar_table[i].in_use && st->sidecar_table[i].attributes) {
+            csilk_json_free(st->sidecar_table[i].attributes);
+        }
+    }
+    free(st);
+    server->otlp_state = NULL;
 }
 
 static void
@@ -409,27 +486,12 @@ csilk_otlp_tracer_start_span_ctx(csilk_ctx_t* c, const char* name)
  *                            immediately.
  * @param[in]     status_code Final span status code.
  */
-void
-csilk_otlp_tracer_end_span(csilk_otlp_span_t* span, int status_code)
+static void
+_otlp_record_span_state(otlp_state_t* st, csilk_otlp_span_t* span)
 {
-    if (!span) {
-        return;
-    }
-
-    span->end_time_ns = get_current_time_ns();
-    span->status_code = status_code;
-
-    if (tls_trace_depth > 0 &&
-        strcmp(tls_trace_stack[tls_trace_depth - 1].span_id, span->span_id) == 0) {
-        tls_trace_depth--;
-    }
-
-    uint64_t total =
-        atomic_fetch_add_explicit(&g_otlp_state->total_spans, 1, memory_order_relaxed) + 1;
+    uint64_t total = atomic_fetch_add_explicit(&st->total_spans, 1, memory_order_relaxed) + 1;
 
     /* If buffer is at capacity, apply sampling: record only every sample_rate-th span */
-    _otlp_state_ensure();
-    otlp_state_t* st = g_otlp_state;
     csilk_mutex_lock(&st->buffer_mutex);
     if (st->spans && st->count < st->cap) {
         st->spans[st->head] = *span;
@@ -450,6 +512,78 @@ csilk_otlp_tracer_end_span(csilk_otlp_span_t* span, int status_code)
     free(span);
 }
 
+/**
+ * @brief Finalize a span and record it into a specific tracer state.
+ */
+void
+csilk_otlp_tracer_end_span(csilk_otlp_span_t* span, int status_code)
+{
+    if (!span) {
+        return;
+    }
+    span->end_time_ns = get_current_time_ns();
+    span->status_code = status_code;
+    if (tls_trace_depth > 0 &&
+        strcmp(tls_trace_stack[tls_trace_depth - 1].span_id, span->span_id) == 0) {
+        tls_trace_depth--;
+    }
+    otlp_state_t* st = _otlp_state_ensure();
+    if (!st) {
+        free(span);
+        return;
+    }
+    _otlp_record_span_state(st, span);
+}
+
+/**
+ * @brief Hook implementation for the scoped end_span callback.
+ *
+ * Resolves the tracer state from @p scope (the owning csilk_server_t*) when
+ * provided, otherwise falls back to the process-level state. This is what
+ * makes spans land in the owning server's ring buffer.
+ */
+static void
+_otlp_hook_end_span(void* span, int status_code, void* scope)
+{
+    if (!span) {
+        return;
+    }
+    csilk_otlp_span_t* s = (csilk_otlp_span_t*)span;
+    s->end_time_ns = get_current_time_ns();
+    s->status_code = status_code;
+    if (tls_trace_depth > 0 &&
+        strcmp(tls_trace_stack[tls_trace_depth - 1].span_id, s->span_id) == 0) {
+        tls_trace_depth--;
+    }
+    otlp_state_t* st = NULL;
+    if (scope) {
+        csilk_server_t* server = (csilk_server_t*)scope;
+        st = _otlp_state_ensure_server(server);
+    }
+    if (!st) {
+        st = _otlp_state_ensure();
+    }
+    if (!st) {
+        free(s);
+        return;
+    }
+    _otlp_record_span_state(st, s);
+}
+
+/**
+ * @brief Hook implementation for the scoped start_span callback.
+ *
+ * Span creation is buffer-independent (uses the TLS stack), so scope only
+ * affects where the completed span is later recorded; the created span is
+ * tagged with its owning scope so end_span can route it.
+ */
+static void*
+_otlp_hook_start_span(const char* name, const char* parent_span_id, void* scope)
+{
+    (void)scope; /* start_span is buffer-independent; routing happens at end_span */
+    return csilk_otlp_tracer_start_span(name, parent_span_id);
+}
+
 void
 csilk_otlp_apm_spans_handler(csilk_ctx_t* c)
 {
@@ -457,8 +591,10 @@ csilk_otlp_apm_spans_handler(csilk_ctx_t* c)
         return;
     }
 
-    _otlp_state_ensure();
-    otlp_state_t* st = g_otlp_state;
+    otlp_state_t* st = _otlp_state_for_ctx(c);
+    if (!st) {
+        return;
+    }
     csilk_mutex_lock(&st->buffer_mutex);
     csilk_json_t* arr = csilk_json_array();
     size_t        count = st->count;

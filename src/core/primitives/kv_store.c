@@ -241,16 +241,28 @@ csilk_tracer_set_hooks(const csilk_tracer_hooks_t* hooks)
 void*
 csilk_trace_span_start(const char* name)
 {
-    if (g_tracer_hooks.start_span) {
-        return g_tracer_hooks.start_span(name, NULL);
-    }
-    return NULL;
+    return csilk_trace_span_start_scoped(name, NULL, NULL);
 }
 
 void
 csilk_trace_span_end(void* span, int status_code)
 {
+    csilk_trace_span_end_scoped(span, status_code, NULL);
+}
+
+void*
+csilk_trace_span_start_scoped(const char* name, const char* parent_span_id, void* scope)
+{
+    if (g_tracer_hooks.start_span) {
+        return g_tracer_hooks.start_span(name, parent_span_id, scope);
+    }
+    return NULL;
+}
+
+void
+csilk_trace_span_end_scoped(void* span, int status_code, void* scope)
+{
     if (span && g_tracer_hooks.end_span) {
-        g_tracer_hooks.end_span(span, status_code);
+        g_tracer_hooks.end_span(span, status_code, scope);
     }
 }

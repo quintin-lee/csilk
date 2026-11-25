@@ -276,6 +276,7 @@ struct csilk_server_s {
     void*             app; /**< Back-reference to owning csilk_app_t (NULL for bare servers). */
     void* ws_room_mgr;   /**< WebSocket room manager (ws_room_manager_t, NULL until first join). */
     void* session_store; /**< Per-server session store (session_store_t*, NULL until first use). */
+    void* otlp_state;    /**< Per-server OTLP tracer state (otlp_state_t*, NULL until first use). */
 };
 
 #define CSILK_H2_INLINE_BUCKETS 16
@@ -421,5 +422,6 @@ CSILK_INTERNAL void _csilk_reload_mgr_free(csilk_server_t* server);
 /** @brief Free the WebSocket room manager owned by a server instance. */
 CSILK_INTERNAL void _csilk_ws_room_mgr_free(csilk_server_t* server);
 CSILK_INTERNAL void _csilk_session_store_free(csilk_server_t* server);
+CSILK_INTERNAL void _csilk_otlp_state_free(csilk_server_t* server);
 
 #endif /* CSILK_SERVER_INTERNAL_H */
