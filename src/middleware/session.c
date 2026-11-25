@@ -98,17 +98,39 @@ typedef struct {
 static session_store_t* g_session_store = NULL;
 
 /**
- * @brief Initialize all bucket mutexes (called once via csilk_once).
+ * @brief Initialize all bucket mutexes for a session store.
+ *
+ * Called via csilk_once + trampoline so that initialization is safe even
+ * under concurrent calls.  Takes the store as a parameter so that both the
+ * process-level (g_session_store) and per-server stores can share the
+ * same code path.
  */
 static void
-init_session_buckets(void)
+init_session_buckets(session_store_t* store)
 {
-    session_store_t* store = g_session_store;
     for (size_t i = 0; i < SESSION_BUCKET_COUNT; i++) {
         store->buckets[i].head = NULL;
         csilk_mutex_init(&store->buckets[i].mutex);
     }
     CSILK_LOG_I("Session: Sharded store initialized (%zu buckets)", (size_t)SESSION_BUCKET_COUNT);
+}
+
+/*
+ * csilk_once callbacks take no arguments (void (*)(void)), so we use a
+ * trampoline pattern: a _Thread_local pointer carries the store address
+ * into the no-arg callback.
+ */
+_Thread_local static session_store_t* tls_pending_store = NULL;
+
+/**
+ * @brief Trampoline that forwards the thread-local store pointer to
+ *        init_session_buckets().  Must be paired with a write to
+ *        tls_pending_store immediately before calling csilk_once.
+ */
+static void
+init_session_buckets_trampoline(void)
+{
+    init_session_buckets(tls_pending_store);
 }
 
 /**
@@ -132,7 +154,10 @@ session_store_ensure(void)
         atomic_init(&store->session_max, SESSION_MAX_DEFAULT);
         g_session_store = store;
     }
-    csilk_once(&store->init_once, init_session_buckets);
+    /* csilk_once callbacks take no arguments; use the TLS trampoline to
+     * carry the store address into the callback on first invocation. */
+    tls_pending_store = store;
+    csilk_once(&store->init_once, init_session_buckets_trampoline);
     return store;
 }
 
@@ -154,12 +179,15 @@ session_store_ensure_server(csilk_server_t* server)
             CSILK_LOG_E("Session: failed to allocate per-server session store");
             return NULL;
         }
+        /* Use the same TLS-trampoline csilk_once pattern as the
+         * process-level path so both share guarded initialization. */
         csilk_once_init(&store->init_once);
+        tls_pending_store = store;
+        csilk_once(&store->init_once, init_session_buckets_trampoline);
         atomic_init(&store->session_count, 0);
         atomic_init(&store->session_max, SESSION_MAX_DEFAULT);
         server->session_store = store;
     }
-    csilk_once(&store->init_once, init_session_buckets);
     return store;
 }
 
