@@ -134,6 +134,28 @@ init_session_buckets_trampoline(void)
 }
 
 /**
+ * @brief Perform the post-allocation initialization sequence for a freshly
+ *        calloc'd session store, shared by both the process-level and
+ *        per-server ensure paths.
+ *
+ *        Runs csilk_once_init, zero-resets the atomic counters, and fires
+ *        the TLS-trampoline once callback that initializes the bucket
+ *        mutexes.  The store's caller slot (g_session_store or
+ *        server->session_store) is written back by the caller AFTER this
+ *        returns, so all sub-stores are fully ready before the store
+ *        becomes visible to other threads.
+ */
+static void
+session_store_initialize(session_store_t* store)
+{
+    csilk_once_init(&store->init_once);
+    atomic_init(&store->session_count, 0);
+    atomic_init(&store->session_max, SESSION_MAX_DEFAULT);
+    tls_pending_store = store;
+    csilk_once(&store->init_once, init_session_buckets_trampoline);
+}
+
+/**
  * @brief Lazily obtain the global session store, allocating and initializing
  * it on first use. The store persists for the process lifetime.
  *
@@ -149,15 +171,9 @@ session_store_ensure(void)
             CSILK_LOG_E("Session: failed to allocate session store");
             return NULL;
         }
-        csilk_once_init(&store->init_once);
-        atomic_init(&store->session_count, 0);
-        atomic_init(&store->session_max, SESSION_MAX_DEFAULT);
+        session_store_initialize(store);
         g_session_store = store;
     }
-    /* csilk_once callbacks take no arguments; use the TLS trampoline to
-     * carry the store address into the callback on first invocation. */
-    tls_pending_store = store;
-    csilk_once(&store->init_once, init_session_buckets_trampoline);
     return store;
 }
 
@@ -179,13 +195,7 @@ session_store_ensure_server(csilk_server_t* server)
             CSILK_LOG_E("Session: failed to allocate per-server session store");
             return NULL;
         }
-        /* Use the same TLS-trampoline csilk_once pattern as the
-         * process-level path so both share guarded initialization. */
-        csilk_once_init(&store->init_once);
-        tls_pending_store = store;
-        csilk_once(&store->init_once, init_session_buckets_trampoline);
-        atomic_init(&store->session_count, 0);
-        atomic_init(&store->session_max, SESSION_MAX_DEFAULT);
+        session_store_initialize(store);
         server->session_store = store;
     }
     return store;
@@ -750,63 +760,6 @@ csilk_session_set_len(csilk_ctx_t*                   c,
 }
 
 /**
- * @brief Retrieve a value from the session.
- *
- * Searches the current session's data list for the given key and returns
- * its associated value.
- *
- * @param c   The request context (used to look up the session).
- * @param key Null-terminated key string. Must not be NULL.
- *
- * @return The value pointer previously stored with csilk_session_set(), or
- *         NULL if the key is not found or no session is active.
- */
-void*
-csilk_session_get(csilk_ctx_t* c, const char* key)
-{
-    if (!c || !key) {
-        return NULL;
-    }
-
-    csilk_session_t* session = csilk_get(c, "_session");
-    if (!session) {
-        return NULL;
-    }
-
-    CSILK_LOG_T("Session: Retrieving key '%s' from session '%s'", key, session->id);
-
-    csilk_mutex_lock(&session->lock);
-    csilk_session_data_t* d = session->data;
-    while (d) {
-        if (strcmp(d->key, key) == 0) {
-            void* v = d->value;
-            csilk_mutex_unlock(&session->lock);
-            return v;
-        }
-        d = d->next;
-    }
-    csilk_mutex_unlock(&session->lock);
-
-    char s_key[128];
-    snprintf(s_key, sizeof(s_key), "session:%s:%s", session->id, key);
-    char* val = csilk_get_string(c, s_key);
-    explicit_bzero(s_key, sizeof(s_key));
-    if (val) {
-        csilk_arena_t* arena = csilk_get_arena(c);
-        if (arena) {
-            char* arena_val = csilk_arena_strdup(arena, val);
-            free(val);
-            /* Cache it locally for subsequent gets */
-            csilk_session_set(c, key, arena_val);
-            return arena_val;
-        }
-        free(val);
-    }
-
-    return NULL;
-}
-
-/**
  * @brief Retrieve a value from the session with an optional size out-parameter.
  *
  * Symmetric to csilk_session_set_len(): when the value was stored with a
@@ -876,6 +829,24 @@ csilk_session_get_ex(csilk_ctx_t* c, const char* key, size_t* out_len)
         *out_len = 0;
     }
     return NULL;
+}
+
+/**
+ * @brief Retrieve a value from the session.
+ *
+ * Searches the current session's data list for the given key and returns
+ * its associated value.
+ *
+ * @param c   The request context (used to look up the session).
+ * @param key Null-terminated key string. Must not be NULL.
+ *
+ * @return The value pointer previously stored with csilk_session_set(), or
+ *         NULL if the key is not found or no session is active.
+ */
+void*
+csilk_session_get(csilk_ctx_t* c, const char* key)
+{
+    return csilk_session_get_ex(c, key, NULL);
 }
 
 /**
