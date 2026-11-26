@@ -113,8 +113,16 @@ csilk_rate_limit_get_saturation_policy(void)
                                                                 memory_order_acquire);
 }
 
-CSILK_INTERNAL void
-_csilk_ratelimit_reset_tables(void)
+/**
+ * @brief Reset every slot in the IP rate-limit table to its empty state.
+ *
+ * Walks the entire MAX_IP_ENTRIES table clearing the lockless state,
+ * counter, timestamps, and the NUL-terminator so each slot reads as empty.
+ * Called by _csilk_ratelimit_reset_tables() (e.g. test isolation, hot
+ * reload).
+ */
+static void
+reset_ip_table(void)
 {
     for (uint32_t i = 0; i < MAX_IP_ENTRIES; i++) {
         atomic_store_explicit(&ip_table[i].state, 0, memory_order_relaxed);
@@ -123,6 +131,17 @@ _csilk_ratelimit_reset_tables(void)
         atomic_store_explicit(&ip_table[i].last_seen, 0, memory_order_relaxed);
         ip_table[i].ip[0] = '\0';
     }
+}
+
+/**
+ * @brief Reset every slot in the keyed rate-limit table to its empty state.
+ *
+ * Same per-slot reset as reset_ip_table(), plus the keyed entry's extra
+ * window_seconds field.
+ */
+static void
+reset_key_table(void)
+{
     for (uint32_t i = 0; i < MAX_KEY_ENTRIES; i++) {
         atomic_store_explicit(&key_table[i].state, 0, memory_order_relaxed);
         atomic_store_explicit(&key_table[i].count, 0, memory_order_relaxed);
@@ -131,6 +150,13 @@ _csilk_ratelimit_reset_tables(void)
         atomic_store_explicit(&key_table[i].window_seconds, 0, memory_order_relaxed);
         key_table[i].key[0] = '\0';
     }
+}
+
+CSILK_INTERNAL void
+_csilk_ratelimit_reset_tables(void)
+{
+    reset_ip_table();
+    reset_key_table();
     atomic_store_explicit(&ratelimit_time_offset, 0, memory_order_relaxed);
     atomic_store_explicit(
         &ip_saturation_policy, CSILK_RATE_SATURATION_EVICT_LRU, memory_order_release);
