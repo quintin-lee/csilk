@@ -168,7 +168,9 @@ test_pool_reaps_dead_child_on_reuse(void)
 {
     csilk_mcp_stdio_pool_shutdown();
 
-    /* A long-lived child: the pool treats it as a real MCP stdio server.
+    /* A long-lived child: the pool treats it as a real MCP stdio server,
+     * so the child stays alive until we kill it - exactly the state a
+     * crashed MCP server leaves behind in a slot.
      * argv[0] must repeat the command name for execvp to resolve it. */
     char*               proc_argv[] = {"sleep", "100", NULL};
     csilk_mcp_client_t* c1 = spawn_real_proc("sleep", proc_argv);
@@ -205,8 +207,8 @@ test_pool_reaps_dead_child_on_reuse(void)
          * dead child). */
         assert(csilk_mcp_stdio_pool_get_count() == 1);
         assert(csilk_mcp_stdio_pool_get_idle_count() == 0);
-        /* The returned client must be usable again: a successful round-trip
-         * proves a live child, i.e. the dead subprocess was replaced. */
+        /* Force the fresh spawn (children spawn lazily on first use) and prove
+         * the pool built a new process instead of resurrecting the dead one. */
         char* ok = csilk_mcp_client_call_tool(c2, "noop", "{}");
         free(ok); /* sleep writes no JSON-RPC: expect failure, but no hang */
         assert(c2->child_pid > 0);

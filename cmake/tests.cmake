@@ -57,6 +57,11 @@ function(add_csilk_test name source)
     set_tests_properties(${name} PROPERTIES TIMEOUT 120)
   elseif(name STREQUAL "test_openai_mock" OR name STREQUAL "test_ai_anthropic" OR name STREQUAL "test_ollama_mock" OR name STREQUAL "test_vector_milvus_qdrant_mock" OR name STREQUAL "test_agent_memory")
     set_tests_properties(${name} PROPERTIES TIMEOUT 60)
+  elseif(name STREQUAL "test_mcp_stdio_pool")
+    # Forks real subprocesses, waits on a TTL boundary and runs RPC round-trips
+    # over a genuinely dead pipe: the liveness and eviction assertions need
+    # far more than the 10s default budget.
+    set_tests_properties(${name} PROPERTIES TIMEOUT 30)
   endif()
 endfunction()
 
