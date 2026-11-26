@@ -430,13 +430,14 @@ set(CSILK_EXTRA_TESTS
     test_integration_ext
     test_admin_integration
     test_session_integration
+    test_session_store_lifecycle
     test_middleware_chain_integration
     test_openapi_integration
     test_sse_integration
     test_ws_integration
 )
 set(CSILK_EXTRA_TEST_DIRS
-    integration;integration;integration;integration;integration;integration;integration;integration;integration
+    integration;integration;integration;integration;integration;integration;integration;integration;integration;integration
 )
 
 # Collect all test names for run_tests DEPENDS
