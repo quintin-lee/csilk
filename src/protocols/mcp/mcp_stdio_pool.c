@@ -10,11 +10,16 @@
 #include "csilk/core/sync.h"
 #include "mcp_internal.h"
 
+#include <errno.h>
+#include <poll.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <time.h>
+#include <unistd.h>
 
 #define CSILK_MCP_STDIO_POOL_CAP 64
 #define CSILK_MCP_STDIO_DEFAULT_MAX 32
@@ -66,15 +71,112 @@ get_max_procs(void)
     return max;
 }
 
-static size_t
-find_idle_slot(const char* key)
+/**
+ * @brief Resolve the idle-eviction TTL in seconds (env override, else default).
+ */
+static int
+get_ttl_seconds(void)
 {
-    for (size_t i = 0; i < CSILK_MCP_STDIO_POOL_CAP; i++) {
-        if (s_pool[i].state == MCP_SLOT_IDLE && strcmp(s_pool[i].key, key) == 0) {
-            return i;
+    char        buf[32];
+    const char* val = csilk_env_get("CSILK_MCP_STDIO_CACHE_TTL", buf, sizeof(buf), NULL);
+    if (!val) {
+        val = csilk_env_get("MINEFOLIO_MCP_CACHE_TTL", buf, sizeof(buf), "60");
+    }
+    int ttl = atoi(val);
+    return ttl > 0 ? ttl : CSILK_MCP_STDIO_DEFAULT_TTL;
+}
+
+/**
+ * @brief Reap every idle slot whose inactivity exceeded @p ttl.
+ *
+ * @pre Caller holds @c s_pool_lock.
+ * @warning Collects victims into @p out_list (which the caller must free) and
+ *          frees the clients itself: the free path may block in waitpid.
+ */
+static size_t
+collect_expired_idle_locked(int ttl, csilk_mcp_client_t** out_list, size_t out_cap)
+{
+    time_t now = time(NULL);
+    size_t kept = 0;
+    for (size_t i = 0; i < CSILK_MCP_STDIO_POOL_CAP && kept < out_cap; i++) {
+        if (s_pool[i].state == MCP_SLOT_IDLE && (now - s_pool[i].last_used) >= (time_t)ttl) {
+            out_list[kept++] = s_pool[i].client;
+            s_pool[i].client = NULL;
+            s_pool[i].state = MCP_SLOT_EMPTY;
+            s_pool[i].key[0] = '\0';
+            s_pool[i].slot_gen++;
         }
     }
-    return SIZE_MAX;
+    return kept;
+}
+
+/* --- Idle-client liveness probing --- */
+
+/**
+ * @brief Probe whether a pooled stdio child is still usable.
+ *
+ * kill(pid, 0) alone cannot answer this: it keeps succeeding while the child is
+ * a zombie (exited but unreaped). combine it with a non-blocking waitpid,
+ * which *does* report an exited child. A reap here is safe because the child is
+ * being declared dead: the slot is dropped by the caller either way.
+ */
+static bool
+_mcp_child_alive(const csilk_mcp_client_t* c)
+{
+    if (!c) {
+        return false;
+    }
+    /* pid <= 0 means the child was never spawned (lazy startup): leave the
+     * decision to the spawn path, never declare a fresh client dead. */
+    if (c->child_pid <= 0) {
+        return true;
+    }
+    if (kill((pid_t)c->child_pid, 0) != 0) {
+        /* ESRCH: already reaped. EPERM: exists but not ours to signal, which
+         * for our own fork'ed children cannot happen. */
+        return errno == EPERM;
+    }
+    int st = 0;
+    return waitpid((pid_t)c->child_pid, &st, WNOHANG) == 0;
+}
+
+/**
+ * @brief Detect whether a pooled child has closed its end of the stdio pipe.
+ *
+ * A child that exited on its own closes stdout, so the parent's read end keeps
+ * reporting readable while read() returns 0. This is the only reliable death
+ * signal for a *zombie* child: kill(pid, 0) keeps succeeding until somebody
+ * reaps it, so the process probe alone cannot see an exited-but-unreaped
+ * subprocess.
+ *
+ * Only POLLHUP / POLLERR are treated as EOF. POLLIN deliberately is NOT: a
+ * live child may have unsolicited notification frames buffered, and treating
+ * "readable" as "dead" would reap perfectly healthy pooled clients.
+ */
+static bool
+_mcp_pipe_eof(const csilk_mcp_client_t* c)
+{
+    if (!c || !c->is_stdio || c->pipe_fd[0] < 0) {
+        return false;
+    }
+    struct pollfd pfd = {.fd = c->pipe_fd[0], .events = POLLIN};
+    int           rc = poll(&pfd, 1, 0);
+    return rc > 0 && (pfd.revents & (POLLHUP | POLLERR)) != 0;
+}
+
+/**
+ * @brief Decide whether an idle pooled stdio client can still be reused.
+ *
+ * Combines the process liveness probe with an EOF check on the read pipe. A
+ * dead-but-unreaped child (kill -> ESRCH) or a peer that closed its stdout end
+ * makes the slot unusable: keeping it would hand the caller a client whose
+ * every RPC fails, which surfaces as an opaque "tool returned NULL" far away
+ * from the real cause.
+ */
+static bool
+_mcp_slot_healthy(const csilk_mcp_client_t* c)
+{
+    return _mcp_child_alive(c) && !_mcp_pipe_eof(c);
 }
 
 static size_t
@@ -127,8 +229,40 @@ csilk_mcp_stdio_pool_acquire_keyed(const char* key, const char* command, char* c
 
     csilk_mutex_lock(&s_pool_lock);
 
-    /* Phase 1: check for idle slot */
-    size_t slot = find_idle_slot(key);
+    /* Phase 1: check for an idle, *healthy* slot. An idle entry whose
+     * subprocess already exited (or whose pipe hit EOF) must never be handed
+     * out: the caller would get a client whose every RPC fails, reported far
+     * from the real cause. Dead entries are reaped on the spot and a fresh
+     * client is spawned instead. The probing helpers never block, so this is
+     * safe under the pool lock.
+     *
+     * Entries idle for longer than the TTL are treated as dead too: nobody
+     * calls evict_idle() from inside the framework, so this scan is the only
+     * place the TTL can be enforced without an external timer. */
+    time_t now = time(NULL);
+    int    ttl = get_ttl_seconds();
+    size_t slot = SIZE_MAX;
+    for (size_t i = 0; i < CSILK_MCP_STDIO_POOL_CAP; i++) {
+        if (s_pool[i].state != MCP_SLOT_IDLE || strcmp(s_pool[i].key, key) != 0) {
+            continue;
+        }
+        if ((now - s_pool[i].last_used) >= (time_t)ttl || !_mcp_slot_healthy(s_pool[i].client)) {
+            csilk_mcp_client_t* dead = s_pool[i].client;
+            s_pool[i].client = NULL;
+            s_pool[i].state = MCP_SLOT_EMPTY;
+            s_pool[i].key[0] = '\0';
+            s_pool[i].slot_gen++;
+            /* Free outside the lock: csilk_mcp_client_free may block in
+             * waitpid, and holding s_pool_lock across it would stall every
+             * other acquire. */
+            csilk_mutex_unlock(&s_pool_lock);
+            csilk_mcp_client_free(dead);
+            csilk_mutex_lock(&s_pool_lock);
+            continue;
+        }
+        slot = i;
+        break;
+    }
     if (slot != SIZE_MAX) {
         s_pool[slot].state = MCP_SLOT_IN_USE;
         s_pool[slot].last_used = time(NULL);
@@ -294,31 +428,14 @@ csilk_mcp_stdio_pool_evict_idle(int ttl_seconds)
     ensure_pool_init();
     int ttl = ttl_seconds;
     if (ttl < 0) {
-        char        buf[32];
-        const char* val = csilk_env_get("CSILK_MCP_STDIO_CACHE_TTL", buf, sizeof(buf), NULL);
-        if (!val) {
-            val = csilk_env_get("MINEFOLIO_MCP_CACHE_TTL", buf, sizeof(buf), "60");
-        }
-        ttl = atoi(val);
-        if (ttl <= 0) {
-            ttl = CSILK_MCP_STDIO_DEFAULT_TTL;
-        }
+        ttl = get_ttl_seconds();
     }
 
-    time_t              now = time(NULL);
     csilk_mcp_client_t* dead_list[CSILK_MCP_STDIO_POOL_CAP];
     size_t              dead_count = 0;
 
     csilk_mutex_lock(&s_pool_lock);
-    for (size_t i = 0; i < CSILK_MCP_STDIO_POOL_CAP; i++) {
-        if (s_pool[i].state == MCP_SLOT_IDLE && (now - s_pool[i].last_used) >= (time_t)ttl) {
-            dead_list[dead_count++] = s_pool[i].client;
-            s_pool[i].client = NULL;
-            s_pool[i].state = MCP_SLOT_EMPTY;
-            s_pool[i].key[0] = '\0';
-            s_pool[i].slot_gen++;
-        }
-    }
+    dead_count = collect_expired_idle_locked(ttl, dead_list, CSILK_MCP_STDIO_POOL_CAP);
     csilk_mutex_unlock(&s_pool_lock);
 
     for (size_t i = 0; i < dead_count; i++) {
