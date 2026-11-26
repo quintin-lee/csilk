@@ -219,7 +219,6 @@ typedef struct csilk_runtime_config_s {
 } csilk_runtime_config_t;
 
 /**
-/**
  * @brief HTTP/3 (QUIC) transport state, consolidated on the server.
  *
  * Holds the H3/QUIC fields that were previously scattered as independent

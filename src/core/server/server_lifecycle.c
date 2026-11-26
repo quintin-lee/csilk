@@ -49,19 +49,20 @@
  * `csilk_server_free()` closes handles (dispatch async, event loop) whose
  * close callbacks only run on the next loop iteration. Each drain iteration
  * runs `CSILK_IO_RUN_NOWAIT`, so this is a bounded anti-spin guard: it gives
- * pending close/pending-work callbacks enough passes to fly while
- * guaranteeing teardown cannot hang forever on a stuck handle.
+ * pending close and async callbacks enough passes to fly while guaranteeing
+ * teardown cannot hang forever on a stuck handle.
  *
  * All drain sites in this file MUST use this single value so the bounded
  * budget stays consistent (previously 64 vs 50 at different sites).
  */
-static constexpr int SERVER_FREE_LOOP_DRAIN_MAX = 64;
+enum { SERVER_FREE_LOOP_DRAIN_MAX = 64 };
 
 /**
  * @brief Pump an event loop nowait up to SERVER_FREE_LOOP_DRAIN_MAX times.
  *
- * Drives pending close / async callbacks during teardown. Stops early once
- * the loop reports no more live handles. Safe to call with a NULL loop.
+ * Drives pending close and async callbacks during teardown. Stops early
+ * once the loop reports no more live handles. Safe to call with a NULL
+ * loop.
  *
  * @param loop The event loop to drain, may be NULL.
  */
