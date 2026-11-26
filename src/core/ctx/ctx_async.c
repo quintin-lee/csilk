@@ -75,7 +75,8 @@ _csilk_async_op_ctx_valid_owner(const csilk_async_op_t* op,
     if (!client) {
         return 1;
     }
-    return client->state != CSILK_CONN_CLOSING && client->state != CSILK_CONN_CLOSED &&
+    csilk_conn_state_t st = csilk_conn_get_state(client);
+    return st != CSILK_CONN_CLOSING && st != CSILK_CONN_CLOSED &&
            client->generation == op->generation && c->request_seq == op->request_seq &&
            (c->h2_stream_owner == NULL || c->stream_gen == op->stream_gen);
 }

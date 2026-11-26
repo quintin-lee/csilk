@@ -241,7 +241,8 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
     size_t          buflen = buf ? buf->len : 0;
     int             is_registered = 0;
 
-    if (!client || client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+    if (!client || csilk_conn_get_state(client) == CSILK_CONN_CLOSING ||
+        csilk_conn_get_state(client) == CSILK_CONN_CLOSED) {
         if (base) {
             extern void pool_put_read_buf(worker_pool_t * wp, char* base, size_t size);
             pool_put_read_buf(NULL, base, buflen);

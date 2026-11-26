@@ -306,20 +306,27 @@ typedef struct csilk_h2_stream_map_s {
  * Clients are pooled and reused for performance.
  */
 struct csilk_client_s {
-    uint64_t           generation;
-    csilk_conn_state_t state;        /**< Connection lifecycle state machine. */
+    uint64_t                    generation;
+    _Atomic(csilk_conn_state_t) state; /**< Connection lifecycle state machine.
+                                    *
+                                    * Atomic: read with acquire, written
+                                    * owner-side but CAS-destroyed from
+                                    * worker-recycle tasks, so plain loads
+                                    * would race (C23 type-punning UB). All
+                                    * access goes through csilk_conn_get_state()
+                                    * / csilk_conn_set_state(). */
 
-    csilk_io_tcp_t handle;           /**< I/O stream handle (libuv or io_uring). */
+    csilk_io_tcp_t handle;             /**< I/O stream handle (libuv or io_uring). */
 
-    csilk_io_timer_t timer;          /**< Connection idle (keep-alive) timer. */
-    csilk_io_timer_t read_timer;     /**< Read timeout timer. */
-    csilk_io_timer_t write_timer;    /**< Write timeout timer. */
-    csilk_io_timer_t request_timer;  /**< Request timeout timer. */
-    _Atomic int      ref_count;      /**< Unified connection reference count. */
-    _Atomic int      pending_io;     /**< In-flight I/O operations and closing timer handles. */
+    csilk_io_timer_t timer;            /**< Connection idle (keep-alive) timer. */
+    csilk_io_timer_t read_timer;       /**< Read timeout timer. */
+    csilk_io_timer_t write_timer;      /**< Write timeout timer. */
+    csilk_io_timer_t request_timer;    /**< Request timeout timer. */
+    _Atomic int      ref_count;        /**< Unified connection reference count. */
+    _Atomic int      pending_io;       /**< In-flight I/O operations and closing timer handles. */
     int              read_paused;
     unsigned         read_active : 1;
-    unsigned         keep_alive : 1; /**< Cached keep-alive decision from
+    unsigned         keep_alive : 1;   /**< Cached keep-alive decision from
                    * _csilk_send_response, used by on_write_done
                    * because llhttp clears F_CONNECTION_CLOSE
                    * after on_message_complete returns. */

@@ -416,7 +416,28 @@ csilk_ws_parse_frame(csilk_ctx_t* c, const uint8_t* buf, size_t nread)
             c->ws_buf_len = 0;
             return;
         } else if (opcode == 0x09) {
-            csilk_ws_send(c, payload, (size_t)payload_len, 0x0A);
+            /* Echo a Pong. If the reply cannot be queued (error) the
+             * connection is unusable — tear it down the same way a Close
+             * frame does. Backpressure (0) is benign: the frame is queued
+             * and flushed once the write queue drains. */
+            int pong_rc = csilk_ws_send(c, payload, (size_t)payload_len, 0x0A);
+            if (pong_rc < 0) {
+                void* ping_client = _csilk_get_internal_client(c);
+                if (ping_client) {
+                    csilk_client_t*    pcl = (csilk_client_t*)ping_client;
+                    csilk_conn_state_t pst = csilk_conn_get_state(pcl);
+                    if (pst != CSILK_CONN_CLOSING && pst != CSILK_CONN_CLOSED) {
+                        csilk_conn_set_state(pcl, CSILK_CONN_CLOSING);
+                        csilk_io_stream_t* pstream = (csilk_io_stream_t*)&pcl->handle;
+                        if (!csilk_io_is_closing((csilk_io_handle_t*)pstream)) {
+                            csilk_io_close((csilk_io_handle_t*)pstream, on_close);
+                        }
+                    }
+                }
+                free(payload);
+                c->ws_buf_len = 0;
+                return;
+            }
         } else if (opcode == 0x0A) {
             /* Pong frame - do nothing */
         } else {

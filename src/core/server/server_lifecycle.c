@@ -41,6 +41,41 @@
 #include "csilk/messaging/mq.h"
 #include "csilk/protocols/h3.h"
 
+/* --- Teardown Loop-Drain Bound --- */
+
+/**
+ * @brief Maximum one-shot loop iterations while draining leftover handles.
+ *
+ * `csilk_server_free()` closes handles (dispatch async, event loop) whose
+ * close callbacks only run on the next loop iteration. Each drain iteration
+ * runs `CSILK_IO_RUN_NOWAIT`, so this is a bounded anti-spin guard: it gives
+ * pending close/pending-work callbacks enough passes to fly while
+ * guaranteeing teardown cannot hang forever on a stuck handle.
+ *
+ * All drain sites in this file MUST use this single value so the bounded
+ * budget stays consistent (previously 64 vs 50 at different sites).
+ */
+static constexpr int SERVER_FREE_LOOP_DRAIN_MAX = 64;
+
+/**
+ * @brief Pump an event loop nowait up to SERVER_FREE_LOOP_DRAIN_MAX times.
+ *
+ * Drives pending close / async callbacks during teardown. Stops early once
+ * the loop reports no more live handles. Safe to call with a NULL loop.
+ *
+ * @param loop The event loop to drain, may be NULL.
+ */
+static void
+_server_free_drain_loop(csilk_io_loop_t* loop)
+{
+    if (!loop) {
+        return;
+    }
+    for (int i = 0; i < SERVER_FREE_LOOP_DRAIN_MAX && csilk_io_loop_alive(loop); i++) {
+        csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
+    }
+}
+
 /* --- Centralized Atomic Initializers --- */
 
 /** @brief Centralized initialization for all runtime config atomic fields. */
@@ -293,11 +328,7 @@ csilk_server_free(csilk_server_t* server)
     if (mq) {
         _csilk_mq_free(mq);
         atomic_store_explicit(&server->mq, NULL, memory_order_release);
-        if (server->loop) {
-            for (int i = 0; i < 64 && csilk_io_loop_alive(server->loop); i++) {
-                csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
-            }
-        }
+        _server_free_drain_loop(server->loop);
     }
 
     if (server->h3_state) {
@@ -316,9 +347,7 @@ csilk_server_free(csilk_server_t* server)
             if (wp->dispatch_async.type != 0 &&
                 !csilk_io_is_closing((csilk_io_handle_t*)&wp->dispatch_async)) {
                 csilk_io_close((csilk_io_handle_t*)&wp->dispatch_async, NULL);
-                if (server->loop) {
-                    csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
-                }
+                _server_free_drain_loop(server->loop);
             }
             int client_cnt = atomic_load_explicit(&wp->client_pool_count, memory_order_relaxed);
             for (int i = 0; i < client_cnt; i++) {
@@ -361,7 +390,9 @@ csilk_server_free(csilk_server_t* server)
     _csilk_dispatch_pool_cleanup();
 
     if (server->loop_owned && server->loop) {
-        for (int i = 0; i < 50 && csilk_io_loop_close(server->loop) != 0; i++) {
+        /* Bounded drain: each close callback flies on the next iteration. */
+        for (int i = 0; i < SERVER_FREE_LOOP_DRAIN_MAX && csilk_io_loop_close(server->loop) != 0;
+             i++) {
             csilk_io_run(server->loop, CSILK_IO_RUN_NOWAIT);
         }
         free(server->loop);

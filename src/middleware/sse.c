@@ -162,7 +162,8 @@ csilk_sse_send(csilk_ctx_t* c, const char* event, const char* data)
     }
 
     csilk_client_t* cl = (csilk_client_t*)internal_client;
-    if (cl->state == CSILK_CONN_CLOSING || cl->state == CSILK_CONN_CLOSED) {
+    if (csilk_conn_get_state(cl) == CSILK_CONN_CLOSING ||
+        csilk_conn_get_state(cl) == CSILK_CONN_CLOSED) {
         return -1;
     }
 

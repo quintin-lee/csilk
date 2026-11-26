@@ -125,7 +125,7 @@ _csilk_client_recycle_dispatch_cb(void* arg)
         return;
     }
     /* Verify generation and closing state to eliminate ABA */
-    if (client->generation == gen && client->state == CSILK_CONN_CLOSING) {
+    if (client->generation == gen && csilk_conn_get_state(client) == CSILK_CONN_CLOSING) {
         if (atomic_load_explicit(&client->ref_count, memory_order_acquire) <= 0 &&
             atomic_load_explicit(&client->pending_io, memory_order_acquire) <= 0) {
             client_destroy(client);
@@ -274,7 +274,8 @@ _csilk_client_check_recycle(csilk_client_t* client)
 
     /* Owner thread: check state and recycle directly (single-threaded access) */
     if (_csilk_is_owner_worker_thread(wp)) {
-        if (client->state != CSILK_CONN_CLOSING && client->state != CSILK_CONN_CLOSED) {
+        if (csilk_conn_get_state(client) != CSILK_CONN_CLOSING &&
+            csilk_conn_get_state(client) != CSILK_CONN_CLOSED) {
             return;
         }
         int ref = atomic_load_explicit(&client->ref_count, memory_order_acquire);
@@ -319,8 +320,8 @@ client_destroy(csilk_client_t* client)
 
     /* Atomic CAS: strictly ensure single, idempotent teardown */
     csilk_conn_state_t expected = CSILK_CONN_CLOSING;
-    if (!atomic_compare_exchange_strong_explicit((_Atomic int*)&client->state,
-                                                 (int*)&expected,
+    if (!atomic_compare_exchange_strong_explicit(&client->state,
+                                                 &expected,
                                                  CSILK_CONN_CLOSED,
                                                  memory_order_acq_rel,
                                                  memory_order_relaxed)) {
@@ -394,7 +395,7 @@ _csilk_on_close_owner(void* arg)
         return;
     }
     csilk_client_t* client = (csilk_client_t*)handle->data;
-    if (client->generation != generation || client->state == CSILK_CONN_CLOSED) {
+    if (client->generation != generation || csilk_conn_get_state(client) == CSILK_CONN_CLOSED) {
         return;
     }
     on_close(handle);
@@ -419,7 +420,8 @@ on_close(csilk_io_handle_t* handle)
         return;
     }
 
-    if (client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+    csilk_conn_state_t cur_state = csilk_conn_get_state(client);
+    if (cur_state == CSILK_CONN_CLOSING || cur_state == CSILK_CONN_CLOSED) {
         return;
     }
 
@@ -469,8 +471,8 @@ _csilk_worker_cleanup_leftover_clients(csilk_server_t*  server,
         if (!items) {
             while (wp->active_clients) {
                 csilk_client_t* leftover = wp->active_clients;
-                if (leftover->state != CSILK_CONN_CLOSING) {
-                    leftover->state = CSILK_CONN_CLOSING;
+                if (csilk_conn_get_state(leftover) != CSILK_CONN_CLOSING) {
+                    csilk_conn_set_state(leftover, CSILK_CONN_CLOSING);
                 }
                 client_list_remove(server, leftover);
                 client_destroy(leftover);
@@ -489,8 +491,8 @@ _csilk_worker_cleanup_leftover_clients(csilk_server_t*  server,
         items[count++] = cur;
         csilk_client_ref(cur);
         client_list_remove(server, cur);
-        if (cur->state != CSILK_CONN_CLOSING) {
-            cur->state = CSILK_CONN_CLOSING;
+        if (csilk_conn_get_state(cur) != CSILK_CONN_CLOSING) {
+            csilk_conn_set_state(cur, CSILK_CONN_CLOSING);
         }
         if (cur->handle.loop != NULL && !csilk_io_is_closing((csilk_io_handle_t*)&cur->handle)) {
             cur->handle.data = cur;
@@ -519,8 +521,8 @@ _csilk_worker_cleanup_leftover_clients(csilk_server_t*  server,
         csilk_client_t* leftover = items[i];
         atomic_store_explicit(&leftover->pending_io, 0, memory_order_relaxed);
         atomic_store_explicit(&leftover->ref_count, 0, memory_order_relaxed);
-        if (leftover->state != CSILK_CONN_CLOSED) {
-            leftover->state = CSILK_CONN_CLOSING;
+        if (csilk_conn_get_state(leftover) != CSILK_CONN_CLOSED) {
+            csilk_conn_set_state(leftover, CSILK_CONN_CLOSING);
             client_destroy(leftover);
         }
     }

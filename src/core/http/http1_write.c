@@ -167,7 +167,8 @@ on_write(csilk_io_write_t* req, int status)
 void
 csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
 {
-    if (!client || client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+    if (!client || csilk_conn_get_state(client) == CSILK_CONN_CLOSING ||
+        csilk_conn_get_state(client) == CSILK_CONN_CLOSED) {
         return;
     }
 
@@ -263,7 +264,8 @@ _csilk_send_data(csilk_ctx_t* c, const uint8_t* data, size_t len)
         return;
     }
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-    if (client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+    if (csilk_conn_get_state(client) == CSILK_CONN_CLOSING ||
+        csilk_conn_get_state(client) == CSILK_CONN_CLOSED) {
         return;
     }
     csilk_client_write(client, data, len);
@@ -280,7 +282,8 @@ _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
         return;
     }
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-    if (client->state == CSILK_CONN_CLOSING || client->state == CSILK_CONN_CLOSED) {
+    if (csilk_conn_get_state(client) == CSILK_CONN_CLOSING ||
+        csilk_conn_get_state(client) == CSILK_CONN_CLOSED) {
         free(data);
         return;
     }

@@ -185,7 +185,7 @@ csilk_conn_set_state(csilk_client_t* client, csilk_conn_state_t new_state)
     if (!client) {
         return;
     }
-    csilk_conn_state_t old_state = client->state;
+    csilk_conn_state_t old_state = atomic_load_explicit(&client->state, memory_order_acquire);
     if (old_state == new_state) {
         return;
     }
@@ -209,11 +209,14 @@ csilk_conn_set_state(csilk_client_t* client, csilk_conn_state_t new_state)
                 csilk_conn_state_str(old_state),
                 csilk_conn_state_str(new_state));
 #endif
-    client->state = new_state;
+    atomic_store_explicit(&client->state, new_state, memory_order_release);
 }
 
 csilk_conn_state_t
 csilk_conn_get_state(const csilk_client_t* client)
 {
-    return client ? client->state : CSILK_CONN_CLOSED;
+    if (!client) {
+        return CSILK_CONN_CLOSED;
+    }
+    return atomic_load_explicit(&client->state, memory_order_acquire);
 }
