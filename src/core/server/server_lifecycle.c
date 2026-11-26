@@ -366,7 +366,15 @@ csilk_server_free(csilk_server_t* server)
                 }
             }
         }
-        free(server->worker_pools);
+        /* NOTE: server->worker_pools itself must outlive csilk_io_loop_close()
+         * below. On the io_uring backend, csilk_io_close() only *queues* a
+         * deferred close op; the queue is drained inside
+         * csilk_io_loop_close(), which then dereferences handles embedded in
+         * worker_pool_t (the per-worker dispatch async). Freeing the array
+         * here would turn that drain into a use-after-free.
+         *
+         * The per-worker buffers freed above are owned by the worker_pool_t
+         * slots and are unaffected by moving the array free later. */
     }
 
     cleanup_tls(server);
@@ -399,6 +407,12 @@ csilk_server_free(csilk_server_t* server)
         free(server->loop);
         server->loop = NULL;
     }
+
+    /* Free after the loop close above: the io_uring backend drains pending
+     * close operations inside csilk_io_loop_close(), and those completions
+     * still dereference worker_pool_t slots (dispatch async handles). */
+    free(server->worker_pools);
+    server->worker_pools = NULL;
 
     csilk_arena_flush_free_list();
     csilk_body_pool_cleanup();
