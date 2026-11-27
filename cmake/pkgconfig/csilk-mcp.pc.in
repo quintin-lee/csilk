@@ -1,0 +1,14 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: csilk-mcp
+Description: Csilk Model Context Protocol server, client, and stdio pool
+Version: @CSILK_VERSION@
+URL: https://github.com/quintin-lee/csilk
+Requires: @CSILK_MCP_PC_REQUIRES@
+Requires.private: @CSILK_MCP_PC_REQUIRES_PRIVATE@
+Libs: -L${libdir} -lcsilk-mcp
+Libs.private: @CSILK_MCP_PC_LIBS_PRIVATE@
+Cflags: -I${includedir} -D_GNU_SOURCE -pthread
