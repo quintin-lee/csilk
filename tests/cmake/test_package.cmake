@@ -1,4 +1,5 @@
-# Verify that an installed csilk package exposes the phase-one module targets.
+# Verify that an installed csilk package exposes the expected module targets,
+# CMake configuration flags, and pkg-config manifests.
 
 if(NOT DEFINED CSILK_BUILD_DIR OR NOT DEFINED CSILK_TEST_BINARY_DIR)
   message(FATAL_ERROR "CSILK_BUILD_DIR and CSILK_TEST_BINARY_DIR are required")
@@ -274,67 +275,121 @@ if(_pkg_config_exe AND NOT CSILK_USE_URING)
 endif()
 
 file(WRITE "${_consumer}/CMakeLists.txt" [=[
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.17)
 project(csilk_package_consumer C)
 
 find_package(csilk CONFIG REQUIRED)
 
+foreach(_cfg_flag IN ITEMS
+    CSILK_BUILD_SHARED
+    CSILK_USE_URING
+    CSILK_ENABLE_DB
+    CSILK_ENABLE_MQ
+    CSILK_ENABLE_AI
+    CSILK_ENABLE_VECTOR
+    CSILK_ENABLE_MCP
+    CSILK_ENABLE_WORKFLOW
+    CSILK_ENABLE_GRPC
+    CSILK_ENABLE_WASM
+    CSILK_ENABLE_WAMR
+    CSILK_HAS_WAMR
+    CSILK_ENABLE_BYPASS
+    CSILK_ENABLE_PERM
+    CSILK_ENABLE_HTTP3
+    CSILK_ENABLE_OBSERVABILITY
+    CSILK_ENABLE_CSV
+    CSILK_NEED_CURL)
+  if(NOT DEFINED ${_cfg_flag})
+    message(FATAL_ERROR "csilk-config.cmake did not define ${_cfg_flag}")
+  endif()
+  if(DEFINED CSILK_EXPECTED_${_cfg_flag})
+    if((${_cfg_flag} AND NOT CSILK_EXPECTED_${_cfg_flag}) OR (NOT ${_cfg_flag} AND CSILK_EXPECTED_${_cfg_flag}))
+      message(FATAL_ERROR "csilk-config.cmake ${_cfg_flag}='${${_cfg_flag}}' != expected '${CSILK_EXPECTED_${_cfg_flag}}'")
+    endif()
+  endif()
+endforeach()
+
 set(_required_targets
+    csilk::csilk
     csilk::base
     csilk::core
     csilk::crypto
     csilk::runtime
+    csilk::json
+    csilk::tls
+    csilk::http2
     csilk::http
     csilk::protocols
     csilk::middleware
     csilk::reflection
     csilk::app)
-if(CSILK_ENABLE_PERM)
-  list(APPEND _required_targets csilk::permission)
-endif()
-if(CSILK_ENABLE_DB)
-  list(APPEND _required_targets csilk::db)
-endif()
-if(CSILK_ENABLE_VECTOR)
-  list(APPEND _required_targets csilk::vector)
-endif()
-if(CSILK_ENABLE_AI)
-  list(APPEND _required_targets csilk::ai)
-endif()
-if(CSILK_ENABLE_MQ)
-  list(APPEND _required_targets csilk::mq)
-endif()
-if(CSILK_ENABLE_WORKFLOW)
-  list(APPEND _required_targets csilk::workflow)
-endif()
-if(CSILK_ENABLE_HTTP3)
-  list(APPEND _required_targets csilk::h3)
-endif()
-if(CSILK_ENABLE_MCP)
-  list(APPEND _required_targets csilk::mcp)
-endif()
-if(CSILK_ENABLE_GRPC)
-  list(APPEND _required_targets csilk::grpc)
-endif()
-if(CSILK_ENABLE_OBSERVABILITY)
-  list(APPEND _required_targets csilk::observability)
-endif()
 if(CSILK_BUILD_SHARED)
   list(APPEND _required_targets
+      csilk::base_shared
+      csilk::core_shared
       csilk::crypto_shared
       csilk::runtime_shared
+      csilk::json_shared
+      csilk::tls_shared
+      csilk::http2_shared
+      csilk::http_shared
       csilk::protocols_shared
       csilk::middleware_shared
       csilk::reflection_shared
       csilk::app_shared
       csilk::shared)
-  if(CSILK_ENABLE_PERM)
-    list(APPEND _required_targets csilk::permission_shared)
-  endif()
-  if(CSILK_ENABLE_VECTOR)
-    list(APPEND _required_targets csilk::vector_shared)
-  endif()
 endif()
+
+set(_optional_flags
+    CSILK_ENABLE_PERM
+    CSILK_ENABLE_DB
+    CSILK_ENABLE_VECTOR
+    CSILK_ENABLE_AI
+    CSILK_ENABLE_MQ
+    CSILK_ENABLE_WORKFLOW
+    CSILK_ENABLE_HTTP3
+    CSILK_ENABLE_MCP
+    CSILK_ENABLE_GRPC
+    CSILK_ENABLE_WASM
+    CSILK_ENABLE_BYPASS
+    CSILK_ENABLE_OBSERVABILITY)
+set(_optional_aliases
+    permission
+    db
+    vector
+    ai
+    mq
+    workflow
+    h3
+    mcp
+    grpc
+    wasm
+    bypass
+    observability)
+
+foreach(_flag _alias IN ZIP_LISTS _optional_flags _optional_aliases)
+  if(${_flag})
+    list(APPEND _required_targets csilk::${_alias})
+    if(CSILK_BUILD_SHARED)
+      list(APPEND _required_targets csilk::${_alias}_shared)
+    endif()
+  else()
+    if(TARGET csilk::${_alias})
+      message(FATAL_ERROR "unexpected disabled module target exposed: csilk::${_alias}")
+    endif()
+    if(TARGET csilk::${_alias}_shared)
+      message(FATAL_ERROR "unexpected disabled shared module target exposed: csilk::${_alias}_shared")
+    endif()
+  endif()
+endforeach()
+
+if(CSILK_ENABLE_HTTP3)
+  list(APPEND _required_targets csilk::ngtcp2 csilk::nghttp3)
+endif()
+if(CSILK_HAS_WAMR)
+  list(APPEND _required_targets csilk::vmlib vmlib)
+endif()
+
 foreach(_target IN LISTS _required_targets)
   if(NOT TARGET ${_target})
     message(FATAL_ERROR "missing exported target: ${_target}")
@@ -381,10 +436,9 @@ endif()
 if(DEFINED USE_ASAN AND USE_ASAN)
   list(APPEND _consumer_cmake_args "-DUSE_ASAN=${USE_ASAN}")
 endif()
-if(DEFINED CSILK_BUILD_SHARED)
-  list(APPEND _consumer_cmake_args "-DCSILK_BUILD_SHARED=${CSILK_BUILD_SHARED}")
-endif()
 foreach(_flag IN ITEMS
+    CSILK_BUILD_SHARED
+    CSILK_USE_URING
     CSILK_ENABLE_DB
     CSILK_ENABLE_MQ
     CSILK_ENABLE_AI
@@ -399,7 +453,7 @@ foreach(_flag IN ITEMS
     CSILK_ENABLE_OBSERVABILITY
     CSILK_ENABLE_CSV)
   if(DEFINED ${_flag})
-    list(APPEND _consumer_cmake_args "-D${_flag}=${${_flag}}")
+    list(APPEND _consumer_cmake_args "-DCSILK_EXPECTED_${_flag}=${${_flag}}")
   endif()
 endforeach()
 
