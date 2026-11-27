@@ -30,6 +30,7 @@ foreach(_opt_mod
     csilk_ai
     csilk_mq
     csilk_workflow
+    csilk_observability
 )
   if(TARGET ${_opt_mod})
     list(APPEND CSILK_INSTALL_TARGETS ${_opt_mod})
@@ -84,6 +85,7 @@ if(CSILK_BUILD_SHARED)
         csilk_ai_shared
         csilk_mq_shared
         csilk_workflow_shared
+        csilk_observability_shared
     )
       if(TARGET ${_opt_mod_shared})
         list(APPEND CSILK_SHARED_INSTALL_TARGETS ${_opt_mod_shared})

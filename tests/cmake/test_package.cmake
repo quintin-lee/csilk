@@ -56,6 +56,9 @@ endif()
 if(CSILK_ENABLE_WORKFLOW)
   list(APPEND _install_targets csilk_workflow)
 endif()
+if(CSILK_ENABLE_OBSERVABILITY)
+  list(APPEND _install_targets csilk_observability)
+endif()
 
 if(CSILK_USE_URING)
   list(APPEND _install_targets uring)
@@ -107,6 +110,9 @@ if(CSILK_BUILD_SHARED)
   endif()
   if(CSILK_ENABLE_WORKFLOW)
     list(APPEND _install_targets csilk_workflow_shared)
+  endif()
+  if(CSILK_ENABLE_OBSERVABILITY)
+    list(APPEND _install_targets csilk_observability_shared)
   endif()
 endif()
 
@@ -172,6 +178,9 @@ if(CSILK_ENABLE_MCP)
 endif()
 if(CSILK_ENABLE_GRPC)
   list(APPEND _required_targets csilk::grpc)
+endif()
+if(CSILK_ENABLE_OBSERVABILITY)
+  list(APPEND _required_targets csilk::observability)
 endif()
 if(CSILK_BUILD_SHARED)
   list(APPEND _required_targets
@@ -249,7 +258,9 @@ foreach(_flag IN ITEMS
     CSILK_ENABLE_WASM
     CSILK_ENABLE_BYPASS
     CSILK_ENABLE_PERM
-    CSILK_ENABLE_HTTP3)
+    CSILK_ENABLE_HTTP3
+    CSILK_ENABLE_OBSERVABILITY
+    CSILK_ENABLE_CSV)
   if(DEFINED ${_flag})
     list(APPEND _consumer_cmake_args "-D${_flag}=${${_flag}}")
   endif()

@@ -77,7 +77,6 @@ set(CSILK_CORE_TESTS
     test_config_load
     test_config_tls
     test_connection
-    test_csv
     test_client_lifetime_stress
     test_context
     test_context_ext
@@ -86,7 +85,6 @@ set(CSILK_CORE_TESTS
     test_async_op
     test_edge
     test_get_param
-    test_mvcc_cache
     test_headers
     test_https
     test_ip
@@ -126,8 +124,6 @@ set(CSILK_CORE_TESTS
     test_hot_reload_null
     test_dispatch_bench
     test_lfqueue_stress
-    test_uring_recv_bench
-    test_uring_stale_stress
     test_router_bench
     test_router_ordering
     test_router_iterative_bench
@@ -136,14 +132,9 @@ set(CSILK_CORE_TESTS
     test_codec_prop
     test_hash_prop
     test_simd_router_arena
-    test_uring_buf
     test_server_stats_bench
     test_swar_http
     test_http1_zerocopy
-    test_uring_sqpoll
-    test_uring_vector
-    test_uring_io
-    test_uring_fs
     test_ctx_json
     test_io_op_model
     test_h2_stream_bench
@@ -163,11 +154,27 @@ set(CSILK_CORE_TESTS
     test_io_backend
     test_secret
     test_python_abi
-    test_mvcc_cache_snapshot
     test_hot_update_atomic
     test_lazy_arena
     test_io_poll
 )
+if(CSILK_ENABLE_CSV)
+  list(APPEND CSILK_CORE_TESTS test_csv)
+endif()
+if(CSILK_ENABLE_DB)
+  list(APPEND CSILK_CORE_TESTS test_mvcc_cache test_mvcc_cache_snapshot)
+endif()
+if(CSILK_USE_URING)
+  list(APPEND CSILK_CORE_TESTS
+      test_uring_recv_bench
+      test_uring_stale_stress
+      test_uring_buf
+      test_uring_sqpoll
+      test_uring_vector
+      test_uring_io
+      test_uring_fs
+  )
+endif()
 if(CSILK_ENABLE_MQ AND CSILK_ENABLE_AI)
   list(APPEND CSILK_CORE_TESTS test_ctx_lifecycle_async)
 endif()
@@ -193,7 +200,6 @@ set(CSILK_APP_TESTS
     test_app
     test_app_ext
     test_app_integration
-    test_admin
     test_cookie
     test_form
     test_group
@@ -202,7 +208,10 @@ set(CSILK_APP_TESTS
     test_hooks_rcu
     test_jsonrpc_frames
 )
-if(CSILK_ENABLE_WASM)
+if(CSILK_ENABLE_OBSERVABILITY)
+  list(APPEND CSILK_APP_TESTS test_admin)
+endif()
+if(CSILK_ENABLE_WASM AND CSILK_ENABLE_WORKFLOW)
   list(APPEND CSILK_APP_TESTS test_app_wasm)
 endif()
 
@@ -277,20 +286,24 @@ set(CSILK_MIDDLEWARE_TESTS
     test_sse
     test_sse_concurrent
     test_static
-    test_trace_circuit_breaker
     test_circuit_breaker
-    test_otlp_exporter
     test_file
     test_validate
     test_waf
     test_waf_filter
-    test_otlp_trace_span
-    test_apm_dashboard_route
 )
+if(CSILK_ENABLE_OBSERVABILITY)
+  list(APPEND CSILK_MIDDLEWARE_TESTS
+      test_otlp_exporter
+      test_otlp_trace_span
+      test_apm_dashboard_route
+      test_trace_circuit_breaker
+  )
+endif()
 if(CSILK_ENABLE_GRPC)
   list(APPEND CSILK_MIDDLEWARE_TESTS test_grpc_gateway)
 endif()
-if(CSILK_ENABLE_AI)
+if(CSILK_ENABLE_AI AND CSILK_ENABLE_OBSERVABILITY)
   list(APPEND CSILK_MIDDLEWARE_TESTS test_otlp_ai)
 endif()
 
@@ -334,16 +347,16 @@ set(CSILK_SECURITY_TESTS
     test_crypto_driver
     test_crypto
     test_totp
-    test_admin_auth
     test_ssrf
-)
-set(CSILK_SECURITY_TEST_DIRS
-    security;security;security;security;security;security;security;security;crypto;crypto;security;security
 )
 # Build matching directory list dynamically so ZIP_LISTS never drifts.
 set(CSILK_SECURITY_TEST_DIRS
-    security;security;security;security;security;security;crypto;crypto;security;security
+    security;security;security;security;security;security;crypto;crypto;security
 )
+if(CSILK_ENABLE_OBSERVABILITY)
+  list(APPEND CSILK_SECURITY_TESTS test_admin_auth)
+  list(APPEND CSILK_SECURITY_TEST_DIRS security)
+endif()
 if(CSILK_ENABLE_PERM)
   list(PREPEND CSILK_SECURITY_TESTS test_perm test_perm_ext)
   list(PREPEND CSILK_SECURITY_TEST_DIRS security security)
@@ -387,9 +400,12 @@ if(CSILK_ENABLE_AI)
       test_ollama_mock
       test_ai_anthropic
       test_ai_trace
-      test_ai_ctx_trace
   )
-  list(APPEND CSILK_AI_TEST_DIRS drivers drivers drivers drivers drivers drivers drivers drivers)
+  list(APPEND CSILK_AI_TEST_DIRS drivers drivers drivers drivers drivers drivers drivers)
+  if(CSILK_ENABLE_OBSERVABILITY)
+    list(APPEND CSILK_AI_TESTS test_ai_ctx_trace)
+    list(APPEND CSILK_AI_TEST_DIRS drivers)
+  endif()
   if(CSILK_ENABLE_WORKFLOW)
     list(APPEND CSILK_AI_TESTS test_ai_skill)
     list(APPEND CSILK_AI_TEST_DIRS drivers)
@@ -441,7 +457,6 @@ endif()
 set(CSILK_EXTRA_TESTS
     test_extra
     test_integration
-    test_admin_integration
     test_session_integration
     test_session_store_lifecycle
     test_middleware_chain_integration
@@ -449,7 +464,10 @@ set(CSILK_EXTRA_TESTS
     test_sse_integration
     test_ws_integration
 )
-if(CSILK_ENABLE_WORKFLOW)
+if(CSILK_ENABLE_OBSERVABILITY)
+  list(APPEND CSILK_EXTRA_TESTS test_admin_integration)
+endif()
+if(CSILK_ENABLE_WORKFLOW AND CSILK_ENABLE_OBSERVABILITY)
   list(APPEND CSILK_EXTRA_TESTS test_integration_ext)
 endif()
 

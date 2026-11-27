@@ -43,6 +43,8 @@ function(csilk_compile_setup TARGET)
       "$<$<BOOL:${CSILK_ENABLE_BYPASS}>:CSILK_HAS_BYPASS=1>"
       "$<$<BOOL:${CSILK_ENABLE_PERM}>:CSILK_HAS_PERM=1>"
       "$<$<BOOL:${CSILK_ENABLE_HTTP3}>:CSILK_HAS_HTTP3=1>"
+      "$<$<BOOL:${CSILK_ENABLE_OBSERVABILITY}>:CSILK_HAS_OBSERVABILITY=1>"
+      "$<$<BOOL:${CSILK_ENABLE_CSV}>:CSILK_HAS_CSV=1>"
       "CSILK_HEADER_BUCKETS=${CSILK_HEADER_BUCKETS}"
       "CSILK_MAX_PARAMS=${CSILK_MAX_PARAMS}"
       "CSILK_MAX_STORAGE=${CSILK_MAX_STORAGE}"
@@ -266,6 +268,9 @@ endif()
 if(CSILK_ENABLE_WORKFLOW)
   csilk_add_module(csilk_workflow CSILK_WORKFLOW_SOURCES "csilk-workflow")
 endif()
+if(CSILK_ENABLE_OBSERVABILITY)
+  csilk_add_module(csilk_observability CSILK_OBSERVABILITY_SOURCES "csilk-observability")
+endif()
 
 # ── Compatibility target ─────────────────────────────────────────────────
 # Keep csilk::core as a stable consumer entry point while runtime owns the
@@ -439,6 +444,21 @@ endif()
 if(CSILK_ENABLE_GRPC)
   csilk_link_module(csilk_grpc csilk_middleware csilk_http csilk_runtime csilk_json)
 endif()
+if(CSILK_ENABLE_OBSERVABILITY)
+  csilk_link_module(csilk_observability csilk_app csilk_middleware csilk_http csilk_runtime csilk_json Threads::Threads)
+  if(CSILK_ENABLE_GRPC)
+    csilk_link_module(csilk_observability csilk_grpc)
+  endif()
+  if(CSILK_ENABLE_DB)
+    csilk_link_module(csilk_observability csilk_db)
+  endif()
+  if(CSILK_ENABLE_AI)
+    csilk_link_module(csilk_observability csilk_ai)
+  endif()
+  if(CSILK_ENABLE_MQ)
+    csilk_link_module(csilk_observability csilk_mq)
+  endif()
+endif()
 
 # ── Umbrella targets ──────────────────────────────────────────────────────
 add_library(csilk INTERFACE)
@@ -489,6 +509,9 @@ if(CSILK_ENABLE_WASM)
 endif()
 if(CSILK_ENABLE_BYPASS)
   list(APPEND CSILK_ENABLED_MODULES csilk_bypass)
+endif()
+if(CSILK_ENABLE_OBSERVABILITY)
+  list(APPEND CSILK_ENABLED_MODULES csilk_observability)
 endif()
 if(CSILK_USE_URING AND TARGET uring)
   list(APPEND CSILK_ENABLED_MODULES uring)

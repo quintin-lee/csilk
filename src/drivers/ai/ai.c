@@ -20,7 +20,9 @@
  */
 
 #include "csilk/drivers/ai.h"
+#ifdef CSILK_HAS_OBSERVABILITY
 #include "csilk/middleware/otlp_trace.h"
+#endif
 
 #include <ctype.h>
 #include <stdatomic.h>
@@ -571,7 +573,9 @@ csilk_ai_chat_ctx(csilk_ai_t*                    ai,
                 trace->completion_tokens = res->completion_tokens;
                 trace->total_tokens = res->total_tokens;
             }
+#ifdef CSILK_HAS_OBSERVABILITY
             csilk_otlp_ctx_attach_ai_trace(ctx, trace);
+#endif
             csilk_ctx_defer(ctx, (void (*)(void*))csilk_ai_trace_free, trace);
         }
     }

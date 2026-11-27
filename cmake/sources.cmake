@@ -30,15 +30,11 @@ set(CSILK_CORE_SOURCES)
 
 # ── Runtime: context, router, server, config and backend glue ─────────────
 set(CSILK_RUNTIME_SOURCES
-    src/core/cache/mvcc_cache.c
     src/core/config/config.c
     src/core/config/logger.c
     src/core/config/hooks.c
     src/core/config/hot_reload.c
     src/core/config/secret.c
-    src/core/uring/uring_buf.c
-    src/core/uring/uring_sqpoll.c
-    src/core/uring/uring_vector.c
     src/core/ctx/context.c
     src/core/ctx/ctx_accessors.c
     src/core/ctx/ctx_async.c
@@ -62,12 +58,17 @@ set(CSILK_RUNTIME_SOURCES
     src/core/server/server_shutdown.c
     src/core/server/server_worker.c
     src/core/plugin/loader.c
-    src/util/flamegraph.c
-    src/util/csv.c
 )
+
+if(CSILK_ENABLE_CSV)
+    list(APPEND CSILK_RUNTIME_SOURCES src/util/csv.c)
+endif()
 
 if(CSILK_USE_URING)
     list(APPEND CSILK_RUNTIME_SOURCES
+        src/core/uring/uring_buf.c
+        src/core/uring/uring_sqpoll.c
+        src/core/uring/uring_vector.c
         src/core/uring/uring_thread_pool.c
         src/core/uring/uring_fs.c
         src/core/uring/uring_io.c
@@ -160,6 +161,7 @@ set(CSILK_VECTOR_SOURCES
 
 # ── Database Module ───────────────────────────────────────────────────────
 set(CSILK_DB_SOURCES
+    src/core/cache/mvcc_cache.c
     src/drivers/db/db.c
     src/drivers/db/sqlite.c
     src/drivers/db/tx_scope.c
@@ -207,8 +209,6 @@ set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/logger.c
     src/middleware/metrics.c
     src/middleware/multipart.c
-    src/middleware/otlp_exporter.c
-    src/middleware/otlp_trace.c
     src/middleware/ratelimit.c
     src/middleware/request_id.c
     src/middleware/security_headers.c
@@ -233,6 +233,13 @@ set(CSILK_APP_SOURCES
     src/app/app.c
     src/app/app_routes.c
     src/app/group.c
+)
+
+# ── Observability & Admin Module (optional) ──────────────────────────────
+set(CSILK_OBSERVABILITY_SOURCES
+    src/middleware/otlp_exporter.c
+    src/middleware/otlp_trace.c
+    src/util/flamegraph.c
     src/app/admin.c
 )
 
@@ -335,4 +342,7 @@ if(CSILK_ENABLE_WASM)
 endif()
 if(CSILK_ENABLE_BYPASS)
   list(APPEND CSILK_SOURCES ${CSILK_BYPASS_SOURCES})
+endif()
+if(CSILK_ENABLE_OBSERVABILITY)
+  list(APPEND CSILK_SOURCES ${CSILK_OBSERVABILITY_SOURCES})
 endif()
