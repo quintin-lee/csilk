@@ -249,11 +249,15 @@ results:
 ## Automated Benchmark Suite
 
 ```bash
-./scripts/run_benchmarks.sh       # Run all benchmarks
-./scripts/run_benchmarks.sh --save # Save results to benchmarks/results/
+# Reproducible built-in C E2E + microbenchmark suite (no external wrk needed)
+./scripts/run_benchmarks.sh --builtin
+
+# Full wrk HTTP load test suite (requires wrk installed)
+./scripts/run_benchmarks.sh       # Run wrk benchmarks
+./scripts/run_benchmarks.sh --save # Save results + host metadata to benchmarks/results/
 ```
 
-Results are saved as JSON in `benchmarks/results/` for comparison tracking.
+Results are saved as JSON (`benchmarks/results/builtin-latest.json` and `benchmarks/results/latest.json`) for reproducible baseline tracking and CI comparison via [`scripts/compare_benchmarks.py`](../scripts/compare_benchmarks.py) and [`scripts/run_microbenchmarks.py`](../scripts/run_microbenchmarks.py).
 
 ---
 

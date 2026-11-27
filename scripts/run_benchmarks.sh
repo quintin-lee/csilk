@@ -13,6 +13,7 @@
 #   ./scripts/run_benchmarks.sh --save                   # save results + run stats
 #   ./scripts/run_benchmarks.sh --compare                # compare with last saved result
 #   ./scripts/run_benchmarks.sh --ci                     # CI mode: fail on >5% regression
+#   ./scripts/run_benchmarks.sh --builtin                # run built-in C E2E/microbench suite (no wrk required)
 #
 set -euo pipefail
 
@@ -33,13 +34,30 @@ RUNS="${BENCH_RUNS:-3}"
 CORES=$(nproc 2>/dev/null || echo 2)
 
 MODE="run"
+BUILTIN=0
 for arg in "$@"; do
     case "$arg" in
         --save)    MODE="save" ;;
         --compare) MODE="compare" ;;
         --ci)      MODE="ci" ;;
+        --builtin) BUILTIN=1 ;;
     esac
 done
+
+if [ "$BUILTIN" -eq 1 ]; then
+    echo "=== Running built-in Release microbenchmark suite ==="
+    cmake -B "$BUILD_DIR" -S "$PROJECT_DIR" -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_FULL=OFF -DCSILK_ENABLE_NATIVE_ARCH=ON
+    cmake --build "$BUILD_DIR" --target \
+        test_http1_e2e_bench test_http1_pipeline_bench test_h2_stream_bench \
+        test_router_bench test_json_accessor_bench test_arena_bench \
+        test_header_map_bench test_dispatch_bench test_server_stats_bench -j"$CORES"
+    mkdir -p "$RESULTS_DIR"
+    python3 "$SCRIPT_DIR/run_microbenchmarks.py" \
+        --uv-build-dir "$BUILD_DIR" \
+        --output "$RESULTS_DIR/builtin-latest.json"
+    rm -rf "$BUILD_DIR"
+    exit 0
+fi
 
 if ! command -v wrk &>/dev/null; then
     echo "Error: wrk not found. Install with: sudo apt-get install wrk"
@@ -344,8 +362,11 @@ bench "openapi"      "$BASE_URL/openapi.json"         4 100
 echo ""
 
 # Meta
-printf '%s"meta":{"version":"%s","git_hash":"%s","timestamp":"%s","duration":"%s","runs_per_benchmark":%s}' \
-    "$sep" "$VERSION" "$GIT_HASH" "$TIMESTAMP" "$DURATION" "$RUNS" >> "$tmpfile"
+CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2- | xargs || uname -m)
+KERNEL_REL=$(uname -r)
+COMPILER_STR=$(cc --version 2>/dev/null | head -n1 || echo "unknown")
+printf '%s"meta":{"version":"%s","git_hash":"%s","timestamp":"%s","duration":"%s","runs_per_benchmark":%s,"cores":%s,"cpu":"%s","kernel":"%s","compiler":"%s"}' \
+    "$sep" "$VERSION" "$GIT_HASH" "$TIMESTAMP" "$DURATION" "$RUNS" "$CORES" "$CPU_MODEL" "$KERNEL_REL" "$COMPILER_STR" >> "$tmpfile"
 echo "}" >> "$tmpfile"
 
 echo "=========================================="

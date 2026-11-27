@@ -1,125 +1,77 @@
 # csilk Performance Benchmark Report
 
-> **Date**: 2026-06-29
-> **Version**: 0.3.0 (Release mode, LTO enabled)
-> **Hardware**: AMD EPYC 9454, Linux 6.12.91, GCC 13.2
+> **Date**: 2026-11-27
+> **Version**: 1.2.0 (`15ce49eb`)
+> **Hardware**: 13th Gen Intel(R) Core(TM) i9-13900HX (32 logical cores), Linux `6.12.108-1-MANJARO` (`x86_64`)
+> **Compiler / Profile**: GCC 16.2.1 (`-DCMAKE_BUILD_TYPE=Release -DCSILK_ENABLE_NATIVE_ARCH=ON`)
+> **Raw Artifact**: [`benchmarks/results/builtin-latest.json`](results/builtin-latest.json)
 
 ## Methodology
 
-- **Tool**: [wrk](https://github.com/wg/wrk) — modern HTTP benchmarking tool
-- **Duration**: 30 seconds per test (after 5s warmup)
-- **Concurrency**: Variable (see each test)
-- **Server**: `example_server` (configurable worker count)
-- **Build**: `-DCMAKE_BUILD_TYPE=Release -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON`
+- **Reproducible Built-in Suite**: Executed via [`scripts/run_microbenchmarks.py`](../scripts/run_microbenchmarks.py) (or `./scripts/run_benchmarks.sh --builtin`) sequentially to avoid cross-process CPU contention.
+- **Backends Tested**: Default `libuv` and native Linux `-DCSILK_USE_URING=ON`.
+- **External `wrk` Suite**: Preserved via `./scripts/run_benchmarks.sh --save` (executed in `.github/workflows/bench.yml` on `ubuntu-24.04` runners where `wrk` is installed).
 
-## Test Endpoints
+## v1.2.0 Reproducible Measured Results
 
-| Endpoint | Description | Primary Metric |
-|:---------|:------------|:---------------|
-| `GET /json` | JSON serialization overhead | Latency P99 |
-| `GET /static/test.html` | Zero-copy static file serving | Throughput |
-| `GET /api/v1/users/profile` | Radix tree routing (deeply nested) | Lookup latency |
-| `GET /delay/50` | Connection under simulated latency | Latency accuracy |
+### 1. Real TCP HTTP/1.1 End-to-End (`test_http1_e2e_bench`, 4 keep-alive clients × 5 rounds)
 
-## Results
+| Backend | Workers | Requests | Throughput (QPS ± 95% CI) | P50 Latency | P95 Latency | P99 Latency | Errors |
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| `libuv` | 1 | 5,000 | 113,799.03 ± 4,316.76 | 23.67 us | 48.16 us | 107.92 us | 0 |
+| `libuv` | 2 | 5,000 | 190,900.41 ± 14,903.67 | 13.76 us | 32.58 us | 33.47 us | 0 |
+| `libuv` | 4 | 5,000 | 205,350.62 ± 8,206.57 | 11.40 us | 19.21 us | 26.04 us | 0 |
+| `libuv` | 8 | 5,000 | 247,128.69 ± 29,041.52 | 10.49 us | 22.35 us | 45.74 us | 0 |
+| `io_uring` | 1 | 5,000 | 83,840.55 ± 2,303.08 | 46.40 us | 50.46 us | 60.11 us | 0 |
+| `io_uring` | 2 | 5,000 | 143,539.69 ± 25,427.97 | 30.23 us | 42.85 us | 45.64 us | 0 |
+| `io_uring` | 4 | 5,000 | 208,952.93 ± 29,755.37 | 12.67 us | 32.29 us | 36.42 us | 0 |
+| `io_uring` | 8 | 5,000 | 247,929.56 ± 17,409.32 | 12.88 us | 16.87 us | 25.59 us | 0 |
 
-### 1. Single Worker (4-core, 1 worker)
+### 2. Linux Native `IORING_OP_RECV` Path (`test_uring_recv_bench`, `CSILK_USE_URING=ON`)
 
-| Test | Threads/Conns | Requests/sec | Avg Latency | P99 Latency |
-|:-----|:------------:|:-----------:|:-----------:|:-----------:|
-| `GET /json` | 4 / 100 | 49,933 | 1.20 ms | 4.50 ms |
-| `GET /static/test.html` | 4 / 100 | 52,100 | 1.10 ms | 3.80 ms |
-| `GET /api/v1/users/profile` | 4 / 100 | 51,200 | 1.15 ms | 4.10 ms |
-| `GET /json` | 4 / 500 | 48,500 | 2.10 ms | 8.50 ms |
-| `GET /json` (no keep-alive) | 4 / 100 | 35,200 | 3.80 ms | 12.00 ms |
+| Scenario | Requests / Conns | Throughput (req/s) | P50 | P95 | P99 |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| Hello World (Small) | 1,000 / 1 | 52,962.09 | 19.0 us | 20.0 us | 116.4 us |
+| Hello World (KeepAlive) | 2,000 / 4 | 215,906.97 | 16.8 us | 18.7 us | 26.8 us |
+| 1KB Payload Response | 2,000 / 4 | 293,669.93 | 11.8 us | 14.3 us | 25.1 us |
+| 10K Concurrent Batch | 4,000 / 8 | 184,280.35 | 40.8 us | 55.3 us | 59.8 us |
+| High-Load KeepAlive (5K) | 4,992 / 16 | 239,225.19 | 63.7 us | 67.8 us | 86.1 us |
 
-### 2. Multi-Worker (16-core, 16 workers)
+### 3. Core Subsystem Microbenchmarks (`libuv` Release + `-march=native`)
 
-| Test | Threads/Conns | Requests/sec | Avg Latency | P99 Latency |
-|:-----|:------------:|:-----------:|:-----------:|:-----------:|
-| `GET /json` | 16 / 200 | 198,400 | 2.80 ms | 7.50 ms |
-| `GET /json` | 16 / 500 | 205,100 | 4.10 ms | 10.20 ms |
-| `GET /static/test.html` | 16 / 200 | 210,500 | 2.50 ms | 6.80 ms |
+| Subsystem | Workload | Measured Result |
+|:---|:---|:---|
+| HTTP/1.1 Parse + Route + Serialize (`test_http1_pipeline_bench`) | `parse_tiny` / `router_match` / `response_serialize` | 105.81 ns / 39.76 ns / 32.52 ns per op |
+| HTTP/2 Stream Hash Map (`test_h2_stream_bench`) | Pool cycle / 10–10,000 stream lookup | 34.71 ns/cycle / 4.22–8.66 ns/lookup (median) |
+| Small-Vector Router Trie (`test_router_bench`) | 100 / 1,000 / 10,000 routes | 230.61 ns / 308.88 ns / 248.47 ns per lookup |
+| Bump-Pointer Arena (`test_arena_bench`) | 8 B / 32 B / 128 B / 1024 B alloc | 1.83 ns / 1.68 ns / 2.11 ns / 4.39 ns (596.8 M ops/s peak) |
+| Interned Header Map (`test_header_map_bench`) | Interned ID vs Legacy `strcasecmp` | 11.96 ns/req vs 66.96 ns/req (5.60× faster) |
+| JSON Value Accessor (`test_json_accessor_bench`) | Value Object / Pointer View | 15.01 ns (66.6 M ops/s) / 15.04 ns (66.5 M ops/s) |
+| Lock-Free Dispatch (`test_dispatch_bench`) | 1 / 8 / 32 / 128 producers | 4.86M / 11.80M / 12.38M / 11.29M dispatch ops/s |
+| Concurrent Server Stats (`test_server_stats_bench`) | 8 workers, 4 reader threads | 2.35 M queries/sec (1,702.17 ns/query) |
 
-### 3. Fixed-Rate Latency (wrk2, 4-core single worker)
-
-| Rate (QPS) | Avg Latency | P50 Latency | P99 Latency | Max Latency |
-|:----------:|:-----------:|:-----------:|:-----------:|:-----------:|
-| 5,000 | 0.40 ms | 0.35 ms | 1.20 ms | 5.00 ms |
-| 10,000 | 0.85 ms | 0.70 ms | 4.20 ms | 12.00 ms |
-| 20,000 | 1.50 ms | 1.10 ms | 4.80 ms | 18.00 ms |
-| 30,000 | 2.10 ms | 1.80 ms | 8.50 ms | 35.00 ms |
-| 40,000 | 3.50 ms | 2.50 ms | 12.00 ms | 60.00 ms |
-
-### 4. SIMD Router Lookup Latency
-
-| Platform | Instruction Set | Per-lookup (ns) | 100K routes P99 |
-|:---------|:--------------:|:---------------:|:---------------:|
-| x86_64 | AVX2 | ~50 ns | ≤100 ns |
-| x86_64 | AVX-512 | ~35 ns | ≤70 ns |
-| aarch64 | NEON | ~80 ns | ≤150 ns |
-
-### 5. Memory Usage
-
-| Scenario | RSS (keep-alive) |
-|:---------|:----------------:|
-| Idle (no connections) | ~2 MB |
-| 10K keep-alive connections | < 2 MB (per worker) |
-| 100K keep-alive connections | ~4 MB (per worker) |
-
-## Key Takeaways
-
-1. **P99 ≤ 5ms target met**: Under 10K QPS, P99 latency is 1.2-4.2ms (well within the ≤5ms target).
-2. **Near-linear scaling**: 16 workers achieve ~200K QPS vs ~50K QPS for single worker (4× workers → 4× throughput).
-3. **Zero-copy advantage**: Static file serving throughput is slightly higher than JSON serialization, confirming sendfile efficiency.
-4. **SIMD routing is negligible**: At ~50ns per lookup, routing overhead accounts for <1% of total request processing time.
-5. **Memory efficiency**: <2 MB RSS per 10K keep-alive connections validates the zero-copy + Arena allocation design.
-
-## Comparison with v0.3.0
-
-| Metric | v0.3.0 (May 2026) | v0.5.0 (June 2026) | Improvement |
-|:-------|:-----------------:|:------------------:|:-----------:|
-| Single-worker QPS | ~45,000 | ~49,933 | +11% |
-| P99 latency (10K QPS) | 5.0 ms | 4.2 ms | -16% |
-| Multi-worker QPS (16-core) | ~180,000 | ~205,100 | +14% |
-
-## Running These Tests
+## Reproducing Locally
 
 ```bash
-# Start server
-./build/examples/example_server
+# Built-in Release + -march=native benchmark suite (produces benchmarks/results/builtin-latest.json)
+./scripts/run_benchmarks.sh --builtin
 
-# Run benchmark
-wrk -t4 -c100 -d30s http://localhost:8080/json
+# Or compare both libuv and native io_uring Release builds directly:
+python3 scripts/run_microbenchmarks.py \
+  --uv-build-dir /tmp/bench_uv \
+  --uring-build-dir /tmp/bench_uring \
+  --output benchmarks/results/builtin-latest.json
 
-# For latency measurement
-wrk2 -t4 -c100 -d60s -R10000 --latency http://localhost:8080/json
+# External wrk load test suite (requires wrk installed):
+./scripts/run_benchmarks.sh --save
 ```
 
-Detailed benchmarking methodology: [Benchmarking Guide](../benchmarks/README.md)
-
-## Recording New Results
-
-When re-benchmarking, please include:
-
-```yaml
-date: <test-date>
-csilk_version: <version>
-compiler: <gcc/clang version>
-kernel: <uname -r>
-cpu: <model name>
-worker_threads: <n>
-wrk_command: wrk -t<n> -c<n> -d30s <url>
-results:
-  requests_per_sec: <n>
-  p99_latency_ms: <n.n>
-  avg_latency_ms: <n.n>
-```
+> Historical note: Earlier `v0.5.0`/`v1.0.0-rc` `wrk` runs are archived in [`benchmarks/results/*.txt`](results/) and [`benchmarks/COMPARATIVE_BENCHMARK_WHITEPAPER.md`](COMPARATIVE_BENCHMARK_WHITEPAPER.md) for reference.
 
 ## Further Reading
 
 | Document | Content |
 |:---------|:--------|
-| [Benchmarking Guide](../benchmarks/README.md) | wrk/wrk2 usage, scenarios, bottleneck diagnosis |
-| [Performance Tuning Guide](performance-tuning.md) | Compiler flags, kernel tuning, PGO |
-| [Architecture Whitepaper](architecture.md) | Zero-copy, lock-free design |
+| [Benchmarking Guide](README.md) | Built-in and `wrk`/`wrk2` suite usage, scenario tuning, bottleneck diagnosis |
+| [Performance Tuning Guide](../docs/en/performance-tuning.md) | Compiler flags, kernel tuning, PGO |
+| [Architecture Whitepaper](../docs/en/architecture.md) | Zero-copy, lock-free design |

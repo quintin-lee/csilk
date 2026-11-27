@@ -1,0 +1,339 @@
+{
+  "meta": {
+    "version": "1.2.0",
+    "git_hash": "15ce49eb",
+    "timestamp": "2026-11-27T08:21:18Z",
+    "host": {
+      "os": "Linux",
+      "kernel": "6.12.108-1-MANJARO",
+      "arch": "x86_64",
+      "cpu": "13th Gen Intel(R) Core(TM) i9-13900HX",
+      "logical_cores": 32
+    },
+    "compiler": "cc (GCC) 16.2.1 20260810",
+    "cmake_profile": "Release + -DCSILK_ENABLE_NATIVE_ARCH=ON"
+  },
+  "libuv": {
+    "http1_e2e": [
+      {
+        "workers": 1,
+        "clients": 4,
+        "rounds": 5,
+        "requests": 5000,
+        "qps": 113799.03,
+        "qps_ci95": 4316.76,
+        "p50_ns": 23668,
+        "p95_ns": 48159,
+        "p99_ns": 107920
+      },
+      {
+        "workers": 2,
+        "clients": 4,
+        "rounds": 5,
+        "requests": 5000,
+        "qps": 190900.41,
+        "qps_ci95": 14903.67,
+        "p50_ns": 13762,
+        "p95_ns": 32582,
+        "p99_ns": 33469
+      },
+      {
+        "workers": 4,
+        "clients": 4,
+        "rounds": 5,
+        "requests": 5000,
+        "qps": 205350.62,
+        "qps_ci95": 8206.57,
+        "p50_ns": 11396,
+        "p95_ns": 19211,
+        "p99_ns": 26040
+      },
+      {
+        "workers": 8,
+        "clients": 4,
+        "rounds": 5,
+        "requests": 5000,
+        "qps": 247128.69,
+        "qps_ci95": 29041.52,
+        "p50_ns": 10491,
+        "p95_ns": 22352,
+        "p99_ns": 45739
+      }
+    ],
+    "http1_pipeline_ns": {
+      "parse_tiny": 105.81,
+      "parse_json": 200.07,
+      "parse_body": 197.63,
+      "parse_fragmented": 171.92,
+      "parse_headers": 631.84,
+      "context_header_prepare": 43.67,
+      "router_match": 39.76,
+      "response_serialize": 32.52,
+      "read_buffer_copy_json": 1.82
+    },
+    "h2_stream": {
+      "pool_ns_per_cycle": 34.71,
+      "rounds": [
+        {
+          "streams": 10,
+          "rounds": 5,
+          "insert_median_ns": 69.6,
+          "lookup_median_ns": 4.22,
+          "delete_median_ns": 17.7
+        },
+        {
+          "streams": 100,
+          "rounds": 5,
+          "insert_median_ns": 122.13,
+          "lookup_median_ns": 6.16,
+          "delete_median_ns": 23.96
+        },
+        {
+          "streams": 1000,
+          "rounds": 5,
+          "insert_median_ns": 148.26,
+          "lookup_median_ns": 8.66,
+          "delete_median_ns": 35.75
+        },
+        {
+          "streams": 10000,
+          "rounds": 5,
+          "insert_median_ns": 415.67,
+          "lookup_median_ns": 6.18,
+          "delete_median_ns": 78.66
+        }
+      ]
+    },
+    "router_trie": [
+      {
+        "routes": 100,
+        "nodes": 319,
+        "overflow": 3,
+        "lookup_ns": 230.61,
+        "ops_per_sec": 4336357
+      },
+      {
+        "routes": 1000,
+        "nodes": 2419,
+        "overflow": 51,
+        "lookup_ns": 308.88,
+        "ops_per_sec": 3237525
+      },
+      {
+        "routes": 10000,
+        "nodes": 9312,
+        "overflow": 51,
+        "lookup_ns": 248.47,
+        "ops_per_sec": 4024649
+      }
+    ],
+    "arena": [
+      {
+        "size_bytes": 8,
+        "ns_per_alloc": 1.83,
+        "cycles_per_alloc": 4.44,
+        "mops_per_sec": 545.2
+      },
+      {
+        "size_bytes": 32,
+        "ns_per_alloc": 1.68,
+        "cycles_per_alloc": 4.05,
+        "mops_per_sec": 596.8
+      },
+      {
+        "size_bytes": 128,
+        "ns_per_alloc": 2.11,
+        "cycles_per_alloc": 5.11,
+        "mops_per_sec": 473.5
+      },
+      {
+        "size_bytes": 1024,
+        "ns_per_alloc": 4.39,
+        "cycles_per_alloc": 10.61,
+        "mops_per_sec": 228.0
+      }
+    ],
+    "header_map": {
+      "Legacy (strcasecmp loop)": {
+        "total_cycles_per_req": 162.0,
+        "cycles_per_hdr": 20.2,
+        "ns_per_req": 66.96
+      },
+      "String Name (Hash + Len)": {
+        "total_cycles_per_req": 112.9,
+        "cycles_per_hdr": 14.1,
+        "ns_per_req": 46.67
+      },
+      "Interned ID (Direct O(1))": {
+        "total_cycles_per_req": 28.9,
+        "cycles_per_hdr": 3.6,
+        "ns_per_req": 11.96
+      }
+    },
+    "json_accessor": {
+      "value_object_ns": 15.01,
+      "value_object_mops": 66.6,
+      "pointer_view_ns": 15.04,
+      "pointer_view_mops": 66.5
+    },
+    "dispatch": [
+      {
+        "producers": 1,
+        "ops": 50000,
+        "dispatch_kops_per_sec": 4862.85,
+        "ns_per_op": 205.6,
+        "e2e_kops_per_sec": 4376.56
+      },
+      {
+        "producers": 8,
+        "ops": 50000,
+        "dispatch_kops_per_sec": 11795.52,
+        "ns_per_op": 84.8,
+        "e2e_kops_per_sec": 8152.28
+      },
+      {
+        "producers": 32,
+        "ops": 49984,
+        "dispatch_kops_per_sec": 12384.62,
+        "ns_per_op": 80.7,
+        "e2e_kops_per_sec": 9664.86
+      },
+      {
+        "producers": 128,
+        "ops": 49920,
+        "dispatch_kops_per_sec": 11290.04,
+        "ns_per_op": 88.6,
+        "e2e_kops_per_sec": 8925.83
+      }
+    ],
+    "server_stats": {
+      "throughput_mqps": 2.35,
+      "avg_latency_ns": 1702.17
+    }
+  },
+  "io_uring": {
+    "http1_e2e": [
+      {
+        "workers": 1,
+        "clients": 4,
+        "rounds": 5,
+        "requests": 5000,
+        "qps": 83840.55,
+        "qps_ci95": 2303.08,
+        "p50_ns": 46397,
+        "p95_ns": 50460,
+        "p99_ns": 60108
+      },
+      {
+        "workers": 2,
+        "clients": 4,
+        "rounds": 5,
+        "requests": 5000,
+        "qps": 143539.69,
+        "qps_ci95": 25427.97,
+        "p50_ns": 30226,
+        "p95_ns": 42850,
+        "p99_ns": 45640
+      },
+      {
+        "workers": 4,
+        "clients": 4,
+        "rounds": 5,
+        "requests": 5000,
+        "qps": 208952.93,
+        "qps_ci95": 29755.37,
+        "p50_ns": 12672,
+        "p95_ns": 32289,
+        "p99_ns": 36419
+      },
+      {
+        "workers": 8,
+        "clients": 4,
+        "rounds": 5,
+        "requests": 5000,
+        "qps": 247929.56,
+        "qps_ci95": 17409.32,
+        "p50_ns": 12877,
+        "p95_ns": 16866,
+        "p99_ns": 25588
+      }
+    ],
+    "uring_recv": [
+      {
+        "scenario": "Hello World (Small)",
+        "requests": 1000,
+        "connections": 1,
+        "req_per_sec": 52962.09,
+        "p50_us": 19.0,
+        "p95_us": 20.0,
+        "p99_us": 116.4
+      },
+      {
+        "scenario": "Hello World (KeepAlive)",
+        "requests": 2000,
+        "connections": 4,
+        "req_per_sec": 215906.97,
+        "p50_us": 16.8,
+        "p95_us": 18.7,
+        "p99_us": 26.8
+      },
+      {
+        "scenario": "1KB Payload Response",
+        "requests": 2000,
+        "connections": 4,
+        "req_per_sec": 293669.93,
+        "p50_us": 11.8,
+        "p95_us": 14.3,
+        "p99_us": 25.1
+      },
+      {
+        "scenario": "10K Concurrent Batch",
+        "requests": 4000,
+        "connections": 8,
+        "req_per_sec": 184280.35,
+        "p50_us": 40.8,
+        "p95_us": 55.3,
+        "p99_us": 59.8
+      },
+      {
+        "scenario": "High-Load KeepAlive (5K)",
+        "requests": 4992,
+        "connections": 16,
+        "req_per_sec": 239225.19,
+        "p50_us": 63.7,
+        "p95_us": 67.8,
+        "p99_us": 86.1
+      }
+    ],
+    "dispatch": [
+      {
+        "producers": 1,
+        "ops": 50000,
+        "dispatch_kops_per_sec": 1465.44,
+        "ns_per_op": 682.4,
+        "e2e_kops_per_sec": 1465.43
+      },
+      {
+        "producers": 8,
+        "ops": 50000,
+        "dispatch_kops_per_sec": 3431.66,
+        "ns_per_op": 291.4,
+        "e2e_kops_per_sec": 3431.63
+      },
+      {
+        "producers": 32,
+        "ops": 49984,
+        "dispatch_kops_per_sec": 4118.44,
+        "ns_per_op": 242.8,
+        "e2e_kops_per_sec": 3934.88
+      },
+      {
+        "producers": 128,
+        "ops": 49920,
+        "dispatch_kops_per_sec": 3558.82,
+        "ns_per_op": 281.0,
+        "e2e_kops_per_sec": 3422.81
+      }
+    ]
+  }
+}

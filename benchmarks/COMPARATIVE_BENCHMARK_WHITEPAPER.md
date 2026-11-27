@@ -1,10 +1,11 @@
 # csilk v1.0 官方性能基准对比白皮书
 ## Comparative Performance Benchmark Whitepaper: csilk vs. Nginx, Drogon, Actix-web & Go net/http
 
-> **报告版本**: 1.0.0-rc  
+> **报告版本**: 1.0.0-rc（历史四方对比参考基线）  
 > **基准发布日期**: 2026-11-14  
 > **测试环境**: 16-Core / 32-Thread AMD EPYC 9454, Ubuntu 24.04 LTS (Linux 6.12.91), 64GB DDR5 ECC  
 > **压测工具**: `wrk` (v4.2.0) & `wrk2` (v4.0.0, 恒定请求速率延迟测试)  
+> **当前可复现 v1.2.0 实测数据**: 请参阅 [`benchmarks/BENCHMARK_REPORT.md`](BENCHMARK_REPORT.md) 与 [`benchmarks/results/builtin-latest.json`](results/builtin-latest.json)（通过 `./scripts/run_benchmarks.sh --builtin` 复现）。
 
 ---
 
