@@ -16,13 +16,22 @@
  * @copyright MIT License
  */
 
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <yaml.h>
 
+#include "csilk/core/security.h"
 #include "csilk/csilk.h"
 #include "../internal/srv_internal.h"
+
+enum {
+    CONFIG_YAML_MAX_DEPTH = 32,
+    CONFIG_TIMEOUT_DEFAULT_MS = 30000,
+    CONFIG_TIMEOUT_MAX_MS = 3600000
+};
 
 /** @brief Convert a case-insensitive log level string to its enum value.
  *
@@ -73,19 +82,280 @@ string_to_log_level(const char* s)
  * @note The config structure is memset to zero first, then defaults are set.
  *       Callers that have already populated fields will lose them. */
 static int
-parse_yaml_config_stream(yaml_parser_t* parser, csilk_config_t* config)
+parse_int_strtol(const char* val, int fallback)
 {
-    yaml_event_t event;
-    char*        current_key = NULL;
-    char*        current_section = NULL;
+    if (!val || *val == '\0') {
+        return fallback;
+    }
+    errno = 0;
+    char* end = nullptr;
+    long  v = strtol(val, &end, 10);
+    if (errno == ERANGE || end == val || *end != '\0' || v < INT_MIN || v > INT_MAX) {
+        return fallback;
+    }
+    return (int)v;
+}
 
-    // Default values
+static long long
+parse_ll_clamped(const char* val, long long min_val, long long max_val, long long fallback)
+{
+    if (!val || *val == '\0') {
+        return fallback;
+    }
+    errno = 0;
+    char*     end = nullptr;
+    long long v = strtoll(val, &end, 10);
+    if (errno == ERANGE || end == val || *end != '\0') {
+        return fallback;
+    }
+    if (v < min_val) {
+        return min_val;
+    }
+    if (v > max_val) {
+        return max_val;
+    }
+    return v;
+}
+
+static unsigned int
+parse_timeout_ms(const char* name, const char* val, unsigned int default_ms)
+{
+    if (!val || *val == '\0') {
+        CSILK_LOG_E("Config: Invalid %s: empty (must be 0-%d)", name, CONFIG_TIMEOUT_MAX_MS);
+        return default_ms;
+    }
+    errno = 0;
+    char* end = nullptr;
+    long  v = strtol(val, &end, 10);
+    if (errno == ERANGE || end == val || *end != '\0' || v < 0 || v > CONFIG_TIMEOUT_MAX_MS) {
+        CSILK_LOG_E("Config: Invalid %s: %s (must be 0-%d)", name, val, CONFIG_TIMEOUT_MAX_MS);
+        return default_ms;
+    }
+    return (unsigned int)v;
+}
+
+static int
+dup_string_field(char** dst, const char* val)
+{
+    char* copy = strdup(val);
+    if (!copy) {
+        return -1;
+    }
+    free(*dst);
+    *dst = copy;
+    return 0;
+}
+
+static int
+dup_const_string_field(const char** dst, const char* val)
+{
+    char* copy = strdup(val);
+    if (!copy) {
+        return -1;
+    }
+    free((void*)*dst);
+    *dst = copy;
+    return 0;
+}
+
+static int
+apply_top_level_key(csilk_config_t* config, const char* key, const char* val)
+{
+    if (strcmp(key, "port") == 0) {
+        config->port = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "http3_port") == 0) {
+        config->http3_port = parse_int_strtol(val, 0);
+    }
+    return 0;
+}
+
+static int
+apply_server_key(csilk_server_config_t* srv, const char* key, const char* val)
+{
+    if (strcmp(key, "idle_timeout_ms") == 0) {
+        srv->idle_timeout_ms = parse_timeout_ms("idle_timeout_ms", val, CONFIG_TIMEOUT_DEFAULT_MS);
+    } else if (strcmp(key, "read_timeout_ms") == 0) {
+        srv->read_timeout_ms = parse_timeout_ms("read_timeout_ms", val, CONFIG_TIMEOUT_DEFAULT_MS);
+    } else if (strcmp(key, "write_timeout_ms") == 0) {
+        srv->write_timeout_ms =
+            parse_timeout_ms("write_timeout_ms", val, CONFIG_TIMEOUT_DEFAULT_MS);
+    } else if (strcmp(key, "request_timeout_ms") == 0) {
+        srv->request_timeout_ms =
+            parse_timeout_ms("request_timeout_ms", val, CONFIG_TIMEOUT_DEFAULT_MS);
+    } else if (strcmp(key, "max_body_size") == 0) {
+        srv->max_body_size = (size_t)parse_ll_clamped(val, 0, 1024LL * 1024LL * 1024LL, 0);
+    } else if (strcmp(key, "max_header_size") == 0) {
+        srv->max_header_size = (size_t)parse_ll_clamped(val, 0, 65536LL, 0);
+    } else if (strcmp(key, "max_url_size") == 0) {
+        srv->max_url_size = (size_t)parse_ll_clamped(val, 0, 1024LL * 1024LL, 0);
+    } else if (strcmp(key, "max_headers_count") == 0) {
+        srv->max_headers_count = (size_t)parse_ll_clamped(val, 0, 1024LL, 0);
+    } else if (strcmp(key, "max_connections") == 0) {
+        srv->max_connections = (int)parse_ll_clamped(val, 0, INT_MAX, 0);
+    } else if (strcmp(key, "listen_backlog") == 0) {
+        srv->listen_backlog = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "tcp_nodelay") == 0) {
+        srv->tcp_nodelay = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "tcp_keepalive") == 0) {
+        srv->tcp_keepalive = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "worker_threads") == 0) {
+        srv->worker_threads = (int)parse_ll_clamped(val, 1, INT_MAX, 1);
+    } else if (strcmp(key, "enable_tls") == 0) {
+        srv->enable_tls = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "tls_cert_file") == 0) {
+        return dup_string_field(&srv->tls_cert_file, val);
+    } else if (strcmp(key, "tls_key_file") == 0) {
+        return dup_string_field(&srv->tls_key_file, val);
+    } else if (strcmp(key, "tls_ca_file") == 0) {
+        return dup_string_field(&srv->tls_ca_file, val);
+    } else if (strcmp(key, "tls_verify_peer") == 0) {
+        srv->tls_verify_peer = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "h2_push_enable") == 0) {
+        srv->h2_push_enable = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "h2_max_push_per_request") == 0) {
+        srv->h2_max_push_per_request = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "enable_simd") == 0) {
+        srv->enable_simd = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "enable_arena_alignment") == 0) {
+        srv->enable_arena_alignment = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "enable_openapi") == 0) {
+        srv->enable_openapi = parse_int_strtol(val, 0);
+    }
+    return 0;
+}
+
+static int
+apply_logger_key(csilk_log_config_t* logger, const char* key, const char* val)
+{
+    if (strcmp(key, "level") == 0) {
+        logger->level = string_to_log_level(val);
+    } else if (strcmp(key, "file_path") == 0) {
+        return dup_const_string_field(&logger->file_path, val);
+    } else if (strcmp(key, "max_file_size") == 0) {
+        logger->max_file_size = (size_t)parse_ll_clamped(val, 0, LLONG_MAX, 0);
+    } else if (strcmp(key, "use_colors") == 0) {
+        logger->use_colors = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "json_format") == 0) {
+        logger->json_format = parse_int_strtol(val, 0);
+    }
+    return 0;
+}
+
+static int
+apply_cors_key(csilk_config_t* config, const char* key, const char* val)
+{
+    if (strcmp(key, "enable") == 0) {
+        config->cors.enable = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "allow_origin") == 0) {
+        return dup_const_string_field(&config->cors.config.allow_origin, val);
+    } else if (strcmp(key, "allow_methods") == 0) {
+        return dup_const_string_field(&config->cors.config.allow_methods, val);
+    } else if (strcmp(key, "allow_headers") == 0) {
+        return dup_const_string_field(&config->cors.config.allow_headers, val);
+    } else if (strcmp(key, "allow_credentials") == 0) {
+        config->cors.config.allow_credentials = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "max_age") == 0) {
+        config->cors.config.max_age = parse_int_strtol(val, 0);
+    }
+    return 0;
+}
+
+static int
+apply_static_files_key(csilk_config_t* config, const char* key, const char* val)
+{
+    if (strcmp(key, "enable") == 0) {
+        config->static_files.enable = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "root_dir") == 0) {
+        return dup_string_field(&config->static_files.root_dir, val);
+    } else if (strcmp(key, "prefix") == 0) {
+        return dup_string_field(&config->static_files.prefix, val);
+    }
+    return 0;
+}
+
+static int
+apply_middleware_key(csilk_config_t* config, const char* key, const char* val)
+{
+    if (strcmp(key, "enable_logger") == 0) {
+        config->middleware.enable_logger = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "enable_recovery") == 0) {
+        config->middleware.enable_recovery = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "enable_csrf") == 0) {
+        config->middleware.enable_csrf = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "enable_auth") == 0) {
+        config->middleware.enable_auth = parse_int_strtol(val, 0);
+    } else if (strcmp(key, "auth_token") == 0) {
+        return dup_string_field(&config->middleware.auth_token, val);
+    }
+    return 0;
+}
+
+static int
+apply_ai_key(csilk_config_t* config, const char* key, const char* val)
+{
+    if (strcmp(key, "driver") == 0) {
+        return dup_string_field(&config->ai.driver, val);
+    } else if (strcmp(key, "model") == 0) {
+        return dup_string_field(&config->ai.model, val);
+    } else if (strcmp(key, "api_key") == 0) {
+        return dup_string_field(&config->ai.api_key, val);
+    } else if (strcmp(key, "base_url") == 0) {
+        return dup_string_field(&config->ai.base_url, val);
+    }
+    return 0;
+}
+
+static int
+apply_config_kv(csilk_config_t* config, const char* section, const char* key, const char* val)
+{
+    if (!section) {
+        return apply_top_level_key(config, key, val);
+    }
+    if (strcmp(section, "server") == 0) {
+        return apply_server_key(&config->server, key, val);
+    }
+    if (strcmp(section, "logger") == 0) {
+        return apply_logger_key(&config->logger, key, val);
+    }
+    if (strcmp(section, "cors") == 0) {
+        return apply_cors_key(config, key, val);
+    }
+    if (strcmp(section, "rate_limit") == 0) {
+        if (strcmp(key, "enable") == 0) {
+            config->rate_limit.enable = parse_int_strtol(val, 0);
+        } else if (strcmp(key, "requests_per_minute") == 0) {
+            config->rate_limit.requests_per_minute = parse_int_strtol(val, 0);
+        }
+        return 0;
+    }
+    if (strcmp(section, "static_files") == 0) {
+        return apply_static_files_key(config, key, val);
+    }
+    if (strcmp(section, "middleware") == 0) {
+        return apply_middleware_key(config, key, val);
+    }
+    if (strcmp(section, "ai") == 0) {
+        return apply_ai_key(config, key, val);
+    }
+    if (strcmp(section, "cipher") == 0) {
+        if (strcmp(key, "enable") == 0) {
+            config->cipher.enable = parse_int_strtol(val, 0);
+        } else if (strcmp(key, "driver") == 0) {
+            return dup_string_field(&config->cipher.driver, val);
+        }
+    }
+    return 0;
+}
+
+static void
+config_init_defaults(csilk_config_t* config)
+{
     memset(config, 0, sizeof(csilk_config_t));
     config->port = 8080;
     config->http3_port = 0;
     config->server.idle_timeout_ms = CSILK_DEFAULT_IDLE_TIMEOUT;
-    config->server.read_timeout_ms = 30000;
-    config->server.write_timeout_ms = 30000;
+    config->server.read_timeout_ms = CONFIG_TIMEOUT_DEFAULT_MS;
+    config->server.write_timeout_ms = CONFIG_TIMEOUT_DEFAULT_MS;
     config->server.max_body_size = CSILK_DEFAULT_MAX_BODY_SIZE;
     config->server.max_header_size = CSILK_DEFAULT_MAX_HEADER_SIZE;
     config->server.max_url_size = CSILK_DEFAULT_MAX_URL_SIZE;
@@ -98,9 +368,20 @@ parse_yaml_config_stream(yaml_parser_t* parser, csilk_config_t* config)
     config->server.enable_openapi = 0;
     config->logger.level = CSILK_LOG_INFO;
     config->logger.use_colors = -1;
+}
 
-    int done = 0;
-    int error = 0;
+static int
+parse_yaml_config_stream(yaml_parser_t* parser, csilk_config_t* config)
+{
+    yaml_event_t event;
+    char*        current_key = nullptr;
+    char*        current_section = nullptr;
+    int          depth = 0;
+    int          done = 0;
+    int          error = 0;
+
+    config_init_defaults(config);
+
     while (!done && !error) {
         if (!yaml_parser_parse(parser, &event)) {
             error = 1;
@@ -110,243 +391,49 @@ parse_yaml_config_stream(yaml_parser_t* parser, csilk_config_t* config)
         switch (event.type) {
         case YAML_SCALAR_EVENT:
             if (!current_key) {
-                current_key = strdup((char*)event.data.scalar.value);
+                current_key = strdup((const char*)event.data.scalar.value);
                 if (!current_key) {
                     error = 1;
                 }
             } else {
-                char* val = (char*)event.data.scalar.value;
-
-                if (current_section == NULL) {
-                    if (strcmp(current_key, "port") == 0) {
-                        config->port = atoi(val);
-                    } else if (strcmp(current_key, "http3_port") == 0) {
-                        config->http3_port = atoi(val);
-                    }
-                } else if (strcmp(current_section, "server") == 0) {
-                    if (strcmp(current_key, "idle_timeout_ms") == 0) {
-                        config->server.idle_timeout_ms = atoi(val);
-                        if (config->server.idle_timeout_ms < 0 ||
-                            config->server.idle_timeout_ms > 3600000) {
-                            CSILK_LOG_E("Config: Invalid idle_timeout_ms: %d (must be 0-3600000)",
-                                        config->server.idle_timeout_ms);
-                            config->server.idle_timeout_ms = 30000; /* default */
-                        }
-                    } else if (strcmp(current_key, "read_timeout_ms") == 0) {
-                        config->server.read_timeout_ms = atoi(val);
-                        if (config->server.read_timeout_ms < 0 ||
-                            config->server.read_timeout_ms > 3600000) {
-                            CSILK_LOG_E("Config: Invalid read_timeout_ms: %d (must be 0-3600000)",
-                                        config->server.read_timeout_ms);
-                            config->server.read_timeout_ms = 30000; /* default */
-                        }
-                    } else if (strcmp(current_key, "write_timeout_ms") == 0) {
-                        config->server.write_timeout_ms = atoi(val);
-                        if (config->server.write_timeout_ms < 0 ||
-                            config->server.write_timeout_ms > 3600000) {
-                            CSILK_LOG_E("Config: Invalid write_timeout_ms: %d (must be 0-3600000)",
-                                        config->server.write_timeout_ms);
-                            config->server.write_timeout_ms = 30000; /* default */
-                        }
-                    } else if (strcmp(current_key, "request_timeout_ms") == 0) {
-                        config->server.request_timeout_ms = atoi(val);
-                        if (config->server.request_timeout_ms < 0 ||
-                            config->server.request_timeout_ms > 3600000) {
-                            CSILK_LOG_E(
-                                "Config: Invalid request_timeout_ms: %d (must be 0-3600000)",
-                                config->server.request_timeout_ms);
-                            config->server.request_timeout_ms = 30000; /* default */
-                        }
-                    } else if (strcmp(current_key, "max_body_size") == 0) {
-                        long long v = strtoll(val, NULL, 10);
-                        config->server.max_body_size = (v < 0) ? 0
-                                                       : (v > 1024 * 1024 * 1024LL)
-                                                           ? 1024 * 1024 * 1024ULL
-                                                           : (size_t)v;
-                    } else if (strcmp(current_key, "max_header_size") == 0) {
-                        long long v = strtoll(val, NULL, 10);
-                        config->server.max_header_size = (v < 0)         ? 0
-                                                         : (v > 65536LL) ? 65536ULL
-                                                                         : (size_t)v;
-                    } else if (strcmp(current_key, "max_url_size") == 0) {
-                        long long v = strtoll(val, NULL, 10);
-                        config->server.max_url_size = (v < 0)               ? 0
-                                                      : (v > 1024 * 1024LL) ? 1024 * 1024ULL
-                                                                            : (size_t)v;
-                    } else if (strcmp(current_key, "max_headers_count") == 0) {
-                        long long v = strtoll(val, NULL, 10);
-                        config->server.max_headers_count = (v < 0)        ? 0
-                                                           : (v > 1024LL) ? 1024
-                                                                          : (size_t)v;
-                    } else if (strcmp(current_key, "max_connections") == 0) {
-                        int v = atoi(val);
-                        config->server.max_connections = (v < 0) ? 0 : v;
-                    } else if (strcmp(current_key, "listen_backlog") == 0) {
-                        config->server.listen_backlog = atoi(val);
-                    } else if (strcmp(current_key, "tcp_nodelay") == 0) {
-                        config->server.tcp_nodelay = atoi(val);
-                    } else if (strcmp(current_key, "tcp_keepalive") == 0) {
-                        config->server.tcp_keepalive = atoi(val);
-                    } else if (strcmp(current_key, "worker_threads") == 0) {
-                        int v = atoi(val);
-                        config->server.worker_threads = (v < 1) ? 1 : v;
-                    } else if (strcmp(current_key, "enable_tls") == 0) {
-                        config->server.enable_tls = atoi(val);
-                    } else if (strcmp(current_key, "tls_cert_file") == 0) {
-                        config->server.tls_cert_file = strdup(val);
-                        if (!config->server.tls_cert_file) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "tls_key_file") == 0) {
-                        config->server.tls_key_file = strdup(val);
-                        if (!config->server.tls_key_file) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "tls_ca_file") == 0) {
-                        config->server.tls_ca_file = strdup(val);
-                        if (!config->server.tls_ca_file) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "tls_verify_peer") == 0) {
-                        config->server.tls_verify_peer = atoi(val);
-                    } else if (strcmp(current_key, "h2_push_enable") == 0) {
-                        config->server.h2_push_enable = atoi(val);
-                    } else if (strcmp(current_key, "h2_max_push_per_request") == 0) {
-                        config->server.h2_max_push_per_request = atoi(val);
-                    } else if (strcmp(current_key, "enable_simd") == 0) {
-                        config->server.enable_simd = atoi(val);
-                    } else if (strcmp(current_key, "enable_arena_alignment") == 0) {
-                        config->server.enable_arena_alignment = atoi(val);
-                    } else if (strcmp(current_key, "enable_openapi") == 0) {
-                        config->server.enable_openapi = atoi(val);
-                    }
-                } else if (strcmp(current_section, "logger") == 0) {
-
-                    if (strcmp(current_key, "level") == 0) {
-                        config->logger.level = string_to_log_level(val);
-                    } else if (strcmp(current_key, "file_path") == 0) {
-                        config->logger.file_path = strdup(val);
-                        if (!config->logger.file_path) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "max_file_size") == 0) {
-                        config->logger.max_file_size = (size_t)atoll(val);
-                    } else if (strcmp(current_key, "use_colors") == 0) {
-                        config->logger.use_colors = atoi(val);
-                    } else if (strcmp(current_key, "json_format") == 0) {
-                        config->logger.json_format = atoi(val);
-                    }
-                } else if (strcmp(current_section, "cors") == 0) {
-                    if (strcmp(current_key, "enable") == 0) {
-                        config->cors.enable = atoi(val);
-                    } else if (strcmp(current_key, "allow_origin") == 0) {
-                        config->cors.config.allow_origin = strdup(val);
-                        if (!config->cors.config.allow_origin) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "allow_methods") == 0) {
-                        config->cors.config.allow_methods = strdup(val);
-                        if (!config->cors.config.allow_methods) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "allow_headers") == 0) {
-                        config->cors.config.allow_headers = strdup(val);
-                        if (!config->cors.config.allow_headers) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "allow_credentials") == 0) {
-                        config->cors.config.allow_credentials = atoi(val);
-                    } else if (strcmp(current_key, "max_age") == 0) {
-                        config->cors.config.max_age = atoi(val);
-                    }
-                } else if (strcmp(current_section, "rate_limit") == 0) {
-                    if (strcmp(current_key, "enable") == 0) {
-                        config->rate_limit.enable = atoi(val);
-                    } else if (strcmp(current_key, "requests_per_minute") == 0) {
-                        config->rate_limit.requests_per_minute = atoi(val);
-                    }
-                } else if (strcmp(current_section, "static_files") == 0) {
-                    if (strcmp(current_key, "enable") == 0) {
-                        config->static_files.enable = atoi(val);
-                    } else if (strcmp(current_key, "root_dir") == 0) {
-                        config->static_files.root_dir = strdup(val);
-                        if (!config->static_files.root_dir) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "prefix") == 0) {
-                        config->static_files.prefix = strdup(val);
-                        if (!config->static_files.prefix) {
-                            error = 1;
-                        }
-                    }
-                } else if (strcmp(current_section, "middleware") == 0) {
-                    if (strcmp(current_key, "enable_logger") == 0) {
-                        config->middleware.enable_logger = atoi(val);
-                    } else if (strcmp(current_key, "enable_recovery") == 0) {
-                        config->middleware.enable_recovery = atoi(val);
-                    } else if (strcmp(current_key, "enable_csrf") == 0) {
-                        config->middleware.enable_csrf = atoi(val);
-                    } else if (strcmp(current_key, "enable_auth") == 0) {
-                        config->middleware.enable_auth = atoi(val);
-                    } else if (strcmp(current_key, "auth_token") == 0) {
-                        if (config->middleware.auth_token) {
-                            free(config->middleware.auth_token);
-                        }
-                        config->middleware.auth_token = strdup(val);
-                        if (!config->middleware.auth_token) {
-                            error = 1;
-                        }
-                    }
-                } else if (strcmp(current_section, "ai") == 0) {
-                    if (strcmp(current_key, "driver") == 0) {
-                        config->ai.driver = strdup(val);
-                        if (!config->ai.driver) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "model") == 0) {
-                        config->ai.model = strdup(val);
-                        if (!config->ai.model) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "api_key") == 0) {
-                        config->ai.api_key = strdup(val);
-                        if (!config->ai.api_key) {
-                            error = 1;
-                        }
-                    } else if (strcmp(current_key, "base_url") == 0) {
-                        config->ai.base_url = strdup(val);
-                        if (!config->ai.base_url) {
-                            error = 1;
-                        }
-                    }
-                } else if (strcmp(current_section, "cipher") == 0) {
-                    if (strcmp(current_key, "enable") == 0) {
-                        config->cipher.enable = atoi(val);
-                    } else if (strcmp(current_key, "driver") == 0) {
-                        config->cipher.driver = strdup(val);
-                        if (!config->cipher.driver) {
-                            error = 1;
-                        }
-                    }
+                const char* val = (const char*)event.data.scalar.value;
+                if (apply_config_kv(config, current_section, current_key, val) != 0) {
+                    error = 1;
                 }
-
                 free(current_key);
-                current_key = NULL;
+                current_key = nullptr;
             }
             break;
         case YAML_MAPPING_START_EVENT:
+            depth++;
+            if (depth > CONFIG_YAML_MAX_DEPTH) {
+                CSILK_LOG_E("Config: YAML nesting depth exceeds %d", CONFIG_YAML_MAX_DEPTH);
+                error = 1;
+                break;
+            }
             if (current_key) {
-                if (current_section) {
-                    free(current_section);
-                }
+                free(current_section);
                 current_section = current_key;
-                current_key = NULL;
+                current_key = nullptr;
             }
             break;
         case YAML_MAPPING_END_EVENT:
-            if (current_section) {
-                free(current_section);
-                current_section = NULL;
+            if (depth > 0) {
+                depth--;
+            }
+            free(current_section);
+            current_section = nullptr;
+            break;
+        case YAML_SEQUENCE_START_EVENT:
+            depth++;
+            if (depth > CONFIG_YAML_MAX_DEPTH) {
+                CSILK_LOG_E("Config: YAML nesting depth exceeds %d", CONFIG_YAML_MAX_DEPTH);
+                error = 1;
+            }
+            break;
+        case YAML_SEQUENCE_END_EVENT:
+            if (depth > 0) {
+                depth--;
             }
             break;
         case YAML_STREAM_END_EVENT:
@@ -358,14 +445,13 @@ parse_yaml_config_stream(yaml_parser_t* parser, csilk_config_t* config)
         yaml_event_delete(&event);
     }
 
-    if (current_key) {
-        free(current_key);
+    free(current_key);
+    free(current_section);
+    if (error) {
+        csilk_config_free(config);
+        return -1;
     }
-    if (current_section) {
-        free(current_section);
-    }
-
-    return error ? -1 : 0;
+    return 0;
 }
 
 int
@@ -495,13 +581,30 @@ csilk_config_free(csilk_config_t* config)
     }
 }
 
+static int
+validate_ai_base_url(const char* url)
+{
+    if (!csilk_security_url_is_ssrf_safe(url, true)) {
+        return -1;
+    }
+    if (strstr(url, "..") != nullptr) {
+        return -1;
+    }
+    for (const unsigned char* p = (const unsigned char*)url; *p != '\0'; p++) {
+        if (*p < 0x20U || *p == 0x7fU) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 /** @brief Validate configuration values for semantic correctness.
  *
  * Checks that port is in range [1, 65535], timeouts are non-negative,
  * max_body_size and max_header_size are positive, listen_backlog and
  * worker_threads are >= 1, and that optional features (rate_limit,
- * static_files, auth middleware) have their required sub-fields set when
- * enabled. Returns the first validation error found.
+ * static_files, auth middleware, ai.base_url) are valid and have their
+ * required sub-fields set when enabled. Returns the first validation error found.
  *
  * @param config    Configuration to validate.
  * @param error_msg [out] Optional pointer to receive a human-readable error
@@ -529,9 +632,27 @@ csilk_config_validate(const csilk_config_t* config, const char** error_msg)
         }
         return -1;
     }
-    if (config->server.idle_timeout_ms < 0) {
+    if (config->server.idle_timeout_ms > (unsigned int)INT_MAX) {
         if (error_msg) {
             *error_msg = "idle_timeout_ms must be >= 0";
+        }
+        return -1;
+    }
+    if (config->server.read_timeout_ms > (unsigned int)INT_MAX) {
+        if (error_msg) {
+            *error_msg = "read_timeout_ms must be >= 0";
+        }
+        return -1;
+    }
+    if (config->server.write_timeout_ms > (unsigned int)INT_MAX) {
+        if (error_msg) {
+            *error_msg = "write_timeout_ms must be >= 0";
+        }
+        return -1;
+    }
+    if (config->server.request_timeout_ms > (unsigned int)INT_MAX) {
+        if (error_msg) {
+            *error_msg = "request_timeout_ms must be >= 0";
         }
         return -1;
     }
@@ -592,6 +713,14 @@ csilk_config_validate(const csilk_config_t* config, const char** error_msg)
             *error_msg = "cipher.driver must be set when cipher is enabled";
         }
         return -1;
+    }
+    if (config->ai.base_url && config->ai.base_url[0] != '\0') {
+        if (validate_ai_base_url(config->ai.base_url) != 0) {
+            if (error_msg) {
+                *error_msg = "ai.base_url must be a valid HTTP/HTTPS URL";
+            }
+            return -1;
+        }
     }
     if (config->server.enable_tls) {
         if (!config->server.tls_cert_file || strlen(config->server.tls_cert_file) == 0) {
