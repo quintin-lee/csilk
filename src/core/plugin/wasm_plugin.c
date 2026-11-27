@@ -164,6 +164,7 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
     memcpy(plugin->bytecode, wasm_bytes, size);
 
     plugin->memory.initial_pages = 1;
+    plugin->memory.max_pages = plugin->config.max_memory_pages;
     plugin->memory.current_size = CSILK_WASM_PAGE_SIZE;
     plugin->memory.data = calloc(1, plugin->memory.current_size);
     if (!plugin->memory.data) {
@@ -173,19 +174,21 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
         return NULL;
     }
 
-    /* WAMR real execution path: only set use_wamr=true after both load and
-     * instantiate succeed, avoiding a fragile intermediate state where
-     * use_wamr=true but wasm_module_id=0. */
-    wasm_module_t wamr_mod =
-        wasm_runtime_load(plugin->bytecode, (uint32_t)plugin->bytecode_size, NULL, 0);
-    if (wamr_mod) {
-        wasm_module_inst_t wamr_inst = wasm_runtime_instantiate(wamr_mod, 4096, 4096, NULL, 0);
-        if (wamr_inst) {
-            plugin->wasm_module_id = (uintptr_t)wamr_mod;
-            plugin->wasm_instance = (uintptr_t)wamr_inst;
-            plugin->use_wamr = true;
-        } else {
-            wasm_runtime_unload(wamr_mod);
+    /* WAMR real execution path: ensure runtime is initialized, then only set
+     * use_wamr=true after both load and instantiate succeed, avoiding a
+     * fragile intermediate state where use_wamr=true but wasm_module_id=0. */
+    if (_csilk_wasm_ensure_runtime()) {
+        wasm_module_t wamr_mod =
+            wasm_runtime_load(plugin->bytecode, (uint32_t)plugin->bytecode_size, NULL, 0);
+        if (wamr_mod) {
+            wasm_module_inst_t wamr_inst = wasm_runtime_instantiate(wamr_mod, 4096, 4096, NULL, 0);
+            if (wamr_inst) {
+                plugin->wasm_module_id = (uintptr_t)wamr_mod;
+                plugin->wasm_instance = (uintptr_t)wamr_inst;
+                plugin->use_wamr = true;
+            } else {
+                wasm_runtime_unload(wamr_mod);
+            }
         }
     }
     /* use_wamr remains false (calloc zero-init) if WAMR load/instantiate failed */
@@ -231,6 +234,12 @@ csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const c
                 csilk_abort(ctx);
             }
             return CSILK_WASM_ERR_OUT_OF_FUEL;
+        }
+        if (ctx) {
+            csilk_set_status(ctx, 500);
+            csilk_set_header(
+                ctx, "X-WASM-Error", err_buf[0] ? err_buf : "CSILK_WASM_TRAP_EXECUTION_ERR");
+            csilk_abort(ctx);
         }
         return -1;
     }

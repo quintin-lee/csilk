@@ -11,8 +11,40 @@
 #include <string.h>
 #include <stdint.h>
 
+#include "csilk/core/plugin/wasm_plugin.h"
 #include "wasm_internal.h"
 #include "wasm_export.h"
+
+static csilk_once_t s_wamr_init_once = CSILK_ONCE_INIT;
+static bool         s_wamr_init_ok = false;
+
+static void
+_csilk_wasm_runtime_atexit(void)
+{
+    if (s_wamr_init_ok) {
+        wasm_runtime_destroy();
+        s_wamr_init_ok = false;
+    }
+}
+
+static void
+_csilk_wasm_runtime_init_once(void)
+{
+    s_wamr_init_ok = wasm_runtime_init();
+    if (s_wamr_init_ok) {
+        atexit(_csilk_wasm_runtime_atexit);
+    }
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((visibility("hidden")))
+#endif
+bool
+_csilk_wasm_ensure_runtime(void)
+{
+    csilk_once(&s_wamr_init_once, _csilk_wasm_runtime_init_once);
+    return s_wamr_init_ok;
+}
 
 /**
  * @brief Resolve a slice of plugin linear memory.
@@ -59,60 +91,43 @@ csilk_wasm_plugin_load_file(const char* filepath, const csilk_wasm_config_t* con
         return NULL;
     }
 
-    fseek(f, 0, SEEK_END);
+    if (fseek(f, 0, SEEK_END) != 0) {
+        fclose(f);
+        return NULL;
+    }
     long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-
-    if (sz < 8) {
+    if (sz < 8 || fseek(f, 0, SEEK_SET) != 0) {
         fclose(f);
         return NULL;
     }
 
-    uint8_t header[8];
-    if (fread(header, 1, 8, f) != 8) {
+    uint8_t* buf = malloc((size_t)sz);
+    if (!buf) {
         fclose(f);
         return NULL;
     }
 
-    uint32_t magic = (uint32_t)header[0] | ((uint32_t)header[1] << 8) |
-                     ((uint32_t)header[2] << 16) | ((uint32_t)header[3] << 24);
-    uint32_t version = (uint32_t)header[4] | ((uint32_t)header[5] << 8) |
-                       ((uint32_t)header[6] << 16) | ((uint32_t)header[7] << 24);
-
-    if (magic != CSILK_WASM_MAGIC || version != CSILK_WASM_VERSION) {
-        fclose(f);
+    size_t nread = fread(buf, 1, (size_t)sz, f);
+    fclose(f);
+    if (nread != (size_t)sz) {
+        free(buf);
         return NULL;
     }
 
-    csilk_wasm_plugin_t* plugin = calloc(1, sizeof(csilk_wasm_plugin_t));
+    csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(buf, (size_t)sz);
+    free(buf);
     if (!plugin) {
-        fclose(f);
         return NULL;
     }
 
     if (config) {
+        csilk_mutex_lock(&plugin->mutex);
         plugin->config = *config;
-    } else {
-        plugin->config.max_memory_pages = 1024;
-        plugin->config.fuel_limit = 1000000;
+        plugin->memory.max_pages = config->max_memory_pages;
+        csilk_mutex_unlock(&plugin->mutex);
+        csilk_wasm_plugin_set_fuel(plugin, (uint32_t)config->fuel_limit);
     }
 
-    csilk_mutex_init(&plugin->mutex);
-
-    plugin->memory.initial_pages = 1;
-    plugin->memory.max_pages = plugin->config.max_memory_pages;
-    plugin->memory.current_size = (size_t)plugin->memory.initial_pages * CSILK_WASM_PAGE_SIZE;
-    plugin->memory.data = calloc(1, plugin->memory.current_size);
-
-    plugin->bytecode_size = (size_t)sz;
-    plugin->bytecode = calloc(1, plugin->bytecode_size);
-    if (plugin->bytecode) {
-        memcpy(plugin->bytecode, header, 8);
-        fseek(f, 8, SEEK_SET);
-        fread(plugin->bytecode + 8, 1, plugin->bytecode_size - 8, f);
-    }
-
-    fclose(f);
     snprintf(plugin->entry_point, sizeof(plugin->entry_point), "run");
     return plugin;
 }
@@ -267,7 +282,7 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
     if (err_buf && err_len > 0) {
         snprintf(err_buf, err_len, "CSILK_WASM_TRAP_EXECUTION_ERR: module not instantiated");
     }
-    errno = ENOTSUP;
     csilk_mutex_unlock(&plugin->mutex);
+    errno = ENOTSUP;
     return NULL;
 }

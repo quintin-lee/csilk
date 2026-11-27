@@ -56,6 +56,12 @@ void* csilk_wasm_get_memory_slice(csilk_wasm_memory_t* mem, uint32_t offset, uin
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((visibility("hidden")))
 #endif
+bool
+_csilk_wasm_ensure_runtime(void);
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((visibility("hidden")))
+#endif
 void
 _csilk_wasm_mw_release_plugin(csilk_wasm_plugin_t* plugin);
 

@@ -206,7 +206,7 @@ jobs:
           libpq-dev libsqlite3-dev libuv1-dev
 
     - name: Configure
-      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCSILK_BUILD_FULL=ON -DUSE_ASAN=ON -DUSE_FUZZER=ON
+      run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang -DCSILK_BUILD_FULL=ON -DCSILK_ENABLE_WASM=ON -DUSE_ASAN=ON -DUSE_FUZZER=ON
 
     - name: Build Fuzzers
       run: cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc fuzz_mcp fuzz_sql_rewrite fuzz_wasm fuzz_h3 -j$(nproc)

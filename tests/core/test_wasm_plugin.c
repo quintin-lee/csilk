@@ -150,10 +150,16 @@ test_wasm_section_validation(void)
 static void
 test_wasm_middleware_integration(void)
 {
-    printf("Testing WASM middleware execution and fuel trap...\n");
+    printf("Testing WASM middleware execution and trap handling...\n");
 
-    const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
-    csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+    /* (module (memory 1) (func (export "custom_filter")) (func (export "trap_func") unreachable)) */
+    static const uint8_t wasm_filter[] = {
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x04, 0x01, 0x60, 0x00,
+        0x00, 0x03, 0x03, 0x02, 0x00, 0x00, 0x05, 0x03, 0x01, 0x00, 0x01, 0x07, 0x1d,
+        0x02, 0x0d, 0x63, 0x75, 0x73, 0x74, 0x6f, 0x6d, 0x5f, 0x66, 0x69, 0x6c, 0x74,
+        0x65, 0x72, 0x00, 0x00, 0x09, 0x74, 0x72, 0x61, 0x70, 0x5f, 0x66, 0x75, 0x6e,
+        0x63, 0x00, 0x01, 0x0a, 0x08, 0x02, 0x02, 0x00, 0x0b, 0x03, 0x00, 0x00, 0x0b};
+    csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(wasm_filter, sizeof(wasm_filter));
     assert(plugin != NULL);
 
     csilk_ctx_t* ctx = csilk_test_ctx_new();
@@ -168,18 +174,19 @@ test_wasm_middleware_integration(void)
     assert(p_hdr != NULL);
     assert(strcmp(p_hdr, "custom_filter") == 0);
 
-    /* Test Fuel exhaustion abort in middleware */
+    /* Test WASM unreachable trap abort in middleware */
     csilk_ctx_t* ctx_trap = csilk_test_ctx_new();
     assert(ctx_trap != NULL);
-    csilk_test_ctx_set_request(ctx_trap, "GET", "/loop");
+    csilk_test_ctx_set_request(ctx_trap, "GET", "/trap");
 
-    void (*mw_loop)(csilk_ctx_t*) = csilk_wasm_plugin_middleware(plugin, "infinite_loop");
-    mw_loop(ctx_trap);
+    void (*mw_trap)(csilk_ctx_t*) = csilk_wasm_plugin_middleware(plugin, "trap_func");
+    assert(mw_trap != NULL);
+    mw_trap(ctx_trap);
 
     assert(csilk_is_aborted(ctx_trap) == 1);
     assert(csilk_get_status(ctx_trap) == 500);
     const char* err_hdr = csilk_get_response_header(ctx_trap, "X-WASM-Error");
-    assert(err_hdr != NULL && strcmp(err_hdr, "TRAP_FUEL_EXHAUSTED") == 0);
+    assert(err_hdr != NULL && strncmp(err_hdr, "CSILK_WASM_TRAP_", 16) == 0);
 
     csilk_test_ctx_free(ctx);
     csilk_test_ctx_free(ctx_trap);
@@ -193,9 +200,17 @@ test_wasm_multi_middleware_isolation(void)
 {
     printf("Testing WASM multi-middleware isolation (no overwrite)...\n");
 
-    const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
-    csilk_wasm_plugin_t* p1 = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
-    csilk_wasm_plugin_t* p2 = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+    /* (module (memory 1) (func (export "mw_alpha")) (func (export "mw_beta"))
+     *         (func (export "mw_gamma")) (func (export "on_request"))) */
+    static const uint8_t wasm_multi[] = {
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x04, 0x01, 0x60, 0x00, 0x00, 0x03,
+        0x05, 0x04, 0x00, 0x00, 0x00, 0x00, 0x05, 0x03, 0x01, 0x00, 0x01, 0x07, 0x2e, 0x04, 0x08,
+        0x6d, 0x77, 0x5f, 0x61, 0x6c, 0x70, 0x68, 0x61, 0x00, 0x00, 0x07, 0x6d, 0x77, 0x5f, 0x62,
+        0x65, 0x74, 0x61, 0x00, 0x01, 0x08, 0x6d, 0x77, 0x5f, 0x67, 0x61, 0x6d, 0x6d, 0x61, 0x00,
+        0x02, 0x0a, 0x6f, 0x6e, 0x5f, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x00, 0x03, 0x0a,
+        0x0d, 0x04, 0x02, 0x00, 0x0b, 0x02, 0x00, 0x0b, 0x02, 0x00, 0x0b, 0x02, 0x00, 0x0b};
+    csilk_wasm_plugin_t* p1 = csilk_wasm_plugin_load(wasm_multi, sizeof(wasm_multi));
+    csilk_wasm_plugin_t* p2 = csilk_wasm_plugin_load(wasm_multi, sizeof(wasm_multi));
     assert(p1 != NULL && p2 != NULL);
 
     /* Register all 4 middlewares BEFORE invoking any of them. */
@@ -232,16 +247,23 @@ test_wasm_middleware_saturation_and_reclamation(void)
 {
     printf("Testing WASM 16-slot thunk saturation, reclamation on free, and post-free safety...\n");
 
-    const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
+    /* (module (memory 1) (func (export "fn0")) (func (export "fn1"))
+     *         (func (export "fn2")) (func (export "fn3"))) */
+    static const uint8_t wasm_slot[] = {
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x04, 0x01, 0x60, 0x00, 0x00,
+        0x03, 0x05, 0x04, 0x00, 0x00, 0x00, 0x00, 0x05, 0x03, 0x01, 0x00, 0x01, 0x07, 0x19,
+        0x04, 0x03, 0x66, 0x6e, 0x30, 0x00, 0x00, 0x03, 0x66, 0x6e, 0x31, 0x00, 0x01, 0x03,
+        0x66, 0x6e, 0x32, 0x00, 0x02, 0x03, 0x66, 0x6e, 0x33, 0x00, 0x03, 0x0a, 0x0d, 0x04,
+        0x02, 0x00, 0x0b, 0x02, 0x00, 0x0b, 0x02, 0x00, 0x0b, 0x02, 0x00, 0x0b};
     csilk_wasm_plugin_t* plugins[4] = {NULL};
     csilk_handler_t      slots[16] = {NULL};
 
     for (int p = 0; p < 4; p++) {
-        plugins[p] = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+        plugins[p] = csilk_wasm_plugin_load(wasm_slot, sizeof(wasm_slot));
         assert(plugins[p] != NULL);
         for (int k = 0; k < 4; k++) {
-            char fname[32];
-            snprintf(fname, sizeof(fname), "slot_p%d_%d", p, k);
+            char fname[16];
+            snprintf(fname, sizeof(fname), "fn%d", k);
             int idx = p * 4 + k;
             slots[idx] = csilk_wasm_plugin_middleware(plugins[p], fname);
             assert(slots[idx] != NULL);
@@ -249,7 +271,7 @@ test_wasm_middleware_saturation_and_reclamation(void)
     }
 
     /* Pool is now full (16 slots); 17th registration must return NULL, not overwrite. */
-    assert(csilk_wasm_plugin_middleware(plugins[0], "overflow") == NULL);
+    assert(csilk_wasm_plugin_middleware(plugins[0], "fn0") == NULL);
 
     /* Free plugin 1 (held slots 4..7): all 4 slots must be reclaimed. */
     csilk_handler_t stale_mw = slots[5];
@@ -265,11 +287,11 @@ test_wasm_middleware_saturation_and_reclamation(void)
     csilk_test_ctx_free(stale_ctx);
 
     /* Re-register 4 middlewares into the reclaimed slots, then saturate again. */
-    csilk_wasm_plugin_t* p_new = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
+    csilk_wasm_plugin_t* p_new = csilk_wasm_plugin_load(wasm_slot, sizeof(wasm_slot));
     assert(p_new != NULL);
     for (int k = 0; k < 4; k++) {
-        char fname[32];
-        snprintf(fname, sizeof(fname), "reclaimed_%d", k);
+        char fname[16];
+        snprintf(fname, sizeof(fname), "fn%d", k);
         csilk_handler_t mw = csilk_wasm_plugin_middleware(p_new, fname);
         assert(mw != NULL);
 
@@ -281,7 +303,7 @@ test_wasm_middleware_saturation_and_reclamation(void)
         assert(hdr != NULL && strcmp(hdr, fname) == 0);
         csilk_test_ctx_free(ctx);
     }
-    assert(csilk_wasm_plugin_middleware(p_new, "overflow_again") == NULL);
+    assert(csilk_wasm_plugin_middleware(p_new, "fn0") == NULL);
 
     csilk_wasm_plugin_free(p_new);
     csilk_wasm_plugin_free(plugins[0]);

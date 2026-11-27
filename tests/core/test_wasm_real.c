@@ -13,7 +13,6 @@
 #include "csilk/csilk.h"
 #include "csilk/core/plugin/wasm_plugin.h"
 #include "csilk/test/test.h"
-#include "wasm_export.h"
 
 /*
  * Minimal valid WASM module (WAT-compiled):
@@ -71,17 +70,9 @@ test_wasm_real_invalid_module_fallback(void)
 int
 main(void)
 {
-    /* Initialize WAMR runtime before first use */
-    if (!wasm_runtime_init()) {
-        printf("WAMR runtime init failed — skipping real WAMR tests\n");
-        return 0;
-    }
-
     test_wasm_real_load_valid();
     test_wasm_real_exec_fuel_reset();
     test_wasm_real_invalid_module_fallback();
-
-    wasm_runtime_destroy();
 
     printf("test_wasm_real: ALL PASSED\n");
     return 0;

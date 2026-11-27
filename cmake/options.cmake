@@ -58,7 +58,7 @@ endif()
 # By default, csilk builds only the lightweight HTTP Web Core (zero SQLite3 or
 # libcurl hard dependencies). Enable individual domain modules or set
 # -DCSILK_BUILD_FULL=ON to build the full feature set.
-option(CSILK_BUILD_FULL "Enable all optional domain modules (DB, MQ, AI, Vector, MCP, Workflow, gRPC, WASM, Bypass, Perm, Observability, CSV)" OFF)
+option(CSILK_BUILD_FULL "Enable all optional domain modules (DB, MQ, AI, Vector, MCP, Workflow, gRPC, Bypass, Perm, Observability, CSV)" OFF)
 
 option(CSILK_ENABLE_DB            "Build database drivers, migrations, MVCC cache, and connection pools (requires SQLite3)" ${CSILK_BUILD_FULL})
 option(CSILK_ENABLE_MQ            "Build message queue, PubSub, WAL, and Raft consensus" ${CSILK_BUILD_FULL})

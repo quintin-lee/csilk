@@ -9,13 +9,29 @@
 static void
 test_wasm_vm_parsing_and_exec(void)
 {
+    /* Bad path / bad magic rejection */
+    assert(csilk_wasm_plugin_load_file(nullptr, nullptr) == nullptr);
+    assert(csilk_wasm_plugin_load_file("/nonexistent/csilk_missing.wasm", nullptr) == nullptr);
+
+    const char* bad_wasm = "test_bad.wasm";
+    FILE*       bf = fopen(bad_wasm, "wb");
+    assert(bf != nullptr);
+    uint8_t bad_bytes[8] = {0xde, 0xad, 0xbe, 0xef, 0x01, 0x00, 0x00, 0x00};
+    fwrite(bad_bytes, 1, sizeof(bad_bytes), bf);
+    fclose(bf);
+    assert(csilk_wasm_plugin_load_file(bad_wasm, nullptr) == nullptr);
+    remove(bad_wasm);
+
+    /* Minimal valid WAT-compiled WASM module: (module (memory 1) (func (export "run"))) */
+    static const uint8_t minimal_run_wasm[] = {
+        0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x04, 0x01, 0x60, 0x00,
+        0x00, 0x03, 0x02, 0x01, 0x00, 0x05, 0x03, 0x01, 0x00, 0x01, 0x07, 0x07, 0x01,
+        0x03, 0x72, 0x75, 0x6e, 0x00, 0x00, 0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b};
+
     const char* dummy_wasm = "test_dummy.wasm";
     FILE*       f = fopen(dummy_wasm, "wb");
     assert(f != nullptr);
-
-    /* Magic 0x6d736100 (\0asm) and Version 0x01000000 (1.0) */
-    uint8_t header[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
-    fwrite(header, 1, 8, f);
+    fwrite(minimal_run_wasm, 1, sizeof(minimal_run_wasm), f);
     fclose(f);
 
     csilk_wasm_config_t config;
@@ -25,7 +41,7 @@ test_wasm_vm_parsing_and_exec(void)
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load_file(dummy_wasm, &config);
     assert(plugin != nullptr);
 
-    char  err_buf[128];
+    char  err_buf[128] = {0};
     char* output =
         csilk_wasm_plugin_exec(plugin, "run", "{\"key\":\"val\"}", err_buf, sizeof(err_buf));
     assert(output != nullptr);
