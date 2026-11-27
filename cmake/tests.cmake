@@ -161,9 +161,6 @@ set(CSILK_CORE_TESTS
 if(CSILK_ENABLE_CSV)
   list(APPEND CSILK_CORE_TESTS test_csv)
 endif()
-if(CSILK_ENABLE_DB)
-  list(APPEND CSILK_CORE_TESTS test_mvcc_cache test_mvcc_cache_snapshot)
-endif()
 if(CSILK_USE_URING)
   list(APPEND CSILK_CORE_TESTS
       test_uring_recv_bench
@@ -185,13 +182,6 @@ if(CSILK_ENABLE_WASM)
       test_wasm_fuel
       test_wasm_wasi
       test_wasm_real
-  )
-endif()
-if(CSILK_ENABLE_BYPASS)
-  list(APPEND CSILK_CORE_TESTS
-      test_af_xdp
-      test_af_xdp_zerocopy
-      test_io_perf_fallback
   )
 endif()
 

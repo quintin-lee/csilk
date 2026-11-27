@@ -10,11 +10,10 @@
  * @copyright MIT License
  */
 
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "csilk/core/uring/io_perf.h"
 
 #ifdef CSILK_USE_URING
 #include <liburing.h>

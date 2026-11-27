@@ -15,8 +15,8 @@
 #include <strings.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/http/http1_zerocopy.h"
 #include "core/ctx/ctx_internal.h"
-#include "core/io/af_xdp_internal.h"
 
 int
 csilk_view_cmp(csilk_view_t view, const char* str)

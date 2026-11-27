@@ -23,14 +23,14 @@
   ],
   "features": {
     "full": {
-      "description": "Enable all optional domain modules (DB, MQ, AI, Vector, MCP, Workflow, gRPC, WASM, Bypass, Perm, Observability, CSV)",
+      "description": "Enable all optional domain modules (DB, MQ, AI, Vector, MCP, Workflow, gRPC, WASM, Perm, Observability, CSV)",
       "dependencies": [
         "curl",
         "sqlite3"
       ]
     },
     "db": {
-      "description": "Database drivers, migrations, MVCC cache, and connection pools (SQLite3)",
+      "description": "Database drivers, migrations, and connection pools (SQLite3)",
       "dependencies": [
         "sqlite3"
       ]

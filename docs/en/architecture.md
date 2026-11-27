@@ -1100,8 +1100,6 @@ csilk/
 │   │   │   ├── hooks.c            # Lifecycle hook system
 │   │   │   ├── hot_reload.c       # File-watch hot-reload (inotify)
 │   │   │   └── logger.c           # Structured logging
-│   │   ├── cache/                 # mvcc_cache.c - MVCC cache
-│   │   ├── io/                    # High-performance I/O (AF_XDP, DPDK PMD)
 │   │   ├── json/                  # cJSON wrapper
 │   │   ├── plugin/                # WASM plugin runtime
 │   │   ├── internal/              # Internal server headers (not installed)

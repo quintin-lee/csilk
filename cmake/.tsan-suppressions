@@ -25,15 +25,3 @@ race:pthread_barrier_destroy
 
 ## io_uring async eventfd kernel-side race.
 race:eventfd
-
-## Epoch-based RCU in the MVCC cache (src/core/cache/mvcc_cache.c).
-## Readers publish their active_epoch (release) on entry and writers only
-## free a retired node once every reader's epoch has advanced past it
-## (acquire). That epoch barrier makes the window race-free at runtime, but
-## TSAN does not model epoch/RCU happens-before, so it flags the reader's
-## plain strcmp(node->key, ...) against the writer's free(node->key)
-## inside try_reclaim(). Suppressed as a known RCU false positive; the
-## snapshot-integrity test (test_mvcc_cache_snapshot) still verifies
-## correctness at the application level.
-race:try_reclaim
-race:csilk_mvcc_cache_get_view

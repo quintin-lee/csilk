@@ -58,9 +58,9 @@ endif()
 # By default, csilk builds only the lightweight HTTP Web Core (zero SQLite3 or
 # libcurl hard dependencies). Enable individual domain modules or set
 # -DCSILK_BUILD_FULL=ON to build the full feature set.
-option(CSILK_BUILD_FULL "Enable all optional domain modules (DB, MQ, AI, Vector, MCP, Workflow, gRPC, Bypass, Perm, Observability, CSV)" OFF)
+option(CSILK_BUILD_FULL "Enable all optional domain modules (DB, MQ, AI, Vector, MCP, Workflow, gRPC, Perm, Observability, CSV)" OFF)
 
-option(CSILK_ENABLE_DB            "Build database drivers, migrations, MVCC cache, and connection pools (requires SQLite3)" ${CSILK_BUILD_FULL})
+option(CSILK_ENABLE_DB            "Build database drivers, migrations, and connection pools (requires SQLite3)" ${CSILK_BUILD_FULL})
 option(CSILK_ENABLE_MQ            "Build message queue, PubSub, WAL, and Raft consensus" ${CSILK_BUILD_FULL})
 option(CSILK_ENABLE_AI            "Build LLM client drivers, AI trace, and tool registry (requires libcurl)" ${CSILK_BUILD_FULL})
 option(CSILK_ENABLE_VECTOR        "Build embedded HNSW and Milvus/Qdrant vector drivers (requires libcurl)" ${CSILK_BUILD_FULL})
@@ -68,7 +68,6 @@ option(CSILK_ENABLE_MCP           "Build Model Context Protocol server/client/st
 option(CSILK_ENABLE_WORKFLOW      "Build AI workflow DAG engine, DSL, grid, and skill sandbox (requires AI + MQ)" ${CSILK_BUILD_FULL})
 option(CSILK_ENABLE_GRPC          "Build gRPC wire codec and HTTP/JSON transcoding gateway" ${CSILK_BUILD_FULL})
 option(CSILK_ENABLE_WASM          "Build WASM plugin module with WAMR runtime" OFF)
-option(CSILK_ENABLE_BYPASS        "Build Linux AF_XDP kernel-bypass module" ${CSILK_BUILD_FULL})
 option(CSILK_ENABLE_PERM          "Build RBAC permission module" ${CSILK_BUILD_FULL})
 option(CSILK_ENABLE_OBSERVABILITY "Build OTLP tracing, CPU flamegraph profiler, and Admin/APM dashboard" ${CSILK_BUILD_FULL})
 option(CSILK_ENABLE_CSV           "Build RFC 4180 CSV parser/serializer utility" ${CSILK_BUILD_FULL})

@@ -269,7 +269,6 @@ make
 #   -DCSILK_ENABLE_MCP=OFF                可选 Model Context Protocol（联动开启 AI）
 #   -DCSILK_ENABLE_GRPC=OFF               可选 gRPC 帧与 HTTP/JSON 转码网关
 #   -DCSILK_ENABLE_WASM=OFF               可选 WASM 插件沙箱（配合 -DCSILK_ENABLE_WAMR=ON 启用运行时）
-#   -DCSILK_ENABLE_BYPASS=OFF             可选内核旁路 UDP / AF_XDP 扩展
 #   -DCSILK_ENABLE_PERM=OFF               可选 RBAC 权限驱动
 #   -DCSILK_ENABLE_HTTP3=OFF              可选 HTTP/3 QUIC 传输（需要 ngtcp2/nghttp3）
 #   -DCSILK_ENABLE_OBSERVABILITY=OFF      可选 OTLP 链路追踪与导出、CPU 火焰图与管理后台 UI
@@ -288,7 +287,7 @@ ctest --output-on-failure
 
 > **Web Core 与可选模块分层边界**：默认配置（`-DCSILK_BUILD_FULL=OFF`）仅构建轻量 **Web Core**（11 个核心目标：`base`、`json`、`crypto`、`reflection`、`runtime`、`tls`、`http2`、`http`、`protocols`、`middleware`、`app`），对 `sqlite3` 与 `libcurl` 零依赖。通过 `-DCSILK_BUILD_FULL=ON` 或单个 `-DCSILK_ENABLE_*` 可按需启用各领域扩展模块。`csilk_wasm` 在开启 `-DCSILK_ENABLE_WAMR=ON` 时集成真实 WAMR 2.4.4 运行时，`csilk_h3` 在开启 `-DCSILK_ENABLE_HTTP3=ON` 时提供基于 `ngtcp2` + `nghttp3` 的 HTTP/3 QUIC 传输；当底层运行时缺席时均 fail-closed（返回 `ENOTSUP`/`NULL`）。
 
-csilk 由 11 个始终构建的 Web Core 模块与 12 个可选领域模块组成（外加 `csilk::core` 兼容别名与 `csilk::csilk` 伞库），同时提供静态库（`.a`）与动态共享库（`.so`）：
+csilk 由 11 个始终构建的 Web Core 模块与 11 个可选领域模块组成（外加 `csilk::core` 兼容别名与 `csilk::csilk` 伞库），同时提供静态库（`.a`）与动态共享库（`.so`）：
 
 | 模块 Target | 动态库 Target | 静态库归档 | 动态共享库 | 说明 |
 |:---|:---|:---|:---|:---|
@@ -308,13 +307,12 @@ csilk 由 11 个始终构建的 Web Core 模块与 12 个可选领域模块组�
 | `csilk::mcp` | `csilk::mcp_shared` | `libcsilk-mcp.a` | `libcsilk-mcp.so` | *（可选 `-DCSILK_ENABLE_MCP`）* Model Context Protocol（JSON-RPC / stdio 池 / SSE / WS） |
 | `csilk::grpc` | `csilk::grpc_shared` | `libcsilk-grpc.a` | `libcsilk-grpc.so` | *（可选 `-DCSILK_ENABLE_GRPC`）* gRPC 帧编解码与 HTTP/JSON 转码网关 |
 | `csilk::permission` | `csilk::permission_shared` | `libcsilk-permission.a` | `libcsilk-permission.so` | *（可选 `-DCSILK_ENABLE_PERM`）* 可插拔 RBAC 权限控制引擎 |
-| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | *（可选 `-DCSILK_ENABLE_DB`）* 数据库抽象层（SQLite/MySQL/PG/Redis/MongoDB）、MVCC 缓存、预编译语句、保存点与迁移引擎 |
+| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | *（可选 `-DCSILK_ENABLE_DB`）* 数据库抽象层（SQLite/MySQL/PG/Redis/MongoDB）、预编译语句、保存点与迁移引擎 |
 | `csilk::vector` | `csilk::vector_shared` | `libcsilk-vector.a` | `libcsilk-vector.so` | *（可选 `-DCSILK_ENABLE_VECTOR`）* 内嵌式 AVX2 SIMD HNSW 向量索引与 Milvus/Qdrant 驱动 |
 | `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | *（可选 `-DCSILK_ENABLE_AI`）* AI 大模型客户端驱动（OpenAI、Ollama、Anthropic）、工具注册中心与追踪 |
 | `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | *（可选 `-DCSILK_ENABLE_MQ`）* 异步消息队列、PubSub、WAL 持久化与 Raft 共识引擎 |
 | `csilk::workflow` | `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | *（可选 `-DCSILK_ENABLE_WORKFLOW`）* Workflow DAG 调度引擎、WAL 恢复、YAML DSL、ReAct Agent 循环与 Skill 沙箱 |
 | `csilk::wasm` | `csilk::wasm_shared` | `libcsilk-wasm.a` | `libcsilk-wasm.so` | *（可选 `-DCSILK_ENABLE_WASM`）* WebAssembly 插件沙箱（配合 `-DCSILK_ENABLE_WAMR=ON` 启用 WAMR 2.4.4） |
-| `csilk::bypass` | `csilk::bypass_shared` | `libcsilk-bypass.a` | `libcsilk-bypass.so` | *（可选 `-DCSILK_ENABLE_BYPASS`）* 原生 `io_uring` multishot UDP 传输、I/O 性能探针与 AF_XDP 扩展 |
 | `csilk::csilk` | `csilk::shared` | `libcsilk.a` | `libcsilk.so` | 聚合 Web Core 与全部已启用可选模块的伞库目标 |
 
 ### CMake 业务应用链接

@@ -8,7 +8,6 @@
 #include <string.h>
 
 #include "csilk/core/sys_io.h"
-#include "csilk/core/uring/io_perf.h"
 
 #ifdef CSILK_USE_URING
 

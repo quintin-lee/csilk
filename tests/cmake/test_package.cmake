@@ -36,9 +36,6 @@ endif()
 if(CSILK_ENABLE_WASM)
   list(APPEND _install_targets csilk_wasm)
 endif()
-if(CSILK_ENABLE_BYPASS)
-  list(APPEND _install_targets csilk_bypass)
-endif()
 if(CSILK_ENABLE_PERM)
   list(APPEND _install_targets csilk_permission)
 endif()
@@ -90,9 +87,6 @@ if(CSILK_BUILD_SHARED)
   endif()
   if(CSILK_ENABLE_WASM)
     list(APPEND _install_targets csilk_wasm_shared)
-  endif()
-  if(CSILK_ENABLE_BYPASS)
-    list(APPEND _install_targets csilk_bypass_shared)
   endif()
   if(CSILK_ENABLE_PERM)
     list(APPEND _install_targets csilk_permission_shared)
@@ -170,7 +164,6 @@ set(_optional_pc_flags
     CSILK_ENABLE_MCP
     CSILK_ENABLE_GRPC
     CSILK_ENABLE_WASM
-    CSILK_ENABLE_BYPASS
     CSILK_ENABLE_MQ
     CSILK_ENABLE_DB
     CSILK_ENABLE_VECTOR
@@ -184,7 +177,6 @@ set(_optional_pc_names
     csilk-mcp
     csilk-grpc
     csilk-wasm
-    csilk-bypass
     csilk-mq
     csilk-db
     csilk-vector
@@ -291,7 +283,6 @@ foreach(_cfg_flag IN ITEMS
     CSILK_ENABLE_WORKFLOW
     CSILK_ENABLE_GRPC
     CSILK_ENABLE_WASM
-    CSILK_ENABLE_BYPASS
     CSILK_ENABLE_PERM
     CSILK_ENABLE_HTTP3
     CSILK_ENABLE_OBSERVABILITY
@@ -349,7 +340,6 @@ set(_optional_flags
     CSILK_ENABLE_MCP
     CSILK_ENABLE_GRPC
     CSILK_ENABLE_WASM
-    CSILK_ENABLE_BYPASS
     CSILK_ENABLE_OBSERVABILITY)
 set(_optional_aliases
     permission
@@ -362,7 +352,6 @@ set(_optional_aliases
     mcp
     grpc
     wasm
-    bypass
     observability)
 
 foreach(_flag _alias IN ZIP_LISTS _optional_flags _optional_aliases)
@@ -445,7 +434,6 @@ foreach(_flag IN ITEMS
     CSILK_ENABLE_WORKFLOW
     CSILK_ENABLE_GRPC
     CSILK_ENABLE_WASM
-    CSILK_ENABLE_BYPASS
     CSILK_ENABLE_PERM
     CSILK_ENABLE_HTTP3
     CSILK_ENABLE_OBSERVABILITY

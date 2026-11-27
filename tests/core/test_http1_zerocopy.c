@@ -3,14 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "core/io/af_xdp_internal.h"
-
-int csilk_str_view_equal(csilk_str_view_t view, const char* str);
-int csilk_http1_parse_header_slices(const char*           buf,
-                                    size_t                len,
-                                    csilk_header_slice_t* slices,
-                                    size_t                max_slices,
-                                    size_t*               out_slice_count);
+#include "csilk/core/http/http1_zerocopy.h"
 
 static void
 test_header_slice_parsing(void)

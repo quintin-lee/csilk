@@ -23,7 +23,6 @@ foreach(_opt_mod
     csilk_mcp
     csilk_grpc
     csilk_wasm
-    csilk_bypass
     csilk_permission
     csilk_db
     csilk_vector
@@ -82,7 +81,6 @@ if(CSILK_BUILD_SHARED)
         csilk_mcp_shared
         csilk_grpc_shared
         csilk_wasm_shared
-        csilk_bypass_shared
         csilk_permission_shared
         csilk_db_shared
         csilk_vector_shared
@@ -236,10 +234,6 @@ set(CSILK_VECTOR_PC_LIBS_PRIVATE "-lcurl")
 set(CSILK_WASM_PC_REQUIRES "csilk-core")
 set(CSILK_WASM_PC_LIBS_PRIVATE "")
 
-# Bypass
-set(CSILK_BYPASS_PC_REQUIRES "csilk-core")
-set(CSILK_BYPASS_PC_LIBS_PRIVATE "")
-
 # TLS
 set(CSILK_TLS_PC_REQUIRES_PRIVATE "openssl")
 set(CSILK_TLS_PC_LIBS_PRIVATE "-lssl -lcrypto")
@@ -382,9 +376,6 @@ if(CSILK_ENABLE_WASM)
     string(APPEND CSILK_PC_LIBS_PRIVATE " -lvmlib")
   endif()
 endif()
-if(CSILK_ENABLE_BYPASS)
-  string(APPEND CSILK_PC_REQUIRES " csilk-bypass")
-endif()
 if(CSILK_ENABLE_PERM)
   string(APPEND CSILK_PC_REQUIRES " csilk-permission")
 endif()
@@ -423,7 +414,6 @@ foreach(_opt_def IN ITEMS
     CSILK_ENABLE_WORKFLOW:CSILK_HAS_WORKFLOW
     CSILK_ENABLE_GRPC:CSILK_HAS_GRPC
     CSILK_ENABLE_WASM:CSILK_HAS_WASM
-    CSILK_ENABLE_BYPASS:CSILK_HAS_BYPASS
     CSILK_ENABLE_PERM:CSILK_HAS_PERM
     CSILK_ENABLE_HTTP3:CSILK_HAS_HTTP3
     CSILK_ENABLE_OBSERVABILITY:CSILK_HAS_OBSERVABILITY
@@ -463,9 +453,6 @@ if(CSILK_ENABLE_GRPC)
 endif()
 if(CSILK_ENABLE_WASM)
   list(APPEND CSILK_PC_FILES csilk-wasm)
-endif()
-if(CSILK_ENABLE_BYPASS)
-  list(APPEND CSILK_PC_FILES csilk-bypass)
 endif()
 if(CSILK_ENABLE_MQ)
   list(APPEND CSILK_PC_FILES csilk-mq)

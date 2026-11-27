@@ -1069,8 +1069,6 @@ csilk/
 │   │   │   ├── hooks.c            # 生命周期 hook 系统
 │   │   │   ├── hot_reload.c       # 文件监视热重载（inotify）
 │   │   │   └── logger.c           # 结构化日志记录
-│   │   ├── cache/                 # mvcc_cache.c - MVCC 缓存
-│   │   ├── io/                    # 高性能 I/O（AF_XDP、DPDK PMD）
 │   │   ├── json/                  # cJSON 包装
 │   │   ├── plugin/                # WASM 插件运行时
 │   │   ├── internal/              # 内部服务器头文件（不安装）

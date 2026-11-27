@@ -771,7 +771,6 @@ _OPTIONAL_SYMBOL_GROUPS = {
     ),
     "grpc": (),
     "wasm": (),
-    "bypass": (),
     "http3": (),
 }
 

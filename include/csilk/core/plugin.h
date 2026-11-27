@@ -4,7 +4,7 @@
  * @brief Plugin ABI interface for csilk modular extension.
  *
  * Defines the stable C ABI that every optional csilk plugin (ai, mq, db,
- * workflow, vector, protocol, wasm, bypass) must implement to be loaded
+ * workflow, vector, protocol, wasm) must implement to be loaded
  * at runtime via dlopen.  The core library exposes csilk_core_load_plugin()
  * and csilk_core_register_plugin() so plugins can register middleware,
  * routes, drivers, and services without the core library linking against

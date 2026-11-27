@@ -38,7 +38,6 @@ function(csilk_compile_setup TARGET)
       "$<$<BOOL:${CSILK_ENABLE_WORKFLOW}>:CSILK_HAS_WORKFLOW=1>"
       "$<$<BOOL:${CSILK_ENABLE_GRPC}>:CSILK_HAS_GRPC=1>"
       "$<$<BOOL:${CSILK_ENABLE_WASM}>:CSILK_HAS_WASM=1>"
-      "$<$<BOOL:${CSILK_ENABLE_BYPASS}>:CSILK_HAS_BYPASS=1>"
       "$<$<BOOL:${CSILK_ENABLE_PERM}>:CSILK_HAS_PERM=1>"
       "$<$<BOOL:${CSILK_ENABLE_HTTP3}>:CSILK_HAS_HTTP3=1>"
       "$<$<BOOL:${CSILK_ENABLE_OBSERVABILITY}>:CSILK_HAS_OBSERVABILITY=1>"
@@ -245,9 +244,6 @@ endif()
 if(CSILK_ENABLE_WASM)
   csilk_add_module(csilk_wasm CSILK_WASM_SOURCES "csilk-wasm")
 endif()
-if(CSILK_ENABLE_BYPASS)
-  csilk_add_module(csilk_bypass CSILK_BYPASS_SOURCES "csilk-bypass")
-endif()
 if(CSILK_ENABLE_MQ)
   csilk_add_module(csilk_mq CSILK_MQ_SOURCES "csilk-mq")
 endif()
@@ -391,9 +387,6 @@ if(CSILK_ENABLE_WASM)
   endif()
   csilk_link_module(csilk_app csilk_wasm)
 endif()
-if(CSILK_ENABLE_BYPASS)
-  csilk_link_module(csilk_bypass csilk_runtime)
-endif()
 if(CSILK_ENABLE_MQ)
   if(TARGET csilk::libuv)
     csilk_link_module(csilk_mq csilk_runtime csilk::libuv)
@@ -509,9 +502,6 @@ if(CSILK_ENABLE_MQ)
 endif()
 if(CSILK_ENABLE_WASM)
   list(APPEND CSILK_ENABLED_MODULES csilk_wasm)
-endif()
-if(CSILK_ENABLE_BYPASS)
-  list(APPEND CSILK_ENABLED_MODULES csilk_bypass)
 endif()
 if(CSILK_ENABLE_OBSERVABILITY)
   list(APPEND CSILK_ENABLED_MODULES csilk_observability)

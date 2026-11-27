@@ -99,13 +99,6 @@ set(CSILK_WASM_SOURCES
     src/core/plugin/wasm_wasi.c
 )
 
-# ── Bypass Module (AF_XDP kernel bypass drivers) ─────────────────────────
-set(CSILK_BYPASS_SOURCES
-    src/core/io/af_xdp.c
-    src/core/io/af_xdp_zerocopy.c
-    src/core/io/io_perf_probe.c
-)
-
 # ── HTTP/1 Module ─────────────────────────────────────────────────────────
 set(CSILK_HTTP_SOURCES
     src/core/http/http1_parse.c
@@ -146,7 +139,6 @@ set(CSILK_VECTOR_SOURCES
 
 # ── Database Module ───────────────────────────────────────────────────────
 set(CSILK_DB_SOURCES
-    src/core/cache/mvcc_cache.c
     src/drivers/db/db.c
     src/drivers/db/sqlite.c
     src/drivers/db/tx_scope.c
@@ -323,9 +315,6 @@ if(CSILK_ENABLE_WORKFLOW)
 endif()
 if(CSILK_ENABLE_WASM)
   list(APPEND CSILK_SOURCES ${CSILK_WASM_SOURCES})
-endif()
-if(CSILK_ENABLE_BYPASS)
-  list(APPEND CSILK_SOURCES ${CSILK_BYPASS_SOURCES})
 endif()
 if(CSILK_ENABLE_OBSERVABILITY)
   list(APPEND CSILK_SOURCES ${CSILK_OBSERVABILITY_SOURCES})

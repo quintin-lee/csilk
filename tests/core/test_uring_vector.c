@@ -1,9 +1,8 @@
 #include <assert.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "csilk/core/uring/io_perf.h"
 
 int csilk_uring_prep_writev_response(void*       sqe_ptr,
                                      int         fd,
