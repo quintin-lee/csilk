@@ -223,6 +223,20 @@ typedef struct csilk_runtime_config_s {
 typedef void (*csilk_server_teardown_fn)(csilk_server_t* server);
 
 /**
+ * @brief Transport operations table for HTTP/3 streaming responses.
+ *
+ * Registered at runtime by the optional HTTP/3 module so Web Core
+ * (response.c) can dispatch CSILK_PROTO_HTTP3 without compile-time
+ * coupling or CSILK_HAS_HTTP3 guards.
+ */
+typedef struct {
+    int (*write)(csilk_ctx_t* c, const uint8_t* data, size_t len);
+    void (*end)(csilk_ctx_t* c);
+    size_t (*get_write_queue_size)(csilk_ctx_t* c);
+    int (*is_writable)(csilk_ctx_t* c);
+} csilk_h3_response_ops_t;
+
+/**
  * @brief HTTP/3 (QUIC) transport state, consolidated on the server.
  *
  * Holds the H3/QUIC fields that were previously scattered as independent
@@ -444,5 +458,11 @@ CSILK_INTERNAL void _csilk_server_register_teardown(csilk_server_t*          ser
 
 /** @brief Pump an event loop nowait up to the bounded teardown drain limit. */
 CSILK_INTERNAL void _csilk_server_drain_loop(csilk_io_loop_t* loop);
+
+/** @brief Register (or clear with NULL) the HTTP/3 streaming response ops table. */
+CSILK_INTERNAL void _csilk_register_h3_response_ops(const csilk_h3_response_ops_t* ops);
+
+/** @brief Retrieve the currently registered HTTP/3 response ops table (or NULL). */
+CSILK_INTERNAL const csilk_h3_response_ops_t* _csilk_get_h3_response_ops(void);
 
 #endif /* CSILK_SERVER_INTERNAL_H */

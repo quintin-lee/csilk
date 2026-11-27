@@ -44,6 +44,27 @@
 
 static _Thread_local char g_h3_worker_recv_buf[65536];
 
+static const csilk_h3_response_ops_t g_h3_response_ops = {
+    .write = csilk_h3_response_write,
+    .end = csilk_h3_response_end,
+    .get_write_queue_size = csilk_h3_response_get_write_queue_size,
+    .is_writable = csilk_h3_response_is_writable,
+};
+
+static void
+_h3_register_response_ops(void)
+{
+    _csilk_register_h3_response_ops(&g_h3_response_ops);
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((constructor)) static void
+_csilk_h3_response_ops_constructor(void)
+{
+    _h3_register_response_ops();
+}
+#endif
+
 #ifdef CSILK_HAS_NGTCP2
 
 /* Forward-declare the TLS setup helper (defined later in this file). */
@@ -905,6 +926,7 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
 csilk_h3_transport_t*
 csilk_h3_transport_new(int port, const char* cert_pem, const char* key_pem)
 {
+    _h3_register_response_ops();
     if (port <= 0) {
         return NULL;
     }
@@ -1220,6 +1242,7 @@ csilk_h3_transport_destroy(csilk_h3_transport_t* t)
 CSILK_INTERNAL csilk_h3_transport_t*
 csilk_h3_worker_transport_new(csilk_server_t* server, void* wp, int udp_fd)
 {
+    _h3_register_response_ops();
     csilk_h3_transport_t* t = calloc(1, sizeof(csilk_h3_transport_t));
     if (!t) {
         return NULL;
@@ -1536,6 +1559,7 @@ csilk_h3_set_enabled(void* server, int port)
     if (!server || port <= 0) {
         return -1;
     }
+    _h3_register_response_ops();
     csilk_server_t* srv = (csilk_server_t*)server;
     if (!srv->h3_state) {
         srv->h3_state = calloc(1, sizeof(csilk_h3_state_t));

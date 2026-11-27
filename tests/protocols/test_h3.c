@@ -738,9 +738,23 @@ test_h3_0rtt_early_data(void)
 }
 #endif /* CSILK_HAS_NGTCP2 */
 
+static void
+test_h3_response_ops_registered(void)
+{
+    printf("Testing HTTP/3 response ops registration at module load...\n");
+    const csilk_h3_response_ops_t* ops = _csilk_get_h3_response_ops();
+    assert(ops != NULL);
+    assert(ops->write != NULL);
+    assert(ops->end != NULL);
+    assert(ops->get_write_queue_size != NULL);
+    assert(ops->is_writable != NULL);
+    printf("test_h3_response_ops_registered: PASS\n");
+}
+
 int
 main()
 {
+    test_h3_response_ops_registered();
     test_h3_varint();
     test_h3_varint_edge_cases();
     test_h3_frame_encode_decode();

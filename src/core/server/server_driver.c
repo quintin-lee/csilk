@@ -33,14 +33,15 @@ typedef struct {
     csilk_admin_monitor_fn on_close;
 } obs_admin_monitor_entry_t;
 
-static csilk_once_t              g_obs_reg_once = CSILK_ONCE_INIT;
-static csilk_mutex_t             g_obs_reg_mutex;
-static obs_metrics_entry_t       g_metrics_collectors[CSILK_OBS_MAX_COLLECTORS];
-static size_t                    g_metrics_collector_count = 0;
-static obs_admin_stats_entry_t   g_admin_stats[CSILK_OBS_MAX_COLLECTORS];
-static size_t                    g_admin_stats_count = 0;
-static obs_admin_monitor_entry_t g_admin_monitors[CSILK_OBS_MAX_COLLECTORS];
-static size_t                    g_admin_monitor_count = 0;
+static csilk_once_t                            g_obs_reg_once = CSILK_ONCE_INIT;
+static csilk_mutex_t                           g_obs_reg_mutex;
+static obs_metrics_entry_t                     g_metrics_collectors[CSILK_OBS_MAX_COLLECTORS];
+static size_t                                  g_metrics_collector_count = 0;
+static obs_admin_stats_entry_t                 g_admin_stats[CSILK_OBS_MAX_COLLECTORS];
+static size_t                                  g_admin_stats_count = 0;
+static obs_admin_monitor_entry_t               g_admin_monitors[CSILK_OBS_MAX_COLLECTORS];
+static size_t                                  g_admin_monitor_count = 0;
+static _Atomic(const csilk_h3_response_ops_t*) g_h3_response_ops = nullptr;
 
 static void
 obs_reg_init_once(void)
@@ -256,4 +257,18 @@ _csilk_admin_notify_monitor_close(csilk_ctx_t* c)
             snap[i].on_close(c);
         }
     }
+}
+
+/* --- Optional HTTP/3 streaming response ops registry --- */
+
+CSILK_INTERNAL void
+_csilk_register_h3_response_ops(const csilk_h3_response_ops_t* ops)
+{
+    atomic_store_explicit(&g_h3_response_ops, ops, memory_order_release);
+}
+
+CSILK_INTERNAL const csilk_h3_response_ops_t*
+_csilk_get_h3_response_ops(void)
+{
+    return atomic_load_explicit(&g_h3_response_ops, memory_order_acquire);
 }

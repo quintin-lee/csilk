@@ -23,13 +23,6 @@
 #include "../primitives/header_map.h"
 #include "csilk/core/http/h2.h"
 
-#ifdef CSILK_HAS_HTTP3
-CSILK_INTERNAL int    csilk_h3_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len);
-CSILK_INTERNAL void   csilk_h3_response_end(csilk_ctx_t* c);
-CSILK_INTERNAL size_t csilk_h3_response_get_write_queue_size(csilk_ctx_t* c);
-CSILK_INTERNAL int    csilk_h3_response_is_writable(csilk_ctx_t* c);
-#endif
-
 /* --- Status & string --- */
 
 /** @brief Set the HTTP status code for the response.
@@ -682,11 +675,8 @@ csilk_response_write(csilk_ctx_t* c, const uint8_t* data, size_t len)
     }
 
     if (client->protocol == CSILK_PROTO_HTTP3) {
-#ifdef CSILK_HAS_HTTP3
-        return csilk_h3_response_write(c, data, len);
-#else
-        return -1;
-#endif
+        const csilk_h3_response_ops_t* ops = _csilk_get_h3_response_ops();
+        return (ops && ops->write) ? ops->write(c, data, len) : -1;
     }
 
     csilk_conn_set_state(client, CSILK_CONN_STREAMING);
@@ -735,11 +725,8 @@ csilk_response_get_write_queue_size(csilk_ctx_t* c)
     }
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
     if (client->protocol == CSILK_PROTO_HTTP3) {
-#ifdef CSILK_HAS_HTTP3
-        return csilk_h3_response_get_write_queue_size(c);
-#else
-        return 0;
-#endif
+        const csilk_h3_response_ops_t* ops = _csilk_get_h3_response_ops();
+        return (ops && ops->get_write_queue_size) ? ops->get_write_queue_size(c) : 0;
     }
     return _csilk_client_get_write_queue_size(client);
 }
@@ -759,11 +746,8 @@ csilk_response_is_writable(csilk_ctx_t* c)
     }
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
     if (client->protocol == CSILK_PROTO_HTTP3) {
-#ifdef CSILK_HAS_HTTP3
-        return csilk_h3_response_is_writable(c);
-#else
-        return 0;
-#endif
+        const csilk_h3_response_ops_t* ops = _csilk_get_h3_response_ops();
+        return (ops && ops->is_writable) ? ops->is_writable(c) : 0;
     }
     size_t q = csilk_response_get_write_queue_size(c);
     return (c->write_high_water_mark == 0 || q < c->write_high_water_mark);
@@ -823,11 +807,6 @@ csilk_response_end(csilk_ctx_t* c)
         return;
     }
 
-    if (!c->response_started) {
-        send_chunked_headers(c);
-        c->is_async = 1;
-    }
-
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
     if (!client || csilk_conn_get_state(client) == CSILK_CONN_CLOSING ||
         csilk_conn_get_state(client) == CSILK_CONN_CLOSED) {
@@ -835,10 +814,16 @@ csilk_response_end(csilk_ctx_t* c)
     }
 
     if (client->protocol == CSILK_PROTO_HTTP3) {
-#ifdef CSILK_HAS_HTTP3
-        csilk_h3_response_end(c);
-#endif
+        const csilk_h3_response_ops_t* ops = _csilk_get_h3_response_ops();
+        if (ops && ops->end) {
+            ops->end(c);
+        }
         return;
+    }
+
+    if (!c->response_started) {
+        send_chunked_headers(c);
+        c->is_async = 1;
     }
 
     _csilk_send_data(c, (const uint8_t*)"0\r\n\r\n", 5);
