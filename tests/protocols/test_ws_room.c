@@ -30,6 +30,9 @@ test_ws_room_broadcast()
     // 1. Setup server and two contexts
     csilk_router_t* router = csilk_router_new();
     csilk_server_t* server = csilk_server_new(router);
+#ifdef CSILK_HAS_MQ
+    (void)csilk_server_get_mq(server);
+#endif
 
     csilk_ctx_t* c1 = csilk_test_ctx_new();
     csilk_ctx_t* c2 = csilk_test_ctx_new();

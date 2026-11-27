@@ -7,7 +7,7 @@ Name: csilk-ai
 Description: Csilk AI and LLM client drivers
 Version: @CSILK_VERSION@
 URL: https://github.com/quintin-lee/csilk
-Requires: csilk-core
+Requires: csilk-http csilk-core
 Requires.private: @CSILK_AI_PC_REQUIRES_PRIVATE@
 Libs: -L${libdir} -lcsilk-ai
 Libs.private: @CSILK_AI_PC_LIBS_PRIVATE@

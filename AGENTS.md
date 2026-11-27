@@ -214,15 +214,15 @@ base          ──→ { threads, {libuv|liburing}, m }
 
 # Optional Domain Modules (CSILK_ENABLE_* = OFF by default, ON via -DCSILK_BUILD_FULL=ON)
 observability ──→ { app, middleware, http, runtime, json, threads }
-workflow      ──→ { runtime, json, ai, mq, wasm, yaml, m }
+workflow      ──→ { app, http, runtime, json, ai, mq, wasm, yaml, m }
 mcp           ──→ { protocols, http, runtime, json, ai, curl }
 grpc          ──→ { middleware, http, runtime, json }
 h3            ──→ { runtime, http, tls, ngtcp2, nghttp3, openssl }
 db            ──→ { runtime, json, sqlite3, optional mysql/pq/hiredis/mongoc }
-ai            ──→ { runtime, json, curl }
+ai            ──→ { http, runtime, json, curl }
 vector        ──→ { runtime, json, curl, m }
 permission    ──→ { runtime, json }
-mq            ──→ runtime
+mq            ──→ { http, runtime }
 wasm          ──→ { app, runtime, optional vmlib }
 bypass        ──→ runtime
 umbrella      ──→ { Web Core + all enabled CSILK_ENABLE_* modules }

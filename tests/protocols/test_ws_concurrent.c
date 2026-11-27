@@ -38,6 +38,9 @@ test_ws_multi_room_broadcast(void)
 
     csilk_router_t* router = csilk_router_new();
     csilk_server_t* server = csilk_server_new(router);
+#ifdef CSILK_HAS_MQ
+    (void)csilk_server_get_mq(server);
+#endif
 
     for (int i = 0; i < NUM_CLIENTS; i++) {
         g_clients[i] = csilk_test_ctx_new();
@@ -91,6 +94,9 @@ test_ws_rapid_join_leave(void)
 
     csilk_router_t* router = csilk_router_new();
     csilk_server_t* server = csilk_server_new(router);
+#ifdef CSILK_HAS_MQ
+    (void)csilk_server_get_mq(server);
+#endif
 
     csilk_ctx_t* c1 = csilk_test_ctx_new();
     c1->server = (struct csilk_server_s*)server;
@@ -135,6 +141,9 @@ test_ws_concurrent_rooms(void)
 
     csilk_router_t* router = csilk_router_new();
     csilk_server_t* server = csilk_server_new(router);
+#ifdef CSILK_HAS_MQ
+    (void)csilk_server_get_mq(server);
+#endif
 
     for (int i = 0; i < NUM_CLIENTS; i++) {
         g_clients[i] = csilk_test_ctx_new();

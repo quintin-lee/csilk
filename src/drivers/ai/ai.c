@@ -62,19 +62,6 @@ extern void csilk_ai_openai_init_driver(void);
 extern void csilk_ai_ollama_init_driver(void);
 extern void csilk_ai_anthropic_init_driver(void);
 
-/* Weak fallback when csilk_http (websocket) is not linked */
-#if defined(__GNUC__) || defined(__clang__)
-__attribute__((weak)) int
-csilk_ws_send(csilk_ctx_t* c, const uint8_t* payload, size_t len, int opcode)
-{
-    (void)c;
-    (void)payload;
-    (void)len;
-    (void)opcode;
-    return -1;
-}
-#endif
-
 /** @brief Lazily initialise the AI monitor registry mutex (idempotent). */
 static void
 ai_monitor_sync_init(void)
