@@ -15,9 +15,9 @@
  *   - csilk_host_get_input:       copies host JSON into plugin memory (the only
  *                                 stub that does something useful).
  *
- * For production WASM plugin execution, enable -DCSILK_ENABLE_WAMR=ON to
+ * For production WASM plugin execution, build with -DCSILK_ENABLE_WASM=ON to
  * link the WAMR runtime with real WASI snapshot support; the stubs above
- * are then replaced by WAMR's native host-call bindings.
+ * are complemented by WAMR's native host-call bindings.
  *
  * @copyright MIT License
  */

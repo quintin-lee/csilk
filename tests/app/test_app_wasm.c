@@ -19,7 +19,6 @@ main(void)
 
     static const uint8_t dummy_wasm[] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(dummy_wasm, sizeof(dummy_wasm));
-#ifdef HAS_WAMR
     assert(plugin != NULL);
     int rc = csilk_app_use_wasm(app, plugin, "on_request");
     assert(rc == 0);
@@ -32,9 +31,6 @@ main(void)
     csilk_wf_free(wf);
 
     csilk_wasm_plugin_free(plugin);
-#else
-    printf("test_app_wasm (fail-closed stub check)\n");
-#endif
 
     csilk_app_free(app);
     printf("test_app_wasm passed successfully\n");

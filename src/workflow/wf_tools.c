@@ -5,10 +5,15 @@
  * @copyright MIT License
  */
 
+#include <errno.h>
+
 #include "workflow_internal.h"
 #include "csilk/core/sync.h"
+#ifdef CSILK_HAS_WASM
 #include "csilk/core/plugin/wasm.h"
+#endif
 
+#ifdef CSILK_HAS_WASM
 /**
  * @brief Workflow node handler that loads and executes a WASM file.
  */
@@ -42,6 +47,7 @@ csilk_wasm_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_dat
     csilk_wasm_plugin_free(plugin);
     return res_data;
 }
+#endif
 
 /**
  * @brief Register a WASM module as a workflow node.
@@ -49,6 +55,7 @@ csilk_wasm_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_dat
 int
 csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_filepath)
 {
+#ifdef CSILK_HAS_WASM
     if (!wf || !node_id || !wasm_filepath) {
         return -1;
     }
@@ -59,8 +66,16 @@ csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_fil
         csilk_wf_node_set_free(node, free);
     }
     return node != NULL ? 0 : -1;
+#else
+    (void)wf;
+    (void)node_id;
+    (void)wasm_filepath;
+    errno = ENOTSUP;
+    return -1;
+#endif
 }
 
+#ifdef CSILK_HAS_WASM
 typedef struct {
     csilk_wasm_plugin_t* plugin;
     char                 entry_func[64];
@@ -90,6 +105,7 @@ csilk_wasm_plugin_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* u
     }
     return res_data;
 }
+#endif
 
 int
 csilk_wf_add_wasm_plugin_node(csilk_wf_t*          wf,
@@ -97,6 +113,7 @@ csilk_wf_add_wasm_plugin_node(csilk_wf_t*          wf,
                               csilk_wasm_plugin_t* plugin,
                               const char*          entry_func)
 {
+#ifdef CSILK_HAS_WASM
     if (!wf || !node_id || !plugin || !entry_func) {
         return -1;
     }
@@ -114,6 +131,14 @@ csilk_wf_add_wasm_plugin_node(csilk_wf_t*          wf,
     }
     csilk_wf_node_set_free(node, free);
     return 0;
+#else
+    (void)wf;
+    (void)node_id;
+    (void)plugin;
+    (void)entry_func;
+    errno = ENOTSUP;
+    return -1;
+#endif
 }
 
 /**

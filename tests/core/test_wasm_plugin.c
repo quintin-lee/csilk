@@ -31,25 +31,15 @@ test_wasm_plugin_load_valid()
     const uint8_t valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
 
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
-#ifndef HAS_WAMR
-    /* Fail-closed when WAMR is disabled: load must return NULL */
-    assert(plugin == NULL);
-    assert(errno == ENOTSUP);
-    printf("test_wasm_plugin_load_valid (fail-closed): PASS\n");
-    return;
-#else
-    /* Stubs enabled or WAMR available: a valid-header module loads. */
     assert(plugin != NULL);
     assert(csilk_wasm_plugin_is_valid(plugin) == 1);
 
     int res = csilk_wasm_plugin_execute(plugin, NULL, "on_request");
-    /* WAMR path may return -1 if the minimal module lacks a callable body;
-     * stub path returns 0. Both are acceptable — no crash, no permanent disable. */
+    /* Minimal header-only module lacks a callable body, so -1 is expected. */
     assert(res == 0 || res == -1);
 
     csilk_wasm_plugin_free(plugin);
     printf("test_wasm_plugin_load_valid: PASS\n");
-#endif
 }
 
 static void
@@ -87,12 +77,6 @@ test_wasm_shared_mem()
 
     const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
-#ifndef HAS_WAMR
-    assert(plugin == NULL);
-    assert(errno == ENOTSUP);
-    printf("test_wasm_shared_mem (fail-closed): PASS\n");
-    return;
-#else
     assert(plugin != NULL);
 
     char host_buf[256] = "Shared Memory Data";
@@ -106,7 +90,6 @@ test_wasm_shared_mem()
 
     csilk_wasm_plugin_free(plugin);
     printf("test_wasm_shared_mem: PASS\n");
-#endif
 }
 
 static void
@@ -145,7 +128,6 @@ test_wasm_section_validation(void)
 {
     printf("Testing WASM binary section format validation...\n");
 
-#ifdef HAS_WAMR
     /* 8-byte header followed by Section 0 (Custom) len=4 payload="test" */
     uint8_t wasm_with_section[14] = {
         0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x00, 0x04, 't', 'e', 's', 't'};
@@ -162,7 +144,6 @@ test_wasm_section_validation(void)
     uint8_t wasm_overflow_sec[10] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x01, 0x7f};
     csilk_wasm_plugin_t* p3 = csilk_wasm_plugin_load(wasm_overflow_sec, sizeof(wasm_overflow_sec));
     assert(p3 == NULL);
-#endif
     printf("test_wasm_section_validation: PASS\n");
 }
 
@@ -171,7 +152,6 @@ test_wasm_middleware_integration(void)
 {
     printf("Testing WASM middleware execution and fuel trap...\n");
 
-#ifdef HAS_WAMR
     const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
     assert(plugin != NULL);
@@ -204,7 +184,6 @@ test_wasm_middleware_integration(void)
     csilk_test_ctx_free(ctx);
     csilk_test_ctx_free(ctx_trap);
     csilk_wasm_plugin_free(plugin);
-#endif
     assert(csilk_wasm_plugin_middleware(NULL, "on_request") == NULL);
     printf("test_wasm_middleware_integration: PASS\n");
 }
@@ -214,7 +193,6 @@ test_wasm_multi_middleware_isolation(void)
 {
     printf("Testing WASM multi-middleware isolation (no overwrite)...\n");
 
-#ifdef HAS_WAMR
     const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
     csilk_wasm_plugin_t* p1 = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
     csilk_wasm_plugin_t* p2 = csilk_wasm_plugin_load(valid_wasm, sizeof(valid_wasm));
@@ -246,7 +224,6 @@ test_wasm_multi_middleware_isolation(void)
 
     csilk_wasm_plugin_free(p1);
     csilk_wasm_plugin_free(p2);
-#endif
     printf("test_wasm_multi_middleware_isolation: PASS\n");
 }
 
@@ -255,7 +232,6 @@ test_wasm_middleware_saturation_and_reclamation(void)
 {
     printf("Testing WASM 16-slot thunk saturation, reclamation on free, and post-free safety...\n");
 
-#ifdef HAS_WAMR
     const uint8_t        valid_wasm[8] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
     csilk_wasm_plugin_t* plugins[4] = {NULL};
     csilk_handler_t      slots[16] = {NULL};
@@ -311,7 +287,6 @@ test_wasm_middleware_saturation_and_reclamation(void)
     csilk_wasm_plugin_free(plugins[0]);
     csilk_wasm_plugin_free(plugins[2]);
     csilk_wasm_plugin_free(plugins[3]);
-#endif
     printf("test_wasm_middleware_saturation_and_reclamation: PASS\n");
 }
 

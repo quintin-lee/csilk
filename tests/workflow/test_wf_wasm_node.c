@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,8 +21,20 @@ test_workflow_wasm_node_execution(void)
     csilk_wf_t* wf = csilk_wf_new("wasm_pipeline");
     assert(wf != NULL);
 
+#ifdef CSILK_HAS_WASM
     int res = csilk_wf_add_wasm_node(wf, "wasm_step_1", dummy_wasm);
     assert(res == 0);
+#else
+    errno = 0;
+    int res = csilk_wf_add_wasm_node(wf, "wasm_step_1", dummy_wasm);
+    assert(res == -1);
+    assert(errno == ENOTSUP);
+
+    errno = 0;
+    res = csilk_wf_add_wasm_plugin_node(wf, "wasm_step_2", NULL, "run");
+    assert(res == -1);
+    assert(errno == ENOTSUP);
+#endif
 
     csilk_wf_free(wf);
     remove(dummy_wasm);

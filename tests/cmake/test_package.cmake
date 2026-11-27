@@ -291,8 +291,6 @@ foreach(_cfg_flag IN ITEMS
     CSILK_ENABLE_WORKFLOW
     CSILK_ENABLE_GRPC
     CSILK_ENABLE_WASM
-    CSILK_ENABLE_WAMR
-    CSILK_HAS_WAMR
     CSILK_ENABLE_BYPASS
     CSILK_ENABLE_PERM
     CSILK_ENABLE_HTTP3
@@ -386,7 +384,7 @@ endforeach()
 if(CSILK_ENABLE_HTTP3)
   list(APPEND _required_targets csilk::ngtcp2 csilk::nghttp3)
 endif()
-if(CSILK_HAS_WAMR)
+if(CSILK_ENABLE_WASM)
   list(APPEND _required_targets csilk::vmlib vmlib)
 endif()
 

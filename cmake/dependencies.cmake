@@ -2,9 +2,9 @@
 
 include(FetchContent)
 
-# ── WAMR (WebAssembly Micro Runtime) — optional ──────────────────────────
-if(CSILK_ENABLE_WAMR)
-  message(STATUS "WAMR enabled — fetching wasm-micro-runtime")
+# ── WAMR (WebAssembly Micro Runtime) — fetched when CSILK_ENABLE_WASM=ON ──
+if(CSILK_ENABLE_WASM)
+  message(STATUS "WASM enabled — fetching wasm-micro-runtime (WAMR)")
   set(WAMR_BUILD_INTERP 1 CACHE STRING "" FORCE)
   set(WAMR_BUILD_AOT 0 CACHE STRING "" FORCE)
   set(WAMR_BUILD_JIT 0 CACHE STRING "" FORCE)
@@ -49,7 +49,6 @@ if(CSILK_ENABLE_WAMR)
   )
   FetchContent_MakeAvailable(wamr)
   if(wamr_SOURCE_DIR)
-    set(CSILK_HAS_WAMR TRUE)
     if(TARGET vmlib AND NOT TARGET csilk::vmlib)
       add_library(csilk::vmlib INTERFACE IMPORTED)
       target_link_libraries(csilk::vmlib INTERFACE vmlib)

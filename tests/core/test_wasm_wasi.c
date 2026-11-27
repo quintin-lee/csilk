@@ -23,13 +23,6 @@ test_wasm_wasi_and_host_functions(void)
     fclose(f);
 
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load_file(dummy_wasm, nullptr);
-#ifndef HAS_WAMR
-    assert(plugin == nullptr);
-    assert(errno == ENOTSUP);
-    remove(dummy_wasm);
-    printf("test_wasm_wasi_and_host_functions (fail-closed) passed\n");
-    return;
-#else
     assert(plugin != nullptr);
 
     uint32_t zero_cap = csilk_host_get_input(plugin, 0, 0, "{\"msg\":\"wasi_test\"}");
@@ -41,7 +34,6 @@ test_wasm_wasi_and_host_functions(void)
     csilk_wasm_plugin_free(plugin);
     remove(dummy_wasm);
     printf("test_wasm_wasi_and_host_functions passed\n");
-#endif
 }
 
 int

@@ -1,11 +1,6 @@
 /**
  * @file wasm_vm.c
- * @brief Tiny in-process WebAssembly plugin runtime for csilk.
- *
- * Implements a minimal WASM "virtual machine": linear memory slicing, module
- * loading with magic/version validation, lifecycle (load/free), and an
- * execution entry point. Execution is currently simulated (it returns a fixed
- * JSON result) but enforces a per-plugin fuel budget to model trap-on-exhaust.
+ * @brief In-process WebAssembly plugin runtime for csilk backed by WAMR.
  *
  * @copyright MIT License
  */
@@ -17,10 +12,7 @@
 #include <stdint.h>
 
 #include "wasm_internal.h"
-
-#ifdef HAS_WAMR
 #include "wasm_export.h"
-#endif
 
 /**
  * @brief Resolve a slice of plugin linear memory.
@@ -58,13 +50,6 @@ csilk_wasm_get_memory_slice(csilk_wasm_memory_t* mem, uint32_t offset, uint32_t 
 csilk_wasm_plugin_t*
 csilk_wasm_plugin_load_file(const char* filepath, const csilk_wasm_config_t* config)
 {
-#ifndef HAS_WAMR
-    /* WAMR runtime not enabled: fail-closed. */
-    (void)filepath;
-    (void)config;
-    errno = ENOTSUP;
-    return NULL;
-#else
     if (!filepath) {
         return NULL;
     }
@@ -130,7 +115,6 @@ csilk_wasm_plugin_load_file(const char* filepath, const csilk_wasm_config_t* con
     fclose(f);
     snprintf(plugin->entry_point, sizeof(plugin->entry_point), "run");
     return plugin;
-#endif
 }
 
 /**
@@ -151,7 +135,6 @@ csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin)
     if (plugin->memory.data && !plugin->memory.is_mapped) {
         free(plugin->memory.data);
     }
-#ifdef HAS_WAMR
     /* WAMR resource cleanup: de-instantiate the instance first, then
      * unload the module.  The module was loaded with wasm_runtime_load
      * (which takes ownership of the bytecode internally), so the module
@@ -169,7 +152,6 @@ csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin)
         }
         plugin->use_wamr = false;
     }
-#endif
     if (plugin->bytecode) {
         free(plugin->bytecode);
     }
@@ -209,7 +191,6 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
 
     csilk_mutex_lock(&plugin->mutex);
 
-#ifdef HAS_WAMR
     /* WAMR real execution path */
     if (plugin->use_wamr && plugin->wasm_module_id) {
         wasm_module_inst_t   inst = (wasm_module_inst_t)(uintptr_t)plugin->wasm_instance;
@@ -282,13 +263,11 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
         }
         return res;
     }
-#else
-    (void)func_name;
     (void)json_input;
-    (void)err_buf;
-    (void)err_len;
+    if (err_buf && err_len > 0) {
+        snprintf(err_buf, err_len, "CSILK_WASM_TRAP_EXECUTION_ERR: module not instantiated");
+    }
     errno = ENOTSUP;
     csilk_mutex_unlock(&plugin->mutex);
     return NULL;
-#endif
 }

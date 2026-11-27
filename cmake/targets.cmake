@@ -20,7 +20,6 @@ function(csilk_compile_setup TARGET)
       "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
       "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
       "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
-      "$<$<BOOL:${CSILK_HAS_WAMR}>:HAS_WAMR>"
       "$<$<BOOL:${ENABLE_OOM_TEST}>:TEST_OOM>"
       "$<$<BOOL:${DEBUG_ARENA}>:DEBUG_ARENA>"
   )
@@ -30,7 +29,6 @@ function(csilk_compile_setup TARGET)
       "$<$<BOOL:${CSILK_HAS_POSTGRES}>:HAS_POSTGRES>"
       "$<$<BOOL:${HAS_MONGODB}>:HAS_MONGODB>"
       "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
-      "$<$<BOOL:${CSILK_HAS_WAMR}>:HAS_WAMR>"
       "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
       "$<$<BOOL:${CSILK_ENABLE_DB}>:CSILK_HAS_DB=1>"
       "$<$<BOOL:${CSILK_ENABLE_MQ}>:CSILK_HAS_MQ=1>"
@@ -386,12 +384,10 @@ if(CSILK_ENABLE_HTTP3)
 endif()
 if(CSILK_ENABLE_WASM)
   csilk_link_module(csilk_wasm csilk_runtime)
-  if(CSILK_HAS_WAMR)
-    if(TARGET csilk::vmlib)
-      csilk_link_module(csilk_wasm csilk::vmlib)
-    else()
-      csilk_link_module(csilk_wasm vmlib)
-    endif()
+  if(TARGET csilk::vmlib)
+    csilk_link_module(csilk_wasm csilk::vmlib)
+  elseif(TARGET vmlib)
+    csilk_link_module(csilk_wasm vmlib)
   endif()
   csilk_link_module(csilk_app csilk_wasm)
 endif()
@@ -437,9 +433,12 @@ if(CSILK_ENABLE_PERM)
 endif()
 if(CSILK_ENABLE_WORKFLOW)
   if(NOT APPLE AND NOT WIN32)
-    csilk_link_module(csilk_workflow csilk_runtime csilk_json csilk_ai csilk_mq csilk_wasm m csilk::yaml)
+    csilk_link_module(csilk_workflow csilk_runtime csilk_json csilk_ai csilk_mq m csilk::yaml)
   else()
-    csilk_link_module(csilk_workflow csilk_runtime csilk_json csilk_ai csilk_mq csilk_wasm csilk::yaml)
+    csilk_link_module(csilk_workflow csilk_runtime csilk_json csilk_ai csilk_mq csilk::yaml)
+  endif()
+  if(CSILK_ENABLE_WASM)
+    csilk_link_module(csilk_workflow csilk_wasm)
   endif()
 endif()
 if(CSILK_ENABLE_MCP)
@@ -550,7 +549,7 @@ if(CSILK_ENABLE_HTTP3)
     target_link_libraries(csilk INTERFACE csilk::nghttp3)
   endif()
 endif()
-if(CSILK_HAS_WAMR)
+if(CSILK_ENABLE_WASM)
   if(TARGET csilk::vmlib)
     target_link_libraries(csilk INTERFACE csilk::vmlib)
   elseif(TARGET vmlib)
@@ -589,7 +588,7 @@ if(CSILK_BUILD_SHARED)
   if(CSILK_NEED_CURL)
     target_link_libraries(csilk_shared PRIVATE CURL::libcurl)
   endif()
-  if(CSILK_HAS_WAMR)
+  if(CSILK_ENABLE_WASM AND TARGET vmlib)
     target_link_libraries(csilk_shared PRIVATE vmlib)
   endif()
   if(CSILK_ENABLE_HTTP3)

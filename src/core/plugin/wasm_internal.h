@@ -45,17 +45,10 @@ struct csilk_wasm_plugin_s {
     uint8_t*            bytecode;
     size_t              bytecode_size;
     char                entry_point[64];
-    /*
-     * WAMR-specific fields: sizeof(this struct) differs between WAMR ON/OFF
-     * builds. This struct is internal-only (never exposed in public headers
-     * or passed by value across ABI boundaries), so the size difference is
-     * safe and intentional.
-     */
-#ifdef HAS_WAMR
+    /* WAMR runtime handles (opaque pointers). */
     uintptr_t wasm_module_id; /* WAMR module descriptor (opaque pointer) */
     uintptr_t wasm_instance;  /* WAMR instance descriptor (opaque pointer) */
     bool      use_wamr;       /* true only when both load + instantiate succeeded */
-#endif
 };
 
 void* csilk_wasm_get_memory_slice(csilk_wasm_memory_t* mem, uint32_t offset, uint32_t len);

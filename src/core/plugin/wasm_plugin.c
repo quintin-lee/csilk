@@ -18,10 +18,7 @@
 #include "csilk/core/plugin/wasm.h"
 #include "csilk/core/plugin/wasm_plugin.h"
 #include "wasm_internal.h"
-
-#ifdef HAS_WAMR
 #include "wasm_export.h"
-#endif
 
 enum { CSILK_WASM_MW_MAX_SLOTS = 16 };
 
@@ -132,12 +129,6 @@ _csilk_wasm_validate_sections(const uint8_t* bytes, size_t size)
 csilk_wasm_plugin_t*
 csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
 {
-#ifndef HAS_WAMR
-    (void)wasm_bytes;
-    (void)size;
-    errno = ENOTSUP;
-    return NULL;
-#else
     if (!wasm_bytes || size < 8) {
         return NULL;
     }
@@ -182,7 +173,6 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
         return NULL;
     }
 
-#ifdef HAS_WAMR
     /* WAMR real execution path: only set use_wamr=true after both load and
      * instantiate succeed, avoiding a fragile intermediate state where
      * use_wamr=true but wasm_module_id=0. */
@@ -199,9 +189,7 @@ csilk_wasm_plugin_load(const uint8_t* wasm_bytes, size_t size)
         }
     }
     /* use_wamr remains false (calloc zero-init) if WAMR load/instantiate failed */
-#endif
     return plugin;
-#endif
 }
 
 /**
@@ -229,7 +217,6 @@ csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const c
         return -1;
     }
 
-#ifdef HAS_WAMR
     if (!plugin->use_wamr) {
         errno = ENOTSUP;
         return -1;
@@ -252,11 +239,6 @@ csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const c
         csilk_set_header(ctx, "X-WASM-Plugin", func_name);
     }
     return 0;
-#else
-    (void)ctx;
-    errno = ENOTSUP;
-    return -1;
-#endif
 }
 
 int
@@ -267,12 +249,10 @@ csilk_wasm_plugin_set_fuel(csilk_wasm_plugin_t* plugin, uint32_t fuel_limit)
     }
     csilk_mutex_lock(&plugin->mutex);
     plugin->config.fuel_limit = fuel_limit;
-#ifdef HAS_WAMR
     if (plugin->use_wamr && plugin->wasm_instance) {
         wasm_runtime_set_module_inst_fuel((wasm_module_inst_t)(uintptr_t)plugin->wasm_instance,
                                           fuel_limit);
     }
-#endif
     csilk_mutex_unlock(&plugin->mutex);
     return 0;
 }
@@ -285,12 +265,10 @@ csilk_wasm_plugin_get_fuel(const csilk_wasm_plugin_t* plugin)
     }
     csilk_mutex_lock((csilk_mutex_t*)&plugin->mutex);
     uint32_t fuel = (uint32_t)plugin->config.fuel_limit;
-#ifdef HAS_WAMR
     if (plugin->use_wamr && plugin->wasm_instance) {
         fuel =
             wasm_runtime_get_module_inst_fuel((wasm_module_inst_t)(uintptr_t)plugin->wasm_instance);
     }
-#endif
     csilk_mutex_unlock((csilk_mutex_t*)&plugin->mutex);
     return fuel;
 }
