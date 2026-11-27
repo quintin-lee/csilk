@@ -12,7 +12,9 @@
 #include "csilk/core/session_store.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
+#include "../core/internal/obs_registry.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -87,15 +89,22 @@ _mem_table_destroy(mem_session_table_t* table)
     free(table);
 }
 
+static uint32_t
+_mem_table_hash(const char* s)
+{
+    uint32_t hash = 2166136261u;
+    for (const char* p = s; *p; p++) {
+        /* clang-format off */
+        hash = (hash ^ (uint32_t)*(const uint8_t*)p) * 16777619u;
+        /* clang-format on */
+    }
+    return hash;
+}
+
 static mem_session_entry_t*
 _mem_table_lookup(mem_session_table_t* table, const char* session_id)
 {
-    uint32_t hash = 2166136261u;
-    for (const char* p = session_id; *p; p++) {
-        /* clang-format off */
-        hash = (hash ^ (uint32_t)*(uint8_t*)p) * 16777619u;
-        /* clang-format on */
-    }
+    uint32_t             hash = _mem_table_hash(session_id);
     mem_session_entry_t* slot = &table->entries[hash % MEM_SESSION_BUCKETS];
     if (slot->in_use && strcmp(slot->id, session_id) == 0) {
         return slot;
@@ -170,12 +179,7 @@ _mem_table_set(mem_session_table_t* table,
 
     csilk_mutex_lock(&table->lock);
 
-    uint32_t hash = 2166136261u;
-    for (const char* p = session_id; *p; p++) {
-        /* clang-format off */
-        hash = (hash ^ (uint32_t)*(uint8_t*)p) * 16777619u;
-        /* clang-format on */
-    }
+    uint32_t             hash = _mem_table_hash(session_id);
     mem_session_entry_t* slot = &table->entries[hash % MEM_SESSION_BUCKETS];
 
     if (slot->in_use && strcmp(slot->id, session_id) != 0) {
@@ -283,6 +287,25 @@ csilk_session_store_new_local(void)
  * =================================================================== */
 
 #ifdef HAS_REDIS
+static char*
+_redis_build_key(const char* prefix, const char* session_id, size_t* out_len)
+{
+    size_t plen = strlen(prefix);
+    size_t slen = strlen(session_id);
+    size_t keylen = plen + slen;
+    char*  key = malloc(keylen + 1);
+    if (!key) {
+        return NULL;
+    }
+    memcpy(key, prefix, plen);
+    memcpy(key + plen, session_id, slen);
+    key[keylen] = '\0';
+    if (out_len) {
+        *out_len = keylen;
+    }
+    return key;
+}
+
 static int
 _redis_get(csilk_session_store_t* store, const char* session_id, char** out_data, size_t* out_len)
 {
@@ -291,18 +314,18 @@ _redis_get(csilk_session_store_t* store, const char* session_id, char** out_data
         return -1;
     }
 
-    /* Serialize the shared redisContext (hiredis is not thread-safe) and
-     * surface I/O errors instead of silently returning -1. */
-    csilk_mutex_lock(&store->redis.lock);
-    size_t keylen = strlen(store->redis.prefix) + strlen(session_id);
-    char*  key = malloc(keylen + 1);
+    size_t keylen = 0;
+    char*  key = _redis_build_key(store->redis.prefix, session_id, &keylen);
     if (!key) {
-        csilk_mutex_unlock(&store->redis.lock);
         return -1;
     }
-    snprintf(key, keylen + 1, "%s%s", store->redis.prefix, session_id);
 
-    redisReply* reply = (redisReply*)redisCommand(ctx, "GET %s", key);
+    /* Serialize the shared redisContext (hiredis is not thread-safe) and
+     * use argv-based commands to prevent space/format injection. */
+    csilk_mutex_lock(&store->redis.lock);
+    const char* argv[] = {"GET", key};
+    size_t      argvlen[] = {3, keylen};
+    redisReply* reply = (redisReply*)redisCommandArgv(ctx, 2, argv, argvlen);
     free(key);
     csilk_mutex_unlock(&store->redis.lock);
     if (!reply) {
@@ -357,26 +380,24 @@ _redis_set(csilk_session_store_t* store,
         return -1;
     }
 
-    /* Serialize the shared redisContext and surface I/O errors. */
-    csilk_mutex_lock(&store->redis.lock);
-    size_t keylen = strlen(store->redis.prefix) + strlen(session_id);
-    char*  key = malloc(keylen + 1);
+    size_t keylen = 0;
+    char*  key = _redis_build_key(store->redis.prefix, session_id, &keylen);
     if (!key) {
-        csilk_mutex_unlock(&store->redis.lock);
         return -1;
     }
-    snprintf(key, keylen + 1, "%s%s", store->redis.prefix, session_id);
 
+    /* Serialize the shared redisContext and surface I/O errors. */
+    csilk_mutex_lock(&store->redis.lock);
     redisReply* reply;
     if (ttl_sec > 0) {
         char        ttlbuf[16];
         int         tn = snprintf(ttlbuf, sizeof(ttlbuf), "%d", ttl_sec);
-        const char* argv[] = {"SETEX", key, ttlbuf, data, NULL};
-        size_t      argvlen[] = {5, keylen, (size_t)tn, len, 0};
+        const char* argv[] = {"SETEX", key, ttlbuf, data};
+        size_t      argvlen[] = {5, keylen, (size_t)tn, len};
         reply = (redisReply*)redisCommandArgv(ctx, 4, argv, argvlen);
     } else {
-        const char* argv[] = {"SET", key, data, NULL};
-        size_t      argvlen[] = {3, keylen, len, 0};
+        const char* argv[] = {"SET", key, data};
+        size_t      argvlen[] = {3, keylen, len};
         reply = (redisReply*)redisCommandArgv(ctx, 3, argv, argvlen);
     }
     free(key);
@@ -399,17 +420,17 @@ _redis_del(csilk_session_store_t* store, const char* session_id)
         return -1;
     }
 
-    /* Serialize the shared redisContext and surface I/O errors. */
-    csilk_mutex_lock(&store->redis.lock);
-    size_t keylen = strlen(store->redis.prefix) + strlen(session_id);
-    char*  key = malloc(keylen + 1);
+    size_t keylen = 0;
+    char*  key = _redis_build_key(store->redis.prefix, session_id, &keylen);
     if (!key) {
-        csilk_mutex_unlock(&store->redis.lock);
         return -1;
     }
-    snprintf(key, keylen + 1, "%s%s", store->redis.prefix, session_id);
 
-    redisReply* reply = (redisReply*)redisCommand(ctx, "DEL %s", key);
+    /* Serialize the shared redisContext and use argv-based DEL. */
+    csilk_mutex_lock(&store->redis.lock);
+    const char* argv[] = {"DEL", key};
+    size_t      argvlen[] = {3, keylen};
+    redisReply* reply = (redisReply*)redisCommandArgv(ctx, 2, argv, argvlen);
     free(key);
     csilk_mutex_unlock(&store->redis.lock);
     if (!reply) {
@@ -575,8 +596,13 @@ _mq_set(csilk_session_store_t* store,
         int32_t                ttl_sec)
 {
     int rc = _mem_table_set(store ? store->mq.table : NULL, session_id, data, len, ttl_sec);
-    if (rc == 0 && store) {
-        (void)store->mq.mq;
+    if (rc == 0 && store && store->mq.mq) {
+        const csilk_mq_runtime_ops_t* ops = _csilk_get_mq_runtime_ops();
+        if (ops && ops->publish_raw) {
+            char topic[256];
+            snprintf(topic, sizeof(topic), "%s%s", store->mq.prefix, session_id ? session_id : "");
+            ops->publish_raw(store->mq.mq, topic, data, len);
+        }
     }
     return rc;
 }
