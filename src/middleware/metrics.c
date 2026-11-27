@@ -354,7 +354,7 @@ static void
 metrics_writer_vemit(metrics_writer_t* w, const char* fmt, va_list args)
 {
     va_list args_copy;
-    va_copy(args_copy, args);
+    va_copy(args_copy, args); // NOLINT(clang-analyzer-security.VAList)
     char dummy[1];
     int  n = vsnprintf(dummy, sizeof(dummy), fmt, args_copy); // NOLINT
     va_end(args_copy);
