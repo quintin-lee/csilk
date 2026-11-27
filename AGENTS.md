@@ -1,6 +1,6 @@
 # Repository Guidelines — csilk
 
-A lightweight HTTP web framework written in C23, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. Built on libuv (default) or io_uring (Linux-only opt-in), llhttp, nghttp2, cJSON, and yyjson.
+A lightweight HTTP web framework written in C23, delivering **P99 latency ≤ 5ms under 10K QPS** on commodity hardware. Built on libuv (default) or io_uring (Linux-only opt-in), llhttp, nghttp2, and yyjson.
 
 ## Project Overview
 
@@ -33,9 +33,10 @@ Use these rules whenever performing work in this repository. They ensure correct
 ### Building & testing
 
 - **Configure once per variant**: each sanitizer/backend combination needs its own `-B build_*` directory. Do not re-run configure on an existing build dir — it mutates state.
+- **Dual-variant verification**: any change touching `cmake/`, `src/core/`, `src/app/`, `src/middleware/`, `src/protocols/`, or `include/csilk/` **must** compile cleanly and pass `ctest` in **both** Core-Only (`-DCSILK_BUILD_FULL=OFF`) and Full (`-DCSILK_BUILD_FULL=ON`) builds.
 - **Run tests via `ctest`**: never `make test` or invoke test executables directly. Use `--test-dir build` (or the variant dir) and filter with `-R` / `-E`.
 - **ASAN/TSAN runtime**: mirror CI flags (`ASAN_OPTIONS`, `LSAN_OPTIONS`, `TSAN_OPTIONS`) when running tests under sanitizers locally. Suppressions live under `cmake/`.
-- **Timeout-sensitive tests**: `test_timeout` (10s), `test_multi_worker`/`test_mq_concurrent` (30s), `test_ws_concurrent`/`test_sse_concurrent` (15s). Set `--timeout` explicitly.
+- **Timeout-sensitive tests**: `test_timeout` (10s), `test_multi_worker`/`test_mq_concurrent`/`test_mcp_stdio_pool` (30s), `test_ws_concurrent`/`test_sse_concurrent` (15s), AI/vector mocks (`test_openai_mock`, `test_ai_anthropic`, `test_ollama_mock`, `test_vector_milvus_qdrant_mock`, `test_agent_memory`, 60s), `test_cmake_package_target_split` (180s). Pass explicit `--timeout` budgets on CTest invocations.
 - **OOM/deterministic tests**: wrap hash-equality assertions in `#ifdef TEST_OOM`; enable with `-DENABLE_OOM_TEST=ON`.
 
 ### Benchmarking & profiling
@@ -64,22 +65,24 @@ Use these rules whenever performing work in this repository. They ensure correct
 
 ### Python bindings
 
-- **Build shared lib first**: `cmake --build build --target csilk_shared`.
-- **Run tests**: `python3 python/tests/test_csilk.py`.
+- **Build full shared lib first**: `cmake --build build_full --target csilk_shared` (bindings map full optional C symbols).
+- **Run full CI scripts**: export `LIBCSILK_PATH=$PWD/build_full/libcsilk.so` and `PYTHONPATH=$PWD/python`, then run `test_csilk.py`, `test_abi_layout.py` (with `CSILK_ABI_PROBE_BIN="$PWD/build_full/test_python_abi" CSILK_REQUIRE_ABI_PROBE=1`), `test_middleware_bindings.py`, `test_test_context_compat.py`, and `test_asyncio_support.py` under `python/tests/`.
 - **Package**: `python/setup.py` drives PyPI wheel generation.
 
 ### Git workflow
 
-- **Commit convention**: `type(scope): 🎯 subject` with emoji after colon (e.g., `feat(server): 🔥 add RCU router swap`). See full type list in this document.
-- **Pre-commit**: run `format` and `check-format` (dry-run) to catch style issues before pushing.
+- **Commit convention**: `type(scope): 🎯 subject` with emoji after colon (e.g., `feat(server): 🔥 add RCU router swap`), lowercase imperative subject. See full type list in this document.
+- **Pre-commit gates**: run `format`, `check-format`, `bash ./scripts/check_sync_primitives.sh`, `bash ./scripts/check_abi_compatibility.sh build_full/libcsilk.so`, `./scripts/check_version_sync.sh`, `python3 scripts/check_mermaid.py .`, and confirm `ldd build_core/libcsilk.so` has zero `sqlite`/`curl` dependencies.
+- **Clean history**: split multi-concern work into focused logical commits; never `--amend` published history and never auto-push without explicit user instruction.
 
 ### Prohibited patterns
 
-- **Never** call raw `uv_*` or `pthread_*` directly in `src/core/server/`, `src/core/http/`, or cross-backend code. Use `csilk_io_*`, `csilk_thread_*`, `csilk_barrier_*`, `csilk_mutex_t`/`csilk_cond_t`.
-- **Never** declare `uv_barrier_t` on the stack when used across threads — always `calloc`/`free`.
+- **Never** include `<pthread.h>` or call raw `pthread_*` anywhere under `src/` (`scripts/check_sync_primitives.sh` fails CI on any match); never call raw `uv_*` directly in cross-backend code. Always use `csilk_io_*`, `csilk_thread_*`, `csilk_barrier_*`, `csilk_mutex_t`/`csilk_cond_t`.
+- **Never** declare `uv_barrier_t` or `csilk_barrier_t` on the stack when used across threads — always `calloc`/`free`.
 - **Never** use `csilk_arena_alloc()` when zero-initialized memory is required — use `csilk_arena_calloc()`.
 - **Never** call `client_destroy()` from a non-owner worker thread — enqueue a recycling task via `csilk_dispatch()`.
 - **Never** include `messaging/mq_internal.h` transitively through `include/csilk/core/internal.h` — add explicit includes only where needed.
+- **Never** pull `SQLite3::SQLite3` or `CURL::libcurl` into Web Core (`CSILK_BUILD_FULL=OFF`), add direct optional-module teardown calls into `server_lifecycle.c`, or add simulated production stubs.
 - **Never** assert bcrypt/hash equality without `#ifdef TEST_OOM` guard (tests use `/dev/urandom` salts by default).
 
 ### Declaration placement
@@ -89,6 +92,40 @@ Use these rules whenever performing work in this repository. They ensure correct
 - **Exception**: `#include` inside a top-level `#ifdef` guard that protects an entire function group (e.g. `#ifdef CSILK_HAS_NGTCP2 … #endif` wrapping multiple function bodies) is permissible when the guarded functions use types from that header; move the `#include` into the top block if no guarded function exists.
 
 **Rationale**: Consistent declaration placement enables fast IDE/clangd navigation, makes the file’s global state surface at the top for review, and prevents accidental ODR issues from late declarations. It also makes code-review diffs cleaner: new globals are visible at the top of the diff rather than buried mid-file.
+
+### Module Boundary & Dependency Constraints (Web Core vs Optional Modules)
+
+- **Zero-bloat Web Core**: `CSILK_BUILD_FULL` defaults to `OFF`. Core targets (`base`, `json`, `crypto`, `reflection`, `runtime`, `tls`, `http2`, `http`, `protocols`, `middleware`, `app`) must build standalone with zero `SQLite3` or `libcurl` linkage (`ldd build_core/libcsilk.so | grep -qiE "sqlite|curl"` must return non-zero).
+- **Strict downward dependency**: Web Core files (`src/core/`, `src/app/`, `src/middleware/`, `src/protocols/`) must not call optional-module symbols (`db`, `mq`, `ai`, `vector`, `mcp`, `workflow`, `grpc`, `wasm`, `bypass`, `perm`, `http3`) unconditionally — guard callers cleanly behind `#ifdef CSILK_HAS_<MODULE>` or register hooks/callbacks at runtime.
+- **Extensible server teardown**: per-server optional or stateful subsystems (`session`, `ws_room`, `otlp_trace`, `h3`, `mq`, etc.) must register a `csilk_server_teardown_fn` via `_csilk_server_register_teardown()` (executed LIFO on shutdown, max 16 slots in `srv_internal.h`) instead of hardcoding subsystem teardown calls in `server_lifecycle.c`.
+- **Single option model**: the 8 legacy `src/plugins/*` wrappers were retired in favor of CMake optional module options (`CSILK_ENABLE_*` in `cmake/options.cmake`) with transitive dependency enforcement (`WAMR -> WASM`, `MCP -> AI`, `WORKFLOW -> AI + MQ + WASM`).
+
+### ABI & Public API Governance (SOVERSION 2)
+
+- **Export whitelist**: `cmake/libcsilk.map` restricts dynamic exports strictly to `csilk_*` (`global: csilk_*; local: *;`). Never invent non-`csilk_` public symbols; internal cross-TU symbols must use `_csilk_` and be kept `static` whenever single-TU.
+- **Opaque handle encapsulation**: `include/csilk/` headers expose opaque pointer typedefs (`csilk_*_t`); concrete `struct csilk_*_s` layouts live in `src/` and internal headers under `src/core/internal/` must never leak into public headers.
+- **ABI baseline gate**: `bash ./scripts/check_abi_compatibility.sh build_full/libcsilk.so` checks exports against `cmake/abi_baseline_symbols.txt` (`SOVERSION 2`). Never remove or break existing baseline symbols within a major `SOVERSION`; intentionally adding/removing exported API in Full mode requires regenerating `cmake/abi_baseline_symbols.txt`.
+- **Python struct layout parity**: any edit to public structs mirrored by `ctypes` in `python/csilk/` must also update `tests/core/test_python_abi.c` and pass `test_abi_layout.py` with `CSILK_REQUIRE_ABI_PROBE=1`.
+
+### Honest Implementation & Fail-Closed Discipline
+
+- **No fake drivers or stub toggles**: simulated `dpdk_pmd`, fake eBPF `xdp_waf`, simulated `llama.c`, dead `quic_vtable`, and `CSILK_ENABLE_EXPERIMENTAL_STUBS` have been removed. Every public driver/middleware entrypoint must represent real functionality or explicit capability absence.
+- **Fail closed on absent runtimes**: optional native integrations (e.g., `HAS_WAMR` in `wasm_vm.c`, `CSILK_HAS_NGTCP2`/`nghttp3` in HTTP/3 listener/transport, optional DB drivers) must set `errno = ENOTSUP` and return `-1` / `nullptr` when unconfigured.
+- **No parallel duplicate subsystems**: place shared WAL file I/O helpers in `src/messaging/wal_common.h`/`.c` (reused by `workflow_wal.c`), keep both fixed and sliding rate-limiters in `src/middleware/ratelimit.c`, and keep dynamic WAF rules/filtering (`csilk_waf_filter_*`) unified in `src/middleware/waf.c`.
+
+### Per-Server Isolation, Security & Hot-Path Constraints
+
+- **Per-server isolation over global singletons**: bind mutable runtime state (sessions, WS rooms, OTLP tracer, H3/MQ/MCP state) to `csilk_server_t` or explicit handles so multiple servers in one process stay isolated and reentrant.
+- **Input, path & SSRF validation**: reject `..` path traversal, NUL/control characters, and non-HTTP(S) URI schemes across static file serving, `.so` plugin loading (`loader.c`), and outbound HTTP drivers (`ssrf.c`).
+- **Hot-path allocation discipline**: keep request parsing, header indexing, routing, and response serialization on `c->arena` + zero-copy `csilk_str_view_t`; avoid per-request heap `malloc`/`free` churn on the hot path.
+- **Toolchain & static-analysis compliance**: new code must build cleanly under both GCC 13+ and Clang 19+ and pass `tidy` (`.clang-tidy` enforces `WarningsAsErrors: '*'`). Prefer `enum` constants over C23 `constexpr` when cross-compiler header compatibility requires it.
+
+### CMake, Packaging & Workspace Hygiene
+
+- **Guard optional CTest properties**: always wrap `set_tests_properties(<name> ...)` for optional tests inside `if(TEST <name>)` in `CMakeLists.txt`.
+- **Drift-free test registration**: prefer single-list `foreach` loops for uniform test directories in `cmake/tests.cmake`; when using `ZIP_LISTS` for mixed directories, maintain exact 1-to-1 list parity.
+- **Package contract synchronization**: any added/removed module must stay synchronized across `cmake/targets.cmake`, `cmake/install.cmake` (`CSILK_INSTALL_TARGETS`, `.pc` variables), `cmake/csilk-config.cmake.in` (`csilk::<mod>`, `csilk::<mod>_shared`, `csilk::shared`), and `tests/cmake/test_package.cmake`.
+- **Workspace hygiene**: never leave temporary test outputs (`*.db`, `*.yaml`, `*.wal`) or redundant `build_*` trees tracked or littered across the repository root.
 
 ## Architecture & Data Flow
 
@@ -113,7 +150,7 @@ TCP/SSL accept → worker loop receives event (libuv/io_uring)
 |---|---|---|
 | `csilk_server_t` | `include/csilk/core/server.h` + opaque impl | Server state: workers, config, router epoch, loops |
 | `csilk_ctx_t` | `include/csilk/core/context.h` + opaque impl | Per-request arena, headers, body views, storage, defer chain |
-| `csilk_client_t` | `src/core/server/connection.c` internal | Connection lifecycle: state machine (INIT→ACCEPTED→TLS→READING→PROCESSING→WRITING→STREAMING→CLOSING→CLOSED), generation tag, pending I/O counters |
+| `csilk_client_t` | `src/core/server/connection_{pool,state,timer,close,io}.c` | Connection lifecycle: state machine (INIT→ACCEPTED→TLS→READING→PROCESSING→WRITING→STREAMING→CLOSING→CLOSED), generation tag, pending I/O counters |
 | `csilk_router_t` | `include/csilk/core/router.h` + opaque impl | Segment-prefix trie with RCU/swappable readers |
 | `csilk_app_t` | `include/csilk/app.h` | High-level app builder (hooks, groups, middleware registration) |
 | `csilk_mq_t` | `include/csilk/messaging/mq.h` | Asynchronous thread-safe message queue with PubSub and WAL |
@@ -149,7 +186,7 @@ Router uses a segment-prefix trie. Swaps are serialized under `server->config_mu
 - **Worker threads** (one per CPU core by default) each own a libuv/io_uring event loop.
 - `wp->active_clients` is strictly single-thread-confined to the owning worker. Cross-worker ops must use `csilk_dispatch(ctx, cb, arg)`.
 - Client recycling uses generation tags (`_csilk_client_recycle_dispatch_cb`); destruction verifies `client->generation == gen && client->state == CSILK_CONN_CLOSING` to prevent ABA/UAF.
-- `csilk_mq_t` teardown is deferred until **after** all worker threads are joined.
+- Teardown of `csilk_mq_t` and per-server optional subsystems (`session`, `ws_room`, `otlp_trace`, `h3`, etc.) executes via registered `_csilk_server_register_teardown()` LIFO hooks **after** all worker threads are joined.
 
 ### Streaming backpressure
 
@@ -320,19 +357,22 @@ UV_USE_IO_URING=1 ctest --test-dir build --output-on-failure
 ### Lint & format
 
 ```bash
-cmake --build build --target check-format   # dry-run; fails on mismatch
-cmake --build build --target format         # apply clang-format in-place
-cmake --build build --target tidy           # clang-tidy (WarningsAsErrors)
-./scripts/check_version_sync.sh             # CMake version ↔ git tag
+cmake --build build_full --target check-format             # dry-run; fails on mismatch
+cmake --build build_full --target format                   # apply clang-format in-place
+cmake --build build_full --target tidy                     # clang-tidy (WarningsAsErrors)
+bash ./scripts/check_sync_primitives.sh                    # ban raw pthread_* in src/
+bash ./scripts/check_abi_compatibility.sh build_full/libcsilk.so  # SOVERSION 2 symbol gate
+./scripts/check_version_sync.sh                            # CMake version ↔ git tag
+python3 scripts/check_mermaid.py .                         # validate Mermaid blocks
 ```
 
-`clang-format` is applied (via `cmake/format.cmake`, `GLOB_RECURSE`) to `src/**`, `include/**`, `tests/**`, and `examples/**`. Run `format` before committing — the tree was normalized in Aug 2026 and every new file must match.
+`clang-format` is applied (via `cmake/format.cmake`, `GLOB_RECURSE`) to `src/**`, `include/**`, `tests/**`, and `examples/**`. `.clang-format` enforces LLVM base, 4-space indentation, 100-column limit, `PointerAlignment: Left`, `BreakBeforeBraces: Linux`, `InsertBraces: true`, and `AlwaysBreakAfterReturnType: AllDefinitions`. Run `format` before committing — every modified or new C/H file must match.
 
 ## Code Conventions & Common Patterns
 
 ### Naming
 
-- **Public functions**: `csilk_` prefix, camelCase — e.g., `csilk_response_write`, `csilk_sse_send`, `csilk_dispatch`.
+- **Public functions**: `csilk_` prefix, snake_case — e.g., `csilk_response_write`, `csilk_sse_send`, `csilk_dispatch`.
 - **Internal helpers**: `_csilk_` prefix — e.g., `_csilk_send_response`, `_csilk_next_handler`.
 - **Struct tags**: `csilk_*_t` — e.g., `csilk_ctx_t`, `csilk_server_t`. Opaque handles for external use; concrete `struct csilk_*_s` lives in `src/` internals.
 - **Constants**: `CSILK_` prefix, SCREAMING_SNAKE — e.g., `CSILK_BCRYPT_HASH_LEN`, `CSILK_MAX_PARAMS`.
@@ -347,11 +387,11 @@ cmake --build build --target tidy           # clang-tidy (WarningsAsErrors)
 
 ### Async & threading
 
-- **Never call raw `uv_*` or `pthread_*`** in cross-backend code. Use `csilk_io_*`, `csilk_thread_*` (`csilk_thread_create`/`join`/`self`/`setaffinity`), `csilk_barrier_*` (`csilk_barrier_init`/`wait`/`destroy`), and `csilk_mutex_t`/`csilk_cond_t` from `<csilk/core/sys_io.h>` and `<csilk/core/sync.h>`.
+- **Never include `<pthread.h>` or call raw `pthread_*`** anywhere in `src/`, and **never call raw `uv_*`** directly in cross-backend code. Use `csilk_io_*`, `csilk_thread_*` (`csilk_thread_create`/`join`/`self`/`setaffinity`), `csilk_barrier_*` (`csilk_barrier_init`/`wait`/`destroy`), and `csilk_mutex_t`/`csilk_cond_t` from `<csilk/core/sys_io.h>` and `<csilk/core/sync.h>`.
 - `wp->active_clients` is strictly single-thread-confined. Cross-worker ops must use `csilk_dispatch(ctx, cb, arg)`.
 - `uv_barrier_t` (and `csilk_barrier_t` underneath) must be heap-allocated — never stack-allocated when used across threads.
 - Client recycling uses generation tags; verify `client->generation == gen && client->state == CSILK_CONN_CLOSING` before destroying.
-- Server teardown order: drain active clients → drain timers → drain `wp->dispatch_async` queues → join workers → stop hot-reload → EBR grace period → destroy router → close event loop → free pools. MQ teardown is deferred until after all joins.
+- Server teardown order: drain active clients → drain timers → drain `wp->dispatch_async` queues → join workers → stop hot-reload → EBR grace period → run registered `_csilk_server_register_teardown()` LIFO callbacks (e.g., `mq`, `h3`, `session`, `ws_room`, `otlp_trace`) → destroy router → close event loop → free pools.
 
 ### Arena & context patterns
 
@@ -411,14 +451,18 @@ csilk_get(app, "/api/echo", echo_handler);
 | `.gcovr` | Coverage report exclusions |
 | `include/csilk.h` | Umbrella public header |
 | `include/csilk/version.h.in` | Version string header template |
-| `src/core/server/connection.c` | Core connection state machine; handles client pool, lifecycle, generation tags |
-| `src/core/server/server_lifecycle.c` → split into `server_rcu.c` + `server_driver.c` | Server startup, RCU router swap, driver injection |
+| `src/core/server/connection_{pool,state,timer,close,io}.c` | Core connection state machine; handles pool, lifecycle, generation tags, I/O |
+| `src/core/server/server_lifecycle.c` → split into `server_rcu.c` + `server_driver.c` | Server startup, RCU router swap, driver injection, teardown hook registry |
 | `src/core/server/server_shutdown.c` | Ordered teardown path |
 | `src/middleware/jwt.c` | JWT HS256 middleware + validation policies |
 | `src/middleware/waf.c` | Dynamic WAF filter (`csilk_waf_filter_*`) + pattern/IP rules |
 | `src/drivers/db/` | Database abstraction + SQLite/MySQL/PQ/Redis/Mongo drivers |
 | `src/drivers/vector/hnsw.c` | HNSW skip-graph index with AVX2 SIMD distance kernels |
 | `src/reflection/reflect.c` | Reflection marshal/unmarshal for struct↔JSON binding |
+| `cmake/libcsilk.map` | Linker version script enforcing pure `csilk_*` symbol exports |
+| `cmake/abi_baseline_symbols.txt` | Full-build exported symbol baseline (`SOVERSION 2`) |
+| `scripts/check_abi_compatibility.sh` | Automated ABI export whitelist & baseline checker |
+| `scripts/check_sync_primitives.sh` | Enforces `csilk/core/sync.h` usage (bans raw `pthread_*` in `src/`) |
 | `scripts/check_version_sync.sh` | Verifies CMake version matches git tag; `--expected <ver>` for release validation |
 | `scripts/csilkskel` | Interactive project scaffold generator (C API + CMake + test skeleton) |
 | `scripts/tag-release.sh` | Bumps version across all 18 locations (src/, python/, cmake/, docs, ASCII diagrams) |
@@ -435,13 +479,14 @@ csilk_get(app, "/api/echo", echo_handler);
 
 ## Runtime & Tooling Preferences
 
-- **CMake** ≥ 3.11 is the build system; no other build backend is supported.
+- **CMake** ≥ 3.24 recommended (`LINK_GROUP:RESCAN` support; 3.11+ fallback works for sequential linking); no other build backend is supported.
 - **ccache** is auto-detected and used as compiler launcher if available.
-- **System dependencies** (must be installed separately): libyaml-dev, libssl-dev (≥ 1.1.1), zlib1g-dev, libcurl4-openssl-dev (≥ 7.80.0), libsqlite3-dev. libpq-dev, libmysqlclient-dev, hiredis, libmongoc are optional per-driver.
-- **Auto-fetched** via FetchContent: libuv (or liburing), nghttp2, llhttp, yyjson, cJSON.
+- **Web Core system dependencies**: `libyaml-dev`, `libssl-dev` (≥ 1.1.1), `zlib1g-dev`, `libuv1-dev` (or `liburing` via FetchContent).
+- **Optional module dependencies**: `libsqlite3-dev` (`CSILK_ENABLE_DB`), `libcurl4-openssl-dev` (≥ 7.80.0, `CSILK_ENABLE_{AI,VECTOR,MCP}`), plus optional `libpq-dev`, `libmysqlclient-dev`, `hiredis`, `libmongoc` per DB driver.
+- **Auto-fetched** via FetchContent: `yyjson`, plus `liburing` (when `CSILK_USE_URING=ON`) and fallback `llhttp`/`nghttp2`/`ngtcp2`/`nghttp3`/`wamr` when not found on system.
 - **Compiler**: Clang 19+ is default; GCC 13+ for coverage jobs. Apple Clang and MSVC are rejected.
-- **Shared libs**: `.so` on Linux, `.dylib` on macOS. Always built alongside `.a`.
-- **pkg-config**: `pkg-config --cflags --libs csilk` works after install.
+- **Shared libs**: `.so` on Linux (`SOVERSION 2`), `.dylib` on macOS. Always built alongside `.a` when `CSILK_BUILD_SHARED=ON`.
+- **pkg-config**: `pkg-config --cflags --libs csilk` works after install (reflecting enabled modules).
 
 ## Testing & QA
 
@@ -449,25 +494,28 @@ csilk_get(app, "/api/echo", echo_handler);
 
 | Category | Filter | Timeout | Notes |
 |---|---|---|---|
-| Unit (core, app, middleware, protocols, security, drivers, reflection, messaging) | `-E test_integration` | 10s | Core property tests (crypto, bcrypt, UUID) use `/dev/urandom` salts — assert-hash tests are `#ifdef TEST_OOM`-guarded |
+| Unit (core, app, middleware, protocols, security, drivers, reflection, messaging) | `-E test_integration` | 10s–60s | Core property tests (crypto, bcrypt, UUID) use `/dev/urandom` salts — assert-hash tests are `#ifdef TEST_OOM`-guarded |
 | Integration | `-R test_integration` | 30s | Live HTTP server fixture; also SSE, session, middleware-chain, OpenAPI, admin |
 | Stress | `test_*_stress` | 30–60s | Multi-worker, RCU reader storm, hot-reload ramp |
-| Fuzz | `fuzz_*` | Manual (CI: 60–120s) | `fuzz_test`, `fuzz_url`, `fuzz_yaml`, `fuzz_headers`, `fuzz_h2`, `fuzz_websocket`, `fuzz_raft_rpc`, `fuzz_mcp`, `fuzz_sql_rewrite`; corpus in `fuzz/corpus/`; dict at `fuzz/fuzz.dict` |
+| Package smoke | `-R test_cmake_package_target_split` | 180s | Installs build tree into temp prefix and compiles external `find_package(csilk)` consumer |
+| Fuzz | `fuzz_*` | Manual (CI: 30–120s) | 6 Core harnesses (`fuzz_test`, `fuzz_url`, `fuzz_yaml`, `fuzz_headers`, `fuzz_h2`, `fuzz_websocket`) + 5 Full harnesses (`fuzz_raft_rpc`, `fuzz_mcp`, `fuzz_sql_rewrite`, `fuzz_wasm`, `fuzz_h3`); corpus in `fuzz/corpus/`; dict at `fuzz/fuzz.dict` |
 
 ### Coverage
 
-Built with `-DUSE_COVERAGE=ON` under gcc (ASAN/TSAN incompatible). GCOV excludes `flamegraph.c`, `redis_storage.c`, `workflow_debug.c`, `uring_vector.c` via `.gcovr`. Current reported coverage: **69%** (12 609 / 18 281 lines). Target: increase via integration tests (SSE alone drove sse.c from 22% → 77%; the coverage campaign further raised websocket.c → 85%, gzip.c → 68%, bounded_buf.c → 100%).
+Built with `-DCSILK_BUILD_FULL=ON -DUSE_COVERAGE=ON -DENABLE_OOM_TEST=OFF` under gcc (ASAN/TSAN incompatible). `.github/workflows/coverage.yml` enforces `--fail-under-line 72` via `gcovr`, excluding `flamegraph.c`, `redis_storage.c`, `workflow_debug.c`, `uring_vector.c`.
 
 ### CI matrix (`.github/workflows/ci.yml`)
 
-- **test**: ubuntu-24.04 + macos-15 × Debug + Release; ASAN on Linux Debug; Python bindings on Release or Linux.
-- **lint**: clang-format check, clang-tidy, version-sync, Mermaid-diagram validation.
-- **fuzz**: clang-19 + ASAN + libFuzzer; 7 harnesses, each with corpus replay.
-- **arm64**: cross-compile via `aarch64-linux-gnu-gcc`.
-- **io_uring**: libuv+`UV_USE_IO_URING=1` and native `CSILK_USE_URING=ON`.
-- **tsan**: separate TSAN job with `halt_on_error=1`.
-- **coverage**: gcc + gcovr job.
-- **benchmarks**: native-arch Release runs; uploads results.
+- **test**: ubuntu-24.04 + macos × Debug + Release (`-DCSILK_BUILD_FULL=ON`); ASAN on Linux Debug; Python bindings on Release/Linux Debug.
+- **lint**: `check-format`, `check_version_sync.sh`, `check_sync_primitives.sh`, `check_abi_compatibility.sh` (SOVERSION 2), `check_mermaid.py`, `tidy`.
+- **fuzz**: clang + ASAN + libFuzzer (`-DCSILK_BUILD_FULL=ON`); all 11 harnesses with corpus replay.
+- **arm64**: cross-compile via `aarch64-linux-gnu-gcc` (`-DCSILK_BUILD_FULL=ON`).
+- **io_uring**: libuv+`UV_USE_IO_URING=1` and native `CSILK_USE_URING=ON` (`-DCSILK_BUILD_FULL=ON`).
+- **tsan**: separate TSAN job with `halt_on_error=1` (`-DCSILK_BUILD_FULL=ON`).
+- **examples**: builds examples and smoke-tests `example_server` and `example_app`.
+- **db_integration**: tests SQLite, PostgreSQL, MySQL, Redis, MongoDB drivers against live service containers.
+- **core-minimal**: builds `-DCSILK_BUILD_FULL=OFF -DCSILK_BUILD_SHARED=ON`, asserts zero SQLite/CURL in `ldd build_core/libcsilk.so`, runs Core unit tests.
+- **coverage**: gcc + gcovr job (`.github/workflows/coverage.yml`).
 - **release**: version bump + tag + PyPI wheel + GitHub release.
 
 ## Commit Convention
