@@ -1,9 +1,10 @@
 /**
  * @file src/core/json/json_access.c
- * @brief Value accessors: get-by-key, type extractors, array indexing.
+ * @brief Value accessors, type predicates, and object key/value iteration helpers.
  */
 
 #include <errno.h>
+#include <string.h>
 #include <strings.h>
 #include "json_internal.h"
 
@@ -479,4 +480,188 @@ csilk_json_as_bool(const csilk_json_t* val, bool default_val)
         }
     }
     return default_val;
+}
+
+/* ====================================================================
+ * Type Predicates
+ * ==================================================================== */
+
+bool
+csilk_json_is_null(const csilk_json_t* v)
+{
+    if (!v || !v->u.raw) {
+        return false;
+    }
+    return json_is_mutable(v) ? yyjson_mut_is_null((yyjson_mut_val*)v->u.mval)
+                              : yyjson_is_null((yyjson_val*)v->u.ival);
+}
+
+bool
+csilk_json_is_object(const csilk_json_t* v)
+{
+    if (!v || !v->u.raw) {
+        return false;
+    }
+    return json_is_mutable(v) ? yyjson_mut_is_obj((yyjson_mut_val*)v->u.mval)
+                              : yyjson_is_obj((yyjson_val*)v->u.ival);
+}
+
+bool
+csilk_json_is_array(const csilk_json_t* v)
+{
+    if (!v || !v->u.raw) {
+        return false;
+    }
+    return json_is_mutable(v) ? yyjson_mut_is_arr((yyjson_mut_val*)v->u.mval)
+                              : yyjson_is_arr((yyjson_val*)v->u.ival);
+}
+
+bool
+csilk_json_is_string(const csilk_json_t* v)
+{
+    if (!v || !v->u.raw) {
+        return false;
+    }
+    return json_is_mutable(v) ? yyjson_mut_is_str((yyjson_mut_val*)v->u.mval)
+                              : yyjson_is_str((yyjson_val*)v->u.ival);
+}
+
+bool
+csilk_json_is_number(const csilk_json_t* v)
+{
+    if (!v || !v->u.raw) {
+        return false;
+    }
+    return json_is_mutable(v) ? yyjson_mut_is_num((yyjson_mut_val*)v->u.mval)
+                              : yyjson_is_num((yyjson_val*)v->u.ival);
+}
+
+bool
+csilk_json_is_bool(const csilk_json_t* v)
+{
+    if (!v || !v->u.raw) {
+        return false;
+    }
+    return json_is_mutable(v) ? yyjson_mut_is_bool((yyjson_mut_val*)v->u.mval)
+                              : yyjson_is_bool((yyjson_val*)v->u.ival);
+}
+
+bool
+csilk_json_is_true(const csilk_json_t* v)
+{
+    if (!v || !v->u.raw) {
+        return false;
+    }
+    return json_is_mutable(v) ? yyjson_mut_is_true((yyjson_mut_val*)v->u.mval)
+                              : yyjson_is_true((yyjson_val*)v->u.ival);
+}
+
+bool
+csilk_json_is_false(const csilk_json_t* v)
+{
+    if (!v || !v->u.raw) {
+        return false;
+    }
+    return json_is_mutable(v) ? yyjson_mut_is_false((yyjson_mut_val*)v->u.mval)
+                              : yyjson_is_false((yyjson_val*)v->u.ival);
+}
+
+/* ====================================================================
+ * Object Key/Value Iteration
+ * ==================================================================== */
+
+const char*
+csilk_json_object_key(const csilk_json_t* obj, size_t index)
+{
+    if (!obj || !obj->u.raw) {
+        return NULL;
+    }
+    if (json_is_mutable(obj)) {
+        if (!yyjson_mut_is_obj((yyjson_mut_val*)obj->u.mval)) {
+            return NULL;
+        }
+        yyjson_mut_obj_iter it;
+        yyjson_mut_obj_iter_init((yyjson_mut_val*)obj->u.mval, &it);
+        yyjson_mut_val* key_val;
+        size_t          i = 0;
+        while ((key_val = yyjson_mut_obj_iter_next(&it))) {
+            if (i == index) {
+                return yyjson_mut_get_str(key_val);
+            }
+            i++;
+        }
+        return NULL;
+    }
+    if (!yyjson_is_obj((yyjson_val*)obj->u.ival)) {
+        return NULL;
+    }
+    yyjson_obj_iter it;
+    yyjson_obj_iter_init((yyjson_val*)obj->u.ival, &it);
+    yyjson_val* key_val;
+    size_t      i = 0;
+    while ((key_val = yyjson_obj_iter_next(&it))) {
+        if (i == index) {
+            return yyjson_get_str(key_val);
+        }
+        i++;
+    }
+    return NULL;
+}
+
+size_t
+csilk_json_object_size(const csilk_json_t* obj)
+{
+    if (!obj || !obj->u.raw) {
+        return 0;
+    }
+    if (json_is_mutable(obj)) {
+        if (!yyjson_mut_is_obj((yyjson_mut_val*)obj->u.mval)) {
+            return 0;
+        }
+        return yyjson_mut_obj_size((yyjson_mut_val*)obj->u.mval);
+    }
+    if (!yyjson_is_obj((yyjson_val*)obj->u.ival)) {
+        return 0;
+    }
+    return yyjson_obj_size((yyjson_val*)obj->u.ival);
+}
+
+csilk_json_t*
+csilk_json_object_val(const csilk_json_t* obj, size_t index)
+{
+    if (!obj || !obj->u.raw) {
+        return NULL;
+    }
+    if (json_is_mutable(obj)) {
+        if (!yyjson_mut_is_obj((yyjson_mut_val*)obj->u.mval)) {
+            return NULL;
+        }
+        yyjson_mut_obj_iter it;
+        yyjson_mut_obj_iter_init((yyjson_mut_val*)obj->u.mval, &it);
+        yyjson_mut_val* key_val;
+        size_t          i = 0;
+        while ((key_val = yyjson_mut_obj_iter_next(&it))) {
+            if (i == index) {
+                return json_view_mutable((yyjson_mut_doc*)obj->doc.mdoc,
+                                         yyjson_mut_obj_iter_get_val(key_val));
+            }
+            i++;
+        }
+        return NULL;
+    }
+    if (!yyjson_is_obj((yyjson_val*)obj->u.ival)) {
+        return NULL;
+    }
+    yyjson_obj_iter it;
+    yyjson_obj_iter_init((yyjson_val*)obj->u.ival, &it);
+    yyjson_val* key_val;
+    size_t      i = 0;
+    while ((key_val = yyjson_obj_iter_next(&it))) {
+        if (i == index) {
+            return json_view_immutable((yyjson_doc*)obj->doc.idoc,
+                                       yyjson_obj_iter_get_val(key_val));
+        }
+        i++;
+    }
+    return NULL;
 }

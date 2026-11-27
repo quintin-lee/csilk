@@ -91,16 +91,8 @@ set(CSILK_TEST_SUPPORT_SOURCES
 # ── JSON Module (yyjson fast serialization engine) ──────────────────────
 set(CSILK_JSON_SOURCES
     src/core/json/json_internal.c
-    src/core/json/json_factory.c
-    src/core/json/json_object.c
-    src/core/json/json_array.c
+    src/core/json/json_doc.c
     src/core/json/json_access.c
-    src/core/json/json_type.c
-    src/core/json/json_parse.c
-    src/core/json/json_serialize.c
-    src/core/json/json_free.c
-    src/core/json/json_copy.c
-    src/core/json/json_iterate.c
     src/core/json/json_mutate.c
 )
 
