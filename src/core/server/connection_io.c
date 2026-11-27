@@ -269,7 +269,9 @@ on_read(csilk_io_stream_t* stream, ssize_t nread, const csilk_io_buf_t* buf)
             process_tls_read(client);
         } else if (client->ctx.is_websocket) {
             csilk_conn_set_state(client, CSILK_CONN_STREAMING);
-            csilk_ws_parse_frame(&client->ctx, (const uint8_t*)base, (size_t)nread);
+            if (client->server && client->server->ws_parse_cb) {
+                client->server->ws_parse_cb(&client->ctx, (const uint8_t*)base, (size_t)nread);
+            }
         } else {
             csilk_conn_set_state(client, CSILK_CONN_READING);
 

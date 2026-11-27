@@ -38,13 +38,11 @@
  */
 
 #include "csilk/reflection/reflect.h"
-#include "csilk/core/server/server.h"
 
 #include <stdio.h>
 #include "csilk/core/sync.h"
 #include <stdlib.h>
 #include <string.h>
-#include <csilk/core/sys_io.h>
 
 static csilk_reflect_entry_t g_registry[MAX_REG_STRUCTS];
 static size_t                g_registry_count = 0;

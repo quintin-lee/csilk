@@ -173,6 +173,7 @@ csilk_otlp_exporter_export_grpc(csilk_otlp_exporter_t* exp, uint8_t* out_buf, si
         return -1;
     }
 
+#ifdef CSILK_HAS_GRPC
     char json_buf[4096] = {0};
     int  count = csilk_otlp_exporter_export_json(exp, json_buf, sizeof(json_buf));
     if (count <= 0) {
@@ -182,6 +183,12 @@ csilk_otlp_exporter_export_grpc(csilk_otlp_exporter_t* exp, uint8_t* out_buf, si
     size_t json_len = strlen(json_buf);
     int frame_len = csilk_grpc_frame_encode((const uint8_t*)json_buf, json_len, out_buf, buf_size);
     return frame_len;
+#else
+    (void)exp;
+    (void)out_buf;
+    (void)buf_size;
+    return -1;
+#endif
 }
 
 static void

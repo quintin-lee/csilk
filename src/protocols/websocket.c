@@ -108,6 +108,11 @@ csilk_ws_handshake(csilk_ctx_t* c)
     if (client) {
         csilk_conn_set_state(client, CSILK_CONN_STREAMING);
     }
+    csilk_server_t* server = csilk_ctx_get_server(c);
+    if (server) {
+        server->ws_parse_cb = csilk_ws_parse_frame;
+        server->ws_close_cb = csilk_ws_close;
+    }
 }
 
 /** @brief Write completion callback for WebSocket frame sends.

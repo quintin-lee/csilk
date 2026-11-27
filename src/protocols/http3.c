@@ -2,9 +2,9 @@
  * @file http3.c
  * @brief HTTP/3 (RFC 9114) QUIC transport implementation via ngtcp2 + nghttp3.
  *
- * Implements the csilk_quic_transport_t vtable (from server.h) against
- * system ngtcp2 and nghttp3 libraries. Guarded by CSILK_HAS_NGTCP2 so the
- * file compiles cleanly even when ngtcp2 is unavailable (fail-closed).
+ * Implements the HTTP/3 transport against system ngtcp2 and nghttp3 libraries.
+ * Guarded by CSILK_HAS_NGTCP2 so the file compiles cleanly even when ngtcp2
+ * is unavailable (fail-closed).
  *
  * The OpenSSL QUIC crypto adapter (ngtcp2_crypto_ossl) drives the TLS 1.3
  * handshake through OpenSSL's SSL_set_quic_tls_cbs(). The ngtcp2 crypto
@@ -25,6 +25,7 @@
 #include "core/internal/srv_impl.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,6 +41,8 @@
 #include <openssl/ssl.h>
 #include <openssl/rand.h>
 #endif /* CSILK_HAS_NGTCP2 */
+
+static _Thread_local char g_h3_worker_recv_buf[65536];
 
 #ifdef CSILK_HAS_NGTCP2
 
@@ -1344,60 +1347,180 @@ csilk_h3_quic_tls_new(SSL_CTX* ssl_ctx)
 }
 #endif /* CSILK_HAS_NGTCP2 */
 
-/* ===================================================================
- * vtable registration (matches csilk_quic_transport_t from server.h)
- * =================================================================== */
-
-static int
-_h3_on_stream_recv(csilk_server_t* server, int64_t stream_id, const uint8_t* data, size_t len)
+#ifndef CSILK_USE_URING
+static void
+on_worker_h3_uv_alloc(csilk_io_handle_t* handle, size_t suggested_size, csilk_io_buf_t* buf)
 {
-    if (!server || !server->h3_state || !server->h3_state->transport) {
-        return 0;
-    }
-#ifdef CSILK_HAS_NGTCP2
-    csilk_h3_transport_t* t = (csilk_h3_transport_t*)server->h3_state->transport;
-    for (int i = 0; i < t->conn_count; i++) {
-        struct csilk_h3_conn_s* c = t->conns[i];
-        if (c && c->nghttp3_conn) {
-            nghttp3_ssize consumed =
-                nghttp3_conn_read_stream(c->nghttp3_conn, stream_id, data, len, 0);
-            if (consumed > 0) {
-                nghttp3_conn_add_write_offset(c->nghttp3_conn, stream_id, (size_t)consumed);
-                return 0;
-            }
-        }
-    }
-#else
-    (void)stream_id;
-    (void)data;
-    (void)len;
-#endif
-    return 0;
+    (void)handle;
+    (void)suggested_size;
+    buf->base = g_h3_worker_recv_buf;
+    buf->len = sizeof(g_h3_worker_recv_buf);
 }
 
-static int
-_h3_on_stream_send(csilk_server_t* server, int64_t stream_id, const uint8_t* data, size_t len)
+static void
+on_worker_h3_uv_recv(csilk_io_udp_t*        handle,
+                     ssize_t                nread,
+                     const csilk_io_buf_t*  buf,
+                     const struct sockaddr* addr,
+                     unsigned int           flags)
 {
-    if (!server || !server->h3_state || !server->h3_state->transport) {
+    (void)flags;
+    if (nread <= 0 || !addr || !buf || !buf->base) {
+        return;
+    }
+    worker_pool_t* wp = (worker_pool_t*)handle->data;
+    if (!wp || !wp->h3_transport) {
+        return;
+    }
+    socklen_t addrlen =
+        (addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+    _h3_process_datagram((struct csilk_h3_transport_s*)wp->h3_transport,
+                         (const uint8_t*)buf->base,
+                         (size_t)nread,
+                         addr,
+                         addrlen);
+}
+#else
+static void
+on_worker_h3_recv_uring(csilk_io_udp_t*        handle,
+                        size_t                 nread,
+                        const csilk_io_buf_t*  buf,
+                        const struct sockaddr* addr)
+{
+    if (nread == 0 || !addr || !buf || !buf->base) {
+        return;
+    }
+    worker_pool_t* wp = (worker_pool_t*)handle->data;
+    if (!wp || !wp->h3_transport) {
+        return;
+    }
+    socklen_t addrlen =
+        (addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+    _h3_process_datagram((struct csilk_h3_transport_s*)wp->h3_transport,
+                         (const uint8_t*)buf->base,
+                         nread,
+                         addr,
+                         addrlen);
+}
+#endif
+
+static int
+_h3_worker_init_cb(csilk_server_t* server, void* wp_arg, csilk_io_loop_t* loop)
+{
+    worker_pool_t* wp = (worker_pool_t*)wp_arg;
+    if (!server || !server->h3_state || server->h3_state->port <= 0 || !wp || !loop) {
         return 0;
     }
-#ifdef CSILK_HAS_NGTCP2
-    csilk_h3_transport_t* t = (csilk_h3_transport_t*)server->h3_state->transport;
-    for (int i = 0; i < t->conn_count; i++) {
-        struct csilk_h3_conn_s* c = t->conns[i];
-        if (c && c->nghttp3_conn) {
-            csilk_h3_session_send_body(c->nghttp3_conn, stream_id, data, len);
-            _h3_flush_http3_to_quic(c);
-            _h3_send_quic_packets(t, c);
-            return 0;
-        }
+#ifndef _WIN32
+    int fd;
+#ifdef __APPLE__
+    fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (fd >= 0) {
+        int flags = fcntl(fd, F_GETFL, 0);
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
     }
 #else
-    (void)stream_id;
-    (void)data;
-    (void)len;
+    fd = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
 #endif
+    if (fd < 0) {
+        CSILK_LOG_E("Server: worker %d failed to create HTTP/3 UDP socket: %s",
+                    wp->worker_index,
+                    strerror(errno));
+        return -1;
+    }
+
+    int on = 1;
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
+#ifdef SO_REUSEPORT
+    setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, &on, sizeof(on));
+#endif
+
+#if defined(__linux__) && defined(SO_INCOMING_CPU)
+    if (wp->worker_index >= 0) {
+        long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+        if (num_cores > 0) {
+            int cpu = (int)(wp->worker_index % num_cores);
+            setsockopt(fd, SOL_SOCKET, SO_INCOMING_CPU, &cpu, sizeof(cpu));
+        }
+    }
+#endif
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)server->h3_state->port);
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        CSILK_LOG_E("Server: worker %d failed to bind HTTP/3 UDP port %d: %s",
+                    wp->worker_index,
+                    server->h3_state->port,
+                    strerror(errno));
+        close(fd);
+        return -1;
+    }
+
+    wp->h3_transport = csilk_h3_worker_transport_new(server, wp, fd);
+    if (!wp->h3_transport) {
+        close(fd);
+        return -1;
+    }
+
+#ifdef CSILK_USE_URING
+    csilk_io_udp_init(loop, &wp->h3_udp_handle);
+    wp->h3_udp_handle.data = wp;
+    csilk_io_udp_open(&wp->h3_udp_handle, fd);
+    csilk_io_udp_recv_start(&wp->h3_udp_handle, on_worker_h3_recv_uring);
+#else
+    csilk_io_udp_init(loop, &wp->h3_udp_handle);
+    wp->h3_udp_handle.data = wp;
+    csilk_io_udp_open(&wp->h3_udp_handle, (csilk_io_os_sock_t)fd);
+    csilk_io_udp_recv_start_raw(&wp->h3_udp_handle, on_worker_h3_uv_alloc, on_worker_h3_uv_recv);
+#endif
+    wp->h3_udp_active = true;
+    CSILK_LOG_I("Server: worker %d listening for HTTP/3 on UDP port %d",
+                wp->worker_index,
+                server->h3_state->port);
     return 0;
+#else
+    return 0;
+#endif
+}
+
+static void
+_h3_worker_stop_cb(void* wp_arg)
+{
+    worker_pool_t* wp = (worker_pool_t*)wp_arg;
+    if (!wp) {
+        return;
+    }
+    if (wp->h3_udp_active) {
+#ifdef CSILK_USE_URING
+        csilk_io_udp_recv_stop(&wp->h3_udp_handle);
+        csilk_io_udp_close(&wp->h3_udp_handle);
+#else
+        csilk_io_udp_recv_stop(&wp->h3_udp_handle);
+        csilk_io_close((csilk_io_handle_t*)&wp->h3_udp_handle, NULL);
+#endif
+        wp->h3_udp_active = false;
+    }
+    if (wp->h3_transport) {
+        csilk_h3_worker_transport_destroy((struct csilk_h3_transport_s*)wp->h3_transport);
+        wp->h3_transport = NULL;
+    }
+}
+
+static void
+_csilk_h3_server_teardown(csilk_server_t* server)
+{
+    if (!server || !server->h3_state) {
+        return;
+    }
+    if (server->h3_state->transport) {
+        csilk_h3_transport_destroy((csilk_h3_transport_t*)server->h3_state->transport);
+        server->h3_state->transport = NULL;
+    }
+    free(server->h3_state);
+    server->h3_state = NULL;
 }
 
 /**
@@ -1414,17 +1537,18 @@ csilk_h3_set_enabled(void* server, int port)
         return -1;
     }
     csilk_server_t* srv = (csilk_server_t*)server;
-    /* csilk_server_set_quic_transport ensures h3_state exists before writing. */
-    static csilk_quic_transport_t h3_vtable = {
-        .name = "ngtcp2",
-        .on_stream_recv = _h3_on_stream_recv,
-        .on_stream_send = _h3_on_stream_send,
-    };
-    csilk_server_set_quic_transport(srv, &h3_vtable);
     if (!srv->h3_state) {
-        return -1;
+        srv->h3_state = calloc(1, sizeof(csilk_h3_state_t));
+        if (!srv->h3_state) {
+            return -1;
+        }
     }
     srv->h3_state->port = port;
+    srv->h3_state->worker_init = _h3_worker_init_cb;
+    srv->h3_state->worker_stop = _h3_worker_stop_cb;
+    srv->h3_state->send_response = csilk_h3_send_response_for_ctx;
+    srv->h3_state->conn_close = csilk_h3_conn_close;
+    _csilk_server_register_teardown(srv, _csilk_h3_server_teardown);
     csilk_h3_transport_t* t = csilk_h3_transport_new(port, NULL, NULL);
     if (t) {
         t->server = srv;

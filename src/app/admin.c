@@ -16,12 +16,17 @@
 #include "csilk/core/internal.h"
 #include "csilk/core/ctx/async.h"
 #include "csilk/core/sync.h"
+#ifdef CSILK_HAS_DB
 #include "csilk/drivers/db.h"
+#endif
+#ifdef CSILK_HAS_AI
 #include "csilk/drivers/ai.h"
+#endif
 #include "csilk/util/flamegraph.h"
 
 /* Weak fallbacks for optional sub-modules (AI, DB) */
 #if defined(__GNUC__) || defined(__clang__)
+#ifdef CSILK_HAS_AI
 __attribute__((weak)) void
 csilk_ai_get_stats(csilk_ai_stats_t* stats)
 {
@@ -39,6 +44,8 @@ csilk_ai_unregister_monitor(void* c)
 {
     (void)c;
 }
+#endif
+#ifdef CSILK_HAS_DB
 __attribute__((weak)) void
 csilk_db_get_stats(csilk_db_stats_t* stats)
 {
@@ -46,6 +53,7 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
         memset(stats, 0, sizeof(*stats));
     }
 }
+#endif
 #endif
 
 /* --- Async flame-graph session state --- */
@@ -293,8 +301,10 @@ admin_stats_handler(csilk_ctx_t* c)
     csilk_json_add_number(root, "avg_latency", avg_latency);
 
     // 2. MQ Stats
-    csilk_mq_stats_t mq_stats;
+    csilk_mq_stats_t mq_stats = {0};
+#ifdef CSILK_HAS_MQ
     csilk_mq_get_stats(csilk_server_get_mq(csilk_ctx_get_server(c)), &mq_stats);
+#endif
 
     csilk_json_t* mq = csilk_json_object();
     csilk_json_add_number(mq, "published", (double)mq_stats.published_total);
@@ -303,8 +313,17 @@ admin_stats_handler(csilk_ctx_t* c)
     csilk_json_add_object(root, "mq", mq);
 
     // 3. AI Stats
-    csilk_ai_stats_t ai_stats;
+#ifdef CSILK_HAS_AI
+    csilk_ai_stats_t ai_stats = {0};
     csilk_ai_get_stats(&ai_stats);
+#else
+    struct {
+        uint64_t requests_total;
+        uint64_t tokens_total;
+        uint64_t errors_total;
+        uint64_t duration_us_total;
+    } ai_stats = {0};
+#endif
 
     csilk_json_t* ai = csilk_json_object();
     csilk_json_add_number(ai, "requests", (double)ai_stats.requests_total);
@@ -318,8 +337,17 @@ admin_stats_handler(csilk_ctx_t* c)
     csilk_json_add_object(root, "ai", ai);
 
     // 4. DB Stats
-    csilk_db_stats_t db_stats;
+#ifdef CSILK_HAS_DB
+    csilk_db_stats_t db_stats = {0};
     csilk_db_get_stats(&db_stats);
+#else
+    struct {
+        uint64_t queries_total;
+        uint64_t execs_total;
+        uint64_t errors_total;
+        uint64_t duration_us_total;
+    } db_stats = {0};
+#endif
 
     csilk_json_t* db = csilk_json_object();
     csilk_json_add_number(db, "queries", (double)db_stats.queries_total);
@@ -459,10 +487,14 @@ admin_monitor_on_close(void* arg)
 {
     admin_monitor_cleanup_t* cl = (admin_monitor_cleanup_t*)arg;
     if (cl) {
+#ifdef CSILK_HAS_MQ
         if (cl->mq) {
             csilk_mq_unregister_monitor(cl->mq, cl->c);
         }
+#endif
+#ifdef CSILK_HAS_AI
         csilk_ai_unregister_monitor(cl->c);
+#endif
         free(cl);
     }
 }
@@ -473,7 +505,10 @@ admin_ws_handler(csilk_ctx_t* c)
 {
     csilk_ws_handshake(c);
     if (csilk_is_websocket(c)) {
-        csilk_mq_t*              mq = csilk_server_get_mq(csilk_ctx_get_server(c));
+        csilk_mq_t* mq = NULL;
+#ifdef CSILK_HAS_MQ
+        mq = csilk_server_get_mq(csilk_ctx_get_server(c));
+#endif
         admin_monitor_cleanup_t* cl = malloc(sizeof(admin_monitor_cleanup_t));
         if (!cl) {
             CSILK_LOG_E("Admin Dashboard: failed to allocate WebSocket cleanup context");
@@ -482,10 +517,13 @@ admin_ws_handler(csilk_ctx_t* c)
         cl->mq = mq;
         cl->c = c;
         csilk_ctx_defer(c, admin_monitor_on_close, cl);
+#ifdef CSILK_HAS_MQ
         csilk_mq_register_monitor(mq, c);
-
+#endif
+#ifdef CSILK_HAS_AI
         // Also monitor AI engine
         csilk_ai_register_monitor(c);
+#endif
 
         CSILK_LOG_I("Admin Dashboard connected via WebSocket");
     }

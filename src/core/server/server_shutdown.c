@@ -94,20 +94,26 @@ close_active_clients(csilk_server_t* server, csilk_io_loop_t* loop)
         csilk_client_t* next = client->next;
         count++;
         if (client->protocol == CSILK_PROTO_HTTP3) {
-            csilk_h3_conn_close(client);
+            if (server->h3_state && server->h3_state->conn_close) {
+                server->h3_state->conn_close(client);
+            }
         } else if (client->ctx.is_websocket) {
             /* The WS close-echo path (csilk_ws_parse_frame opcode 0x8) may
              * already be closing this handle — uv_close() asserts on a
              * handle that is closing, so check first. */
             if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
-                csilk_ws_close(&client->ctx, 1001, "Server stopping");
+                if (server->ws_close_cb) {
+                    server->ws_close_cb(&client->ctx, 1001, "Server stopping");
+                }
                 csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
             }
         } else if (client->ctx.is_sse) {
             /* Send the terminal SSE event, then close with on_close so the
              * client object is recycled — csilk_sse_close() passes a NULL
              * close callback which would strand the client on active list. */
-            csilk_sse_send(&client->ctx, "close", "Server stopping");
+            if (server->sse_send_cb) {
+                server->sse_send_cb(&client->ctx, "close", "Server stopping");
+            }
             if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
                 csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
             }
@@ -165,8 +171,9 @@ on_stop_async(csilk_io_async_t* handle)
         csilk_io_async_send(&server->worker_pools[i].stop_async);
     }
 
-    if (server->worker_pools && server->worker_pools[0].h3_udp_active) {
-        _csilk_worker_stop_h3(&server->worker_pools[0]);
+    if (server->worker_pools && server->worker_pools[0].h3_udp_active && server->h3_state &&
+        server->h3_state->worker_stop) {
+        server->h3_state->worker_stop(&server->worker_pools[0]);
     }
 
     csilk_io_stop(server->loop);
@@ -222,8 +229,9 @@ on_worker_stop_async(csilk_io_async_t* handle)
         csilk_io_close((csilk_io_handle_t*)handle, NULL);
     }
 
-    if (server->worker_pools[worker_idx].h3_udp_active) {
-        _csilk_worker_stop_h3(&server->worker_pools[worker_idx]);
+    if (server->worker_pools[worker_idx].h3_udp_active && server->h3_state &&
+        server->h3_state->worker_stop) {
+        server->h3_state->worker_stop(&server->worker_pools[worker_idx]);
     }
 
     csilk_io_stop(loop);

@@ -158,10 +158,14 @@ test_otlp_batch_exporter_lifecycle(void)
     }
     uint8_t grpc_buf[8192];
     int     grpc_len = csilk_otlp_exporter_export_grpc(exp, grpc_buf, sizeof(grpc_buf));
+#ifdef CSILK_HAS_GRPC
     assert(grpc_len >= 0);
     if (grpc_len > 5) {
         assert(grpc_buf[0] == 0); /* compression flag */
     }
+#else
+    assert(grpc_len == -1);
+#endif
 
     /* Start/stop async worker */
     int rc = csilk_otlp_exporter_start(exp, 100);

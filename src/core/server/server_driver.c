@@ -43,24 +43,3 @@ csilk_server_set_cipher_driver(csilk_server_t* server, csilk_cipher_driver_t* dr
         server->cipher_driver = driver;
     }
 }
-
-/**
- * @brief Set the server's QUIC transport implementation.
- * @param[in] server    Server whose QUIC transport is set.
- * @param[in] transport QUIC transport handle (stored opaquely; may be NULL).
- * @note No-op if server is NULL. The transport is stored as an opaque pointer.
- */
-void
-csilk_server_set_quic_transport(csilk_server_t* server, csilk_quic_transport_t* transport)
-{
-    if (!server) {
-        return;
-    }
-    if (!server->h3_state) {
-        server->h3_state = calloc(1, sizeof(csilk_h3_state_t));
-        if (!server->h3_state) {
-            return;
-        }
-    }
-    server->h3_state->quic_vtable = (void*)transport;
-}

@@ -2,9 +2,8 @@
  * @file http3_internal.h
  * @brief Internal HTTP/3 (QUIC) type definitions and transport abstraction.
  *
- * Defines the stream/connection/transport structs for the v1.2 HTTP/3
- * implementation. The QUIC transport vtable itself lives in
- * csilk/core/server/server.h (csilk_quic_transport_t).
+ * Defines the stream/connection/transport structs for the HTTP/3
+ * implementation.
  *
  * @copyright MIT License
  */

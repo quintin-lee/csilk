@@ -20,7 +20,7 @@
 #include "mq_internal.h"
 #include "csilk/core/sync.h"
 #include "csilk/messaging/mq.h"
-#include "mq_internal.h"
+#include "../core/internal/srv_internal.h"
 
 extern void on_mq_async(csilk_io_async_t* handle);
 
@@ -272,4 +272,49 @@ _csilk_mq_free(csilk_mq_t* mq)
         mq->async_handle.data = mq;
         csilk_io_close((csilk_io_handle_t*)&mq->async_handle, on_mq_close);
     }
+}
+
+static void
+_csilk_mq_server_teardown(csilk_server_t* server)
+{
+    if (!server) {
+        return;
+    }
+    csilk_mq_t* mq = atomic_exchange_explicit(&server->mq, NULL, memory_order_acq_rel);
+    if (mq) {
+        _csilk_mq_free(mq);
+        _csilk_server_drain_loop(server->loop);
+    }
+}
+
+csilk_mq_t*
+csilk_server_get_mq(csilk_server_t* server)
+{
+    if (!server) {
+        return NULL;
+    }
+    csilk_mq_t* mq = atomic_load_explicit(&server->mq, memory_order_acquire);
+    if (!mq) {
+        csilk_mutex_lock(&server->config_mutex);
+        mq = atomic_load_explicit(&server->mq, memory_order_relaxed);
+        if (!mq) {
+            mq = _csilk_mq_new(server->loop);
+            if (mq) {
+                mq->server = server;
+            }
+            atomic_store_explicit(&server->mq, mq, memory_order_release);
+        }
+        csilk_mutex_unlock(&server->config_mutex);
+        if (mq) {
+            _csilk_server_register_teardown(server, _csilk_mq_server_teardown);
+        }
+    }
+    return mq;
+}
+
+csilk_mq_t*
+csilk_ctx_get_mq(csilk_ctx_t* c)
+{
+    csilk_server_t* server = csilk_ctx_get_server(c);
+    return server ? csilk_server_get_mq(server) : NULL;
 }

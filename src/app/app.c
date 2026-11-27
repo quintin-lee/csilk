@@ -38,7 +38,9 @@
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 #include "core/internal/srv_internal.h"
+#ifdef CSILK_HAS_WASM
 #include "csilk/core/plugin/wasm_plugin.h"
+#endif
 #include "app_internal.h"
 
 /** @brief Default HTTP listen port. */
@@ -609,6 +611,7 @@ csilk_app_use(csilk_app_t* app, csilk_handler_t h)
     CSILK_LOG_I("Registered global middleware: %p", (void*)h);
 }
 
+#ifdef CSILK_HAS_WASM
 int
 csilk_app_use_wasm(csilk_app_t* app, csilk_wasm_plugin_t* plugin, const char* func_name)
 {
@@ -622,6 +625,7 @@ csilk_app_use_wasm(csilk_app_t* app, csilk_wasm_plugin_t* plugin, const char* fu
     csilk_app_use(app, mw);
     return 0;
 }
+#endif
 
 /* ---- OpenAPI / Swagger ---- */
 

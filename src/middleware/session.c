@@ -37,6 +37,8 @@ enum { SESSION_TTL = 3600 };
 /** @brief Maximum number of active sessions before LRU eviction. */
 #define SESSION_MAX_DEFAULT 10000
 
+static void _csilk_session_store_free(csilk_server_t* server);
+
 /**
  * @brief Session data item (key-value pair).
  *
@@ -197,6 +199,7 @@ session_store_ensure_server(csilk_server_t* server)
         }
         session_store_initialize(store);
         server->session_store = store;
+        _csilk_server_register_teardown(server, _csilk_session_store_free);
     }
     return store;
 }
@@ -332,7 +335,7 @@ _session_ctx_release(void* ptr)
  * store is NULL (no-op). Must be called after all in-flight contexts have been
  * drained so no context ref outlives the store.
  */
-void
+static void
 _csilk_session_store_free(csilk_server_t* server)
 {
     session_store_t* store = (session_store_t*)server->session_store;

@@ -388,17 +388,6 @@ csilk_ctx_get_server(csilk_ctx_t* c)
 }
 
 /**
- * @brief Get the server's message queue for a context.
- * @param[in] c Request context (may be NULL).
- * @return The message queue, or NULL if c or its server is NULL.
- */
-csilk_mq_t*
-csilk_ctx_get_mq(csilk_ctx_t* c)
-{
-    return (c && c->server) ? csilk_server_get_mq(c->server) : NULL;
-}
-
-/**
  * @brief Report whether the context is asynchronous.
  * @param[in] c Request context (may be NULL).
  * @return 1 if async, 0 otherwise or if c is NULL.

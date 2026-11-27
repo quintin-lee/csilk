@@ -35,11 +35,8 @@
 #include "csilk/core/internal.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/server/hot_reload.h"
-#include "csilk/reflection/reflect.h"
 #include "../internal/srv_internal.h"
 #include "../internal/srv_impl.h"
-#include "csilk/messaging/mq.h"
-#include "csilk/protocols/h3.h"
 
 /* --- Teardown Loop-Drain Bound --- */
 
@@ -75,6 +72,32 @@ _server_free_drain_loop(csilk_io_loop_t* loop)
     for (int i = 0; i < SERVER_FREE_LOOP_DRAIN_MAX && csilk_io_loop_alive(loop); i++) {
         csilk_io_run(loop, CSILK_IO_RUN_NOWAIT);
     }
+}
+
+CSILK_INTERNAL void
+_csilk_server_drain_loop(csilk_io_loop_t* loop)
+{
+    _server_free_drain_loop(loop);
+}
+
+CSILK_INTERNAL void
+_csilk_server_register_teardown(csilk_server_t* server, csilk_server_teardown_fn cb)
+{
+    if (!server || !cb) {
+        return;
+    }
+    csilk_mutex_lock(&server->config_mutex);
+    for (size_t i = 0; i < server->teardown_cb_count; i++) {
+        if (server->teardown_cbs[i] == cb) {
+            csilk_mutex_unlock(&server->config_mutex);
+            return;
+        }
+    }
+    if (server->teardown_cb_count <
+        sizeof(server->teardown_cbs) / sizeof(server->teardown_cbs[0])) {
+        server->teardown_cbs[server->teardown_cb_count++] = cb;
+    }
+    csilk_mutex_unlock(&server->config_mutex);
 }
 
 /* --- Centralized Atomic Initializers --- */
@@ -141,7 +164,6 @@ _csilk_server_atomics_init(csilk_server_t* s, csilk_router_t* router)
 csilk_server_t*
 csilk_server_new(csilk_router_t* router)
 {
-    csilk_reflect_init();
     csilk_arena_init();
     csilk_server_t* s = calloc(1, sizeof(csilk_server_t));
     if (!s) {
@@ -325,19 +347,13 @@ csilk_server_free(csilk_server_t* server)
         server->worker_barrier = NULL;
     }
 
-    csilk_mq_t* mq = atomic_load_explicit(&server->mq, memory_order_acquire);
-    if (mq) {
-        _csilk_mq_free(mq);
-        atomic_store_explicit(&server->mq, NULL, memory_order_release);
-        _server_free_drain_loop(server->loop);
-    }
-
-    if (server->h3_state) {
-        if (server->h3_state->transport) {
-            csilk_h3_transport_destroy((csilk_h3_transport_t*)server->h3_state->transport);
+    /* Run registered subsystem teardowns (MQ, H3, WS rooms, session store, OTLP)
+     * in LIFO order before draining worker pools and destroying mutexes. */
+    while (server->teardown_cb_count > 0) {
+        csilk_server_teardown_fn cb = server->teardown_cbs[--server->teardown_cb_count];
+        if (cb) {
+            cb(server);
         }
-        free(server->h3_state);
-        server->h3_state = NULL;
     }
 
     free(server->spa_doc_root);
@@ -389,9 +405,6 @@ csilk_server_free(csilk_server_t* server)
     csilk_mutex_destroy(&server->hook_mutex);
     csilk_mutex_destroy(&server->config_mutex);
 
-    _csilk_ws_room_mgr_free(server);
-    _csilk_session_store_free(server);
-    _csilk_otlp_state_free(server);
     csilk_dev_hot_reload_stop(server);
     _csilk_plugin_cleanup_server(server);
     csilk_server_wait_grace_period(server);
@@ -712,8 +725,8 @@ csilk_server_run(csilk_server_t* server, int port)
     _csilk_worker_init_read_buf_pool(&server->worker_pools[0]);
     _csilk_worker_init_dispatch(&server->worker_pools[0], server->loop);
 
-    if (server->h3_state && server->h3_state->port > 0) {
-        _csilk_worker_init_h3(server, &server->worker_pools[0], server->loop);
+    if (server->h3_state && server->h3_state->port > 0 && server->h3_state->worker_init) {
+        server->h3_state->worker_init(server, &server->worker_pools[0], server->loop);
     }
 
     if (server->config.tcp_keepalive > 0) {

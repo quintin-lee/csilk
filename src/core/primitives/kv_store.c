@@ -61,8 +61,10 @@ csilk_set_ex(csilk_ctx_t* c, const char* key, void* value, void (*free_fn)(void*
 
     /* Limit storage items to prevent excessive allocation in a single request */
     if (count >= CSILK_MAX_STORAGE) {
-        CSILK_LOG_E(
-            "Context: storage limit reached (%d items) for key: %s", CSILK_MAX_STORAGE, key);
+        fprintf(stderr,
+                "Context: storage limit reached (%d items) for key: %s\n",
+                CSILK_MAX_STORAGE,
+                key);
         return;
     }
 

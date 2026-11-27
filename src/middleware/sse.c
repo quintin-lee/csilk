@@ -81,6 +81,11 @@ csilk_sse_init(csilk_ctx_t* c)
     csilk_ctx_set_sse(c, 1);
     c->response.body_len = 0;
 
+    csilk_server_t* server = csilk_ctx_get_server(c);
+    if (server) {
+        server->sse_send_cb = csilk_sse_send;
+    }
+
     void* internal_client = _csilk_get_internal_client(c);
     if (!internal_client) {
         CSILK_LOG_E("SSE: failed to initialize - internal client stream missing for request %p",

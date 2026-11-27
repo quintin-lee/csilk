@@ -33,14 +33,6 @@ main(void)
     printf("HTTP/3 disabled (default) — verifying fail-closed stubs\n");
 #endif
 
-    /*
-     * Verify the csilk_quic_transport_t vtable type is available.
-     * The actual QUIC transport implementation is v1.2+; this test
-     * confirms the conditional-compile skeleton compiles and links.
-     */
-    csilk_quic_transport_t* transport = NULL;
-    assert(transport == NULL);
-
     printf("test_http3_skeleton: PASS\n");
     return 0;
 }

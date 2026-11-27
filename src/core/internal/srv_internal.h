@@ -218,6 +218,9 @@ typedef struct csilk_runtime_config_s {
     _Atomic(unsigned int) backpressure_max_latency_us;
 } csilk_runtime_config_t;
 
+/** @brief Teardown callback registered by optional subsystems attached to a server. */
+typedef void (*csilk_server_teardown_fn)(csilk_server_t* server);
+
 /**
  * @brief HTTP/3 (QUIC) transport state, consolidated on the server.
  *
@@ -226,10 +229,13 @@ typedef struct csilk_runtime_config_s {
  * freed at server teardown. Worker-local transports live on worker_pool_t.
  */
 typedef struct {
-    int   port;        /**< Configured HTTP/3 UDP port (e.g. 443), 0 = disabled. */
-    void* transport;   /**< Shared csilk_h3_transport_t* (main loop; NULL until enabled). */
-    void* ssl_ctx;     /**< Shared OpenSSL SSL_CTX* for QUIC across workers. */
-    void* quic_vtable; /**< QUIC transport vtable (API stub; actual H3 I/O uses transport). */
+    int   port;      /**< Configured HTTP/3 UDP port (e.g. 443), 0 = disabled. */
+    void* transport; /**< Shared csilk_h3_transport_t* (main loop; NULL until enabled). */
+    void* ssl_ctx;   /**< Shared OpenSSL SSL_CTX* for QUIC across workers. */
+    int (*worker_init)(csilk_server_t* server, void* wp, csilk_io_loop_t* loop);
+    void (*worker_stop)(void* wp);
+    void (*send_response)(csilk_ctx_t* c);
+    void (*conn_close)(csilk_client_t* client);
 } csilk_h3_state_t;
 
 /**
@@ -277,6 +283,11 @@ struct csilk_server_s {
     void* session_store; /**< Per-server session store (session_store_t*, NULL until first use). */
     void* otlp_state;    /**< Per-server OTLP tracer state (otlp_state_t*, NULL until first use). */
     void* mcp_server;    /**< Per-server MCP server (csilk_mcp_server_t*, NULL unless bind_app). */
+    csilk_server_teardown_fn teardown_cbs[16]; /**< Subsystem teardown callbacks (LIFO). */
+    size_t                   teardown_cb_count;
+    void (*ws_parse_cb)(csilk_ctx_t* c, const uint8_t* data, size_t len);
+    void (*ws_close_cb)(csilk_ctx_t* c, uint16_t code, const char* reason);
+    int (*sse_send_cb)(csilk_ctx_t* c, const char* event, const char* data);
 };
 
 #define CSILK_H2_INLINE_BUCKETS 16
@@ -426,9 +437,11 @@ CSILK_INTERNAL void _csilk_reload_try_reclaim(csilk_server_t* server);
 /** @brief Destroy the reload manager and force reclamation of all remaining records. */
 CSILK_INTERNAL void _csilk_reload_mgr_free(csilk_server_t* server);
 
-/** @brief Free the WebSocket room manager owned by a server instance. */
-CSILK_INTERNAL void _csilk_ws_room_mgr_free(csilk_server_t* server);
-CSILK_INTERNAL void _csilk_session_store_free(csilk_server_t* server);
-CSILK_INTERNAL void _csilk_otlp_state_free(csilk_server_t* server);
+/** @brief Register a subsystem teardown callback on @p server (deduplicated, LIFO). */
+CSILK_INTERNAL void _csilk_server_register_teardown(csilk_server_t*          server,
+                                                    csilk_server_teardown_fn cb);
+
+/** @brief Pump an event loop nowait up to the bounded teardown drain limit. */
+CSILK_INTERNAL void _csilk_server_drain_loop(csilk_io_loop_t* loop);
 
 #endif /* CSILK_SERVER_INTERNAL_H */

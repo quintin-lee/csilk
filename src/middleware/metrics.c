@@ -28,7 +28,12 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
+#ifdef CSILK_HAS_DB
 #include "csilk/drivers/db.h"
+#endif
+#ifdef CSILK_HAS_AI
+#include "csilk/drivers/ai.h"
+#endif
 
 /** @brief Maximum number of metrics entries tracked. */
 enum { CSILK_METRICS_MAX_ENTRIES = 1024 };
@@ -560,6 +565,7 @@ csilk_metrics_handler(csilk_ctx_t* c)
 
     /* --- Part 6: Sub-system Statistics (Optional) --- */
 
+#ifdef CSILK_HAS_MQ
     /* MQ Stats */
     csilk_mq_stats_t mq;
     csilk_mq_get_stats(csilk_server_get_mq(csilk_ctx_get_server(c)), &mq);
@@ -580,7 +586,9 @@ csilk_metrics_handler(csilk_ctx_t* c)
                       "csilk_mq_queue_depth %llu\n",
                       (unsigned long long)mq.queue_depth);
     }
+#endif
 
+#ifdef CSILK_HAS_AI
     /* AI Stats */
     csilk_ai_stats_t ai;
     csilk_ai_get_stats(&ai);
@@ -601,7 +609,9 @@ csilk_metrics_handler(csilk_ctx_t* c)
                       "csilk_ai_errors_total %llu\n",
                       (unsigned long long)ai.errors_total);
     }
+#endif
 
+#ifdef CSILK_HAS_DB
     /* DB Stats */
     csilk_db_stats_t db;
     csilk_db_get_stats(&db);
@@ -622,6 +632,7 @@ csilk_metrics_handler(csilk_ctx_t* c)
                       "csilk_db_errors_total %llu\n",
                       (unsigned long long)db.errors_total);
     }
+#endif
 
     /* Set response headers and body */
     csilk_set_header(c, "Content-Type", "text/plain; version=0.0.4");

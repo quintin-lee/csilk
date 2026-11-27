@@ -16,7 +16,6 @@
 #include "../primitives/header_map.h"
 #include "csilk/core/internal.h"
 #include "csilk/core/http/h2.h"
-#include "csilk/protocols/h3.h"
 
 /* --- Status text --- */
 
@@ -238,7 +237,9 @@ _csilk_send_response(csilk_ctx_t* c)
     }
 
     if (client->protocol == CSILK_PROTO_HTTP3) {
-        csilk_h3_send_response_for_ctx(c);
+        if (client->server && client->server->h3_state && client->server->h3_state->send_response) {
+            client->server->h3_state->send_response(c);
+        }
         return;
     }
 

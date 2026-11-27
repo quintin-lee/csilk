@@ -249,7 +249,9 @@ process_tls_read(csilk_client_t* client)
         }
 
         if (client->ctx.is_websocket) {
-            csilk_ws_parse_frame(&client->ctx, (const uint8_t*)buf, (size_t)n);
+            if (client->server && client->server->ws_parse_cb) {
+                client->server->ws_parse_cb(&client->ctx, (const uint8_t*)buf, (size_t)n);
+            }
         } else if (client->protocol == CSILK_PROTO_HTTP2) {
             if (csilk_h2_process_data(client, (const uint8_t*)buf, (size_t)n) != 0) {
                 CSILK_LOG_E("TLS: HTTP/2 processing error");

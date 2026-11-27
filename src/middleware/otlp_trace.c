@@ -26,6 +26,8 @@
 #define CSILK_MAX_TRACE_DEPTH 16
 #define CSILK_OTLP_SIDECAR_CAP 1024
 
+static void _csilk_otlp_state_free(csilk_server_t* server);
+
 typedef struct {
     char trace_id[33];
     char span_id[17];
@@ -131,6 +133,7 @@ _otlp_state_ensure_server(csilk_server_t* server)
         atomic_init(&st->total_spans, 0);
         csilk_once_init(&st->init_once);
         server->otlp_state = st;
+        _csilk_server_register_teardown(server, _csilk_otlp_state_free);
     }
     /* Initialize this server's buffers (buffer/sidecar only; hooks stay global). */
     csilk_mutex_init(&st->buffer_mutex);
@@ -164,7 +167,7 @@ _otlp_state_for_ctx(csilk_ctx_t* c)
  * @brief Free a server's per-server OTLP tracer state. Called from
  * csilk_server_free(). Frees the span ring buffer and sidecar attributes.
  */
-void
+static void
 _csilk_otlp_state_free(csilk_server_t* server)
 {
     otlp_state_t* st = (otlp_state_t*)server->otlp_state;

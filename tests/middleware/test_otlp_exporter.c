@@ -59,9 +59,13 @@ test_otlp_exporter_export_grpc()
     uint8_t grpc_buf[2048] = {0};
     int     frame_len = csilk_otlp_exporter_export_grpc(exp, grpc_buf, sizeof(grpc_buf));
 
+#ifdef CSILK_HAS_GRPC
     assert(frame_len > 5);
     /* Verify 5-byte gRPC prefix header: Compressed-Flag = 0 */
     assert(grpc_buf[0] == 0x00);
+#else
+    assert(frame_len == -1);
+#endif
 
     csilk_otlp_exporter_free(exp);
     printf("test_otlp_exporter_export_grpc: PASS\n");
