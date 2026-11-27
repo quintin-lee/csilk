@@ -603,10 +603,41 @@ void custom_error_handler(csilk_ctx_t* c) {
 
 ---
 
+## 非阻塞处理器与异步卸载
+
+由于 `_csilk_dispatch_request()` 会在所属 Worker 的 I/O 事件循环线程上同步执行中间件与路由处理链，路由处理器**禁止**在事件循环线程内执行阻塞 I/O（如同步网络/数据库调用、大文件阻塞读写）或长时间 CPU 密集计算，否则会阻塞同一 Worker 下的所有连接。
+
+对于重计算或阻塞型任务，应使用 `csilk_async_op_begin()` 与 `csilk_async_op_complete()` 将任务卸载到后台线程/线程池；该机制会自动启用异步模式、绑定防 ABA 代际租约与可选超时，并在任务完成后将回调安全派发回原 Worker 事件循环：
+
+```c
+#include "csilk/core/ctx/async.h"
+
+static void on_job_done(csilk_ctx_t* c, void* result) {
+    char* payload = (char*)result;
+    csilk_string(c, CSILK_STATUS_OK, payload ? payload : "ok");
+    free(payload);
+    _csilk_send_response(c);
+}
+
+static void heavy_route_handler(csilk_ctx_t* c) {
+    csilk_async_op_t* op = csilk_async_op_begin(c, 5000, on_job_done, NULL, NULL);
+    if (!op) {
+        csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "async init failed");
+        return;
+    }
+    /* 将 op 投递至后台线程池；后台完成后调用 csilk_async_op_complete(op, res)。 */
+}
+```
+
+若使用自定义的后台线程集成模式，可在事件循环线程先调用 `csilk_ctx_set_async(c, 1)` 与 `csilk_ctx_acquire_async(c)`，后台完成后再通过 `csilk_dispatch(c, cb, arg)` 切回原 Worker 线程校验 `csilk_async_token_validate()`、发送响应并释放 `csilk_ctx_release_async()`。
+
+---
+
 ## 最佳实践 (最佳实践)
 
 | 实践 | 说明 |
 |:-----|------|
+| **MUST NOT** 在事件循环线程中阻塞或执行重计算 | 使用 `csilk_async_op_begin()` / `csilk_dispatch()` 卸载至后台线程 |
 | **MUST** 使用 `csilk_next(c)` 传递请求 | 中间件链必需步骤 |
 | **SHOULD** 避免在热路径中 `malloc` | 使用 Arena 或预分配 |
 | **SHOULD** 在 Recovery Handler 中清理资源 | 防止泄漏 |

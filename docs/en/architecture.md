@@ -154,6 +154,9 @@ The framework is built on `libuv` (default) or `io_uring` (optional, Linux-only 
   - **Encrypted read** -> `on_read` -> `BIO_write` -> `SSL_read` -> `llhttp_execute` / `csilk_h2_process_data`
   - **Encrypted write** -> `SSL_write` -> `BIO_read` -> `uv_write`
 
+> [!IMPORTANT]
+> **Non-Blocking Handler Convention**: `_csilk_dispatch_request()` invokes the matched middleware and route handler chain **synchronously** on the worker's I/O event-loop thread. Any CPU-intensive computation or blocking I/O inside a synchronous handler stalls all connections owned by that worker. Handlers performing heavy or blocking work **MUST** offload execution to a background thread/pool via `csilk_async_op_begin()` + `csilk_async_op_complete()` (or `csilk_ctx_set_async()` + `csilk_ctx_acquire_async()` + `csilk_dispatch()`).
+
 ```mermaid
 %%{init: {
   'theme': 'base',

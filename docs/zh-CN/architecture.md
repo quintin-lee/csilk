@@ -153,6 +153,9 @@ target_link_libraries(my_service PRIVATE csilk::http csilk::tls)
   - **加密读取** -> `on_read` -> `BIO_write` -> `SSL_read` -> `llhttp_execute` / `csilk_h2_process_data`
   - **加密写入** -> `SSL_write` -> `BIO_read` -> `uv_write`
 
+> [!IMPORTANT]
+> **非阻塞处理器约定**：`_csilk_dispatch_request()` 会在所属 Worker 的 I/O 事件循环线程上**同步**执行中间件与路由处理链。任何 CPU 密集型计算或阻塞 I/O 若直接放在同步 handler 中，都会阻塞同一 Worker 上的所有并发连接；此类重任务**必须**通过 `csilk_async_op_begin()` + `csilk_async_op_complete()`（或底层 `csilk_ctx_set_async()` + `csilk_ctx_acquire_async()` + `csilk_dispatch()`）卸载到后台线程/线程池执行，再回到事件循环安全回写响应。
+
 ```mermaid
 %%{init: {
   'theme': 'base',

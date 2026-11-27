@@ -275,6 +275,10 @@ csilk_server_config_t config = {
 | `keep_alive_timeout_ms` | 5000 | 3000~5000 | 高并发下缩短以释放资源 |
 | `tcp_nodelay` | 1 | **保持启用** | 禁用 Nagle 算法，降低延迟 |
 
+### 3.4 处理器非阻塞约束
+
+`_csilk_dispatch_request()` 在 Worker 的 I/O 事件循环线程上同步执行整个中间件与路由处理链。任何 CPU 密集型计算或阻塞型 I/O（如同步磁盘、数据库或外部 HTTP 调用）**MUST NOT** 直接占用事件循环线程，应通过 `csilk_async_op_begin()` + `csilk_async_op_complete()` 或 `csilk_ctx_set_async()` + `csilk_dispatch()` 卸载到后台线程池执行，以保持 P99 ≤ 5ms 尾延迟。
+
 ---
 
 ## 4. 运行时监控与诊断
@@ -349,6 +353,7 @@ csilk 支持两种 io_uring 使用方式：
 - [ ] Arena 块大小根据请求特征调整
 - [ ] `tcp_nodelay` 已启用（默认）
 - [ ] 生产环境禁用 DEBUG_ARENA
+- [ ] CPU 密集型与阻塞 I/O 任务已通过 `csilk_async_op_begin()` / `csilk_dispatch()` 异步卸载
 - [ ] perf / 火焰图已配置（生产可选开启）
 
 ---

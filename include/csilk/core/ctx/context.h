@@ -7,7 +7,7 @@
  * read/write access to the request, response, path parameters, arena,
  * storage, and connection state.
  *
- * @version 0.5.2
+ * @version 1.2.0
  * @copyright MIT License
  */
 
@@ -376,8 +376,13 @@ void csilk_set_status(csilk_ctx_t* c, int status);
  *
  * When async mode is enabled the framework will NOT automatically flush the
  * response after the handler chain returns.  The handler is responsible for
- * calling csilk_response_write / csilk_response_end at a later time (e.g.,
- * after an async I/O operation completes).
+ * calling csilk_response_write / csilk_response_end (or _csilk_send_response
+ * via csilk_async_op_complete() / csilk_dispatch()) at a later time (e.g.,
+ * after an async I/O or offloaded CPU operation completes).
+ *
+ * Prefer csilk_async_op_begin() (which sets async mode, pins the connection
+ * generation tag, and arms an optional timeout) when offloading blocking work
+ * from a synchronous route handler so the worker event loop stays non-blocking.
  *
  * @param c         The request context.
  * @param is_async  1 to enable async mode, 0 to disable (default).
@@ -454,10 +459,14 @@ int csilk_ctx_is_closed(csilk_ctx_t* c);
 
 /**
  * @brief Dispatch a callback to be executed on the event loop thread owning this context.
- * 
- * This allows background threads (e.g., Python asyncio threads) to safely execute
- * code on the main I/O event loop (libuv or io_uring) to send responses.
- * 
+ *
+ * This allows background threads (e.g., worker pools or Python asyncio threads)
+ * to safely execute code on the owning I/O event loop (libuv or io_uring) to
+ * send responses without blocking the event loop during heavy computation or
+ * blocking I/O. Acquire a lease with csilk_ctx_acquire_async() (or use
+ * csilk_async_op_begin() / csilk_async_op_complete()) to keep the context alive
+ * and detect stale/closed connections before touching @p c inside @p cb.
+ *
  * @param c The request context.
  * @param cb The callback function to execute.
  * @param arg Opaque argument passed to the callback.

@@ -83,8 +83,14 @@ csilk_abort(csilk_ctx_t* c)
 /** @brief Dispatch the fully parsed request to the router and middleware chain.
  *
  * Triggers request hooks, executes the router match, invokes the handler
- * chain, and decides whether to send the response synchronously or defer
- * (for async handlers or streaming responses).
+ * chain synchronously on the owning worker's I/O event-loop thread, and decides
+ * whether to send the response immediately or defer (when `c->is_async` is set
+ * for async handlers or streaming responses).
+ *
+ * @note Because execution runs directly on the worker event loop, CPU-intensive
+ *       or blocking handlers will stall sibling connections on the same worker
+ *       and MUST offload heavy work via csilk_async_op_begin() or
+ *       csilk_ctx_set_async() + csilk_dispatch().
  *
  * @param c The request context populated by the HTTP parser. */
 CSILK_INTERNAL void

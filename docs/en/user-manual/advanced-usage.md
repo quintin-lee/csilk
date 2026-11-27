@@ -655,10 +655,41 @@ void custom_error_handler(csilk_ctx_t* c) {
 
 ---
 
+## Non-Blocking Handlers & Async Offloading
+
+Because `_csilk_dispatch_request()` executes the middleware and route handler chain synchronously on the owning worker's I/O event-loop thread, handlers **MUST NOT** perform blocking I/O (e.g., synchronous DB/network calls, heavy disk reads) or long-running CPU computation inline. Blocking the event loop stalls all other connections serviced by that worker.
+
+Offload heavy or blocking work to a background thread/pool using `csilk_async_op_begin()` and `csilk_async_op_complete()`, which marks `is_async = 1`, tracks the connection generation against ABA/UAF, arms an optional timeout, and safely marshals completion back onto the owning worker thread:
+
+```c
+#include "csilk/core/ctx/async.h"
+
+static void on_job_done(csilk_ctx_t* c, void* result) {
+    char* payload = (char*)result;
+    csilk_string(c, CSILK_STATUS_OK, payload ? payload : "ok");
+    free(payload);
+    _csilk_send_response(c);
+}
+
+static void heavy_route_handler(csilk_ctx_t* c) {
+    csilk_async_op_t* op = csilk_async_op_begin(c, 5000, on_job_done, NULL, NULL);
+    if (!op) {
+        csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "async init failed");
+        return;
+    }
+    /* Enqueue `op` to a background thread pool; worker calls csilk_async_op_complete(op, res). */
+}
+```
+
+For custom background workers without `csilk_async_op_t`, call `csilk_ctx_set_async(c, 1)` + `csilk_ctx_acquire_async(c)` on the handler thread, then marshal response finalization back to the owning worker loop with `csilk_dispatch(c, cb, arg)` (validating the token via `csilk_async_token_validate()` and releasing via `csilk_ctx_release_async()`).
+
+---
+
 ## Best Practices (最佳实践)
 
 | 实践 | 说明 |
 |:-----|------|
+| **MUST NOT** 在事件循环线程中阻塞或运行 CPU 重任务 | 使用 `csilk_async_op_begin()` / `csilk_dispatch()` 卸载至后台线程池 |
 | **MUST** 使用 `csilk_next(c)` 传递请求 | 中间件链必需步骤 |
 | **SHOULD** 避免在热路径中 `malloc` | 使用 Arena 或预分配 |
 | **SHOULD** 在 Recovery Handler 中清理资源 | 防止泄漏 |
