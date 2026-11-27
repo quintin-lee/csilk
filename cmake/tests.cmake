@@ -484,22 +484,27 @@ endforeach()
 # Standalone core tests registered outside the list loop
 # plugin.h pulls in server.h -> router.h -> context.h -> sys_io.h, which needs
 # <uv.h> on the libuv backend. These dlopen test plugins are the only targets
-# with no library dependencies, so they must link csilk::libuv explicitly to
-# inherit its include directories (e.g. Homebrew's /opt/homebrew/include on
-# macOS, where uv.h is not on the default include path).
+# with no library dependencies, so they must inherit csilk::libuv's include
+# directories (e.g. Homebrew's /opt/homebrew/include on macOS, where uv.h is
+# not on the default include path). In native io_uring builds csilk::libuv is
+# not defined at all and sys_io.h does not include <uv.h>, so guard on TARGET.
 add_library(csilk_test_plugin SHARED tests/core/test_plugin_mod.c)
 set_target_properties(csilk_test_plugin PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
     POSITION_INDEPENDENT_CODE ON)
 csilk_target_setup(csilk_test_plugin PRIVATE SHARED)
-target_link_libraries(csilk_test_plugin PRIVATE csilk::libuv)
+if(TARGET csilk::libuv)
+  target_link_libraries(csilk_test_plugin PRIVATE csilk::libuv)
+endif()
 
 add_library(csilk_test_plugin_bad_abi SHARED tests/core/test_plugin_bad_abi.c)
 set_target_properties(csilk_test_plugin_bad_abi PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
     POSITION_INDEPENDENT_CODE ON)
 csilk_target_setup(csilk_test_plugin_bad_abi PRIVATE SHARED)
-target_link_libraries(csilk_test_plugin_bad_abi PRIVATE csilk::libuv)
+if(TARGET csilk::libuv)
+  target_link_libraries(csilk_test_plugin_bad_abi PRIVATE csilk::libuv)
+endif()
 
 add_csilk_test(test_plugin "${CMAKE_CURRENT_SOURCE_DIR}/tests/core/test_plugin.c")
 set_target_properties(test_plugin PROPERTIES ENABLE_EXPORTS TRUE)
