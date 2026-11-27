@@ -71,7 +71,6 @@ if(CSILK_USE_URING)
         src/core/uring/uring_vector.c
         src/core/uring/uring_thread_pool.c
         src/core/uring/uring_fs.c
-        src/core/uring/uring_io.c
         src/core/uring/uring_loop.c
         src/core/uring/uring_handle.c
         src/core/uring/uring_tcp.c
@@ -125,7 +124,6 @@ set(CSILK_HTTP_SOURCES
     src/core/http/http1_serialize.c
     src/core/http/http1_write.c
     src/core/http/http1_pipeline.c
-    src/core/http/http1_response.c
     src/core/http/http1_zerocopy.c
     src/core/http/swar_http.c
 )
@@ -140,7 +138,6 @@ set(CSILK_HTTP2_SOURCES
     src/core/http/h2_callbacks.c
     src/core/http/h2_session.c
     src/core/http/h2_response.c
-    src/core/http/h2.c
 )
 
 # ── HTTP/3 Module (ngtcp2 & nghttp3 QUIC adapter, optional) ───────────────
@@ -282,7 +279,6 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_ai_react_loop.c
     src/workflow/skill.c
     src/workflow/wf_tools.c
-    src/workflow/wf_scheduler.c
     src/workflow/wf_ctx.c
     src/workflow/wf_node.c
     src/workflow/wf_run.c
