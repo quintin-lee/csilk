@@ -33,6 +33,11 @@ typedef struct {
     csilk_admin_monitor_fn on_close;
 } obs_admin_monitor_entry_t;
 
+typedef struct {
+    const char*          name;
+    csilk_ready_check_fn fn;
+} obs_ready_check_entry_t;
+
 static csilk_once_t                            g_obs_reg_once = CSILK_ONCE_INIT;
 static csilk_mutex_t                           g_obs_reg_mutex;
 static obs_metrics_entry_t                     g_metrics_collectors[CSILK_OBS_MAX_COLLECTORS];
@@ -41,7 +46,10 @@ static obs_admin_stats_entry_t                 g_admin_stats[CSILK_OBS_MAX_COLLE
 static size_t                                  g_admin_stats_count = 0;
 static obs_admin_monitor_entry_t               g_admin_monitors[CSILK_OBS_MAX_COLLECTORS];
 static size_t                                  g_admin_monitor_count = 0;
+static obs_ready_check_entry_t                 g_ready_checks[CSILK_OBS_MAX_COLLECTORS];
+static size_t                                  g_ready_check_count = 0;
 static _Atomic(const csilk_h3_response_ops_t*) g_h3_response_ops = nullptr;
+static _Atomic(const csilk_mq_runtime_ops_t*)  g_mq_runtime_ops = nullptr;
 
 static void
 obs_reg_init_once(void)
@@ -271,4 +279,68 @@ CSILK_INTERNAL const csilk_h3_response_ops_t*
 _csilk_get_h3_response_ops(void)
 {
     return atomic_load_explicit(&g_h3_response_ops, memory_order_acquire);
+}
+
+/* --- Runtime readiness check & MQ ops registry --- */
+
+CSILK_INTERNAL int
+_csilk_ready_register_check(const char* name, csilk_ready_check_fn fn)
+{
+    if (!name || !name[0] || !fn) {
+        return -1;
+    }
+    obs_reg_ensure_init();
+    csilk_mutex_lock(&g_obs_reg_mutex);
+    for (size_t i = 0; i < g_ready_check_count; i++) {
+        if (strcmp(g_ready_checks[i].name, name) == 0) {
+            g_ready_checks[i].fn = fn;
+            csilk_mutex_unlock(&g_obs_reg_mutex);
+            return 0;
+        }
+    }
+    if (g_ready_check_count >= CSILK_OBS_MAX_COLLECTORS) {
+        csilk_mutex_unlock(&g_obs_reg_mutex);
+        return -1;
+    }
+    g_ready_checks[g_ready_check_count++] = (obs_ready_check_entry_t){
+        .name = name,
+        .fn = fn,
+    };
+    csilk_mutex_unlock(&g_obs_reg_mutex);
+    return 0;
+}
+
+CSILK_INTERNAL int
+_csilk_ready_run_checks(csilk_ctx_t* c, const char** reason_out)
+{
+    if (reason_out) {
+        *reason_out = NULL;
+    }
+    obs_reg_ensure_init();
+    obs_ready_check_entry_t snap[CSILK_OBS_MAX_COLLECTORS];
+    csilk_mutex_lock(&g_obs_reg_mutex);
+    size_t count = g_ready_check_count;
+    if (count > 0) {
+        memcpy(snap, g_ready_checks, count * sizeof(snap[0]));
+    }
+    csilk_mutex_unlock(&g_obs_reg_mutex);
+
+    for (size_t i = 0; i < count; i++) {
+        if (snap[i].fn && snap[i].fn(c, reason_out) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+CSILK_INTERNAL void
+_csilk_register_mq_runtime_ops(const csilk_mq_runtime_ops_t* ops)
+{
+    atomic_store_explicit(&g_mq_runtime_ops, ops, memory_order_release);
+}
+
+CSILK_INTERNAL const csilk_mq_runtime_ops_t*
+_csilk_get_mq_runtime_ops(void)
+{
+    return atomic_load_explicit(&g_mq_runtime_ops, memory_order_acquire);
 }

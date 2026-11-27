@@ -19,9 +19,7 @@
 #include <string.h>
 #include "csilk/core/internal.h"
 #include "csilk/core/sync.h"
-#ifdef CSILK_HAS_MQ
-#include "../messaging/mq_internal.h"
-#endif
+#include "core/internal/obs_registry.h"
 #include "core/internal/srv_internal.h"
 #include "core/internal/srv_impl.h"
 
@@ -361,25 +359,16 @@ ws_room_deliver(ws_room_manager_t* mgr,
     ws_room_snap_release(snap);
 }
 
-#ifdef CSILK_HAS_MQ
-/** @brief MQ callback: broadcast a "ws.room.<name>" payload to that room's snapshot. */
+/** @brief Callback invoked by optional MQ runtime ops to deliver a room broadcast. */
 static void
-on_room_message(csilk_mq_ctx_t* ctx)
+ws_room_deliver_from_broker(csilk_server_t* server,
+                            const char*     room_name,
+                            const uint8_t*  payload,
+                            size_t          len)
 {
-    const char*    topic = csilk_mq_get_topic(ctx);
-    size_t         payload_len;
-    const uint8_t* payload = (const uint8_t*)csilk_mq_get_payload(ctx, &payload_len);
-
-    if (!topic || strncmp(topic, "ws.room.", 8) != 0) {
-        return;
-    }
-
-    const char*        room_name = topic + 8;
-    csilk_server_t*    server = (ctx && ctx->mq) ? ctx->mq->server : NULL;
     ws_room_manager_t* mgr = server ? (ws_room_manager_t*)server->ws_room_mgr : NULL;
-    ws_room_deliver(mgr, room_name, payload, payload_len);
+    ws_room_deliver(mgr, room_name, payload, len);
 }
-#endif
 
 /**
  * @brief Free the WebSocket room manager owned by a server instance.
@@ -452,14 +441,12 @@ csilk_ws_join_room(csilk_ctx_t* c, const char* room_name)
 
         mgr->rooms[mgr->rooms_count++] = room;
 
-#ifdef CSILK_HAS_MQ
-        char topic[256];
-        snprintf(topic, sizeof(topic), "ws.room.%s", room_name);
-        csilk_mq_t* mq = csilk_ctx_get_mq(c);
-        if (mq) {
-            csilk_mq_subscribe(mq, topic, on_room_message);
+        const csilk_mq_runtime_ops_t* mq_ops = _csilk_get_mq_runtime_ops();
+        if (mq_ops && mq_ops->ws_subscribe) {
+            char topic[256];
+            snprintf(topic, sizeof(topic), "ws.room.%s", room_name);
+            mq_ops->ws_subscribe(c, topic, ws_room_deliver_from_broker);
         }
-#endif
     }
 
     csilk_mutex_lock(&room->mutex);
@@ -554,17 +541,13 @@ csilk_ws_broadcast_room(csilk_ctx_t* c, const char* room_name, const char* messa
     if (!c || !room_name || !message) {
         return;
     }
-#ifdef CSILK_HAS_MQ
-    csilk_mq_t* mq = csilk_ctx_get_mq(c);
-    if (!mq) {
+    const csilk_mq_runtime_ops_t* mq_ops = _csilk_get_mq_runtime_ops();
+    if (mq_ops && mq_ops->ws_publish) {
+        char topic[256];
+        snprintf(topic, sizeof(topic), "ws.room.%s", room_name);
+        mq_ops->ws_publish(c, topic, (const uint8_t*)message, strlen(message));
         return;
     }
-
-    char topic[256];
-    snprintf(topic, sizeof(topic), "ws.room.%s", room_name);
-    csilk_mq_publish(mq, topic, message, strlen(message));
-#else
     ws_room_manager_t* mgr = ws_room_manager_from_ctx(c);
     ws_room_deliver(mgr, room_name, (const uint8_t*)message, strlen(message));
-#endif
 }

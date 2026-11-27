@@ -20,7 +20,10 @@
 #include "mq_internal.h"
 #include "csilk/core/sync.h"
 #include "csilk/messaging/mq.h"
+#include "../core/internal/obs_registry.h"
 #include "../core/internal/srv_internal.h"
+
+static _Atomic(csilk_ws_room_deliver_fn) g_ws_room_deliver_cb = nullptr;
 
 extern void on_mq_async(csilk_io_async_t* handle);
 
@@ -216,12 +219,97 @@ mq_admin_monitor_close(csilk_ctx_t* c)
     }
 }
 
+static int
+mq_ready_check(csilk_ctx_t* c, const char** reason_out)
+{
+    csilk_server_t*  srv = csilk_ctx_get_server(c);
+    csilk_mq_t*      mq_ptr = srv ? atomic_load_explicit(&srv->mq, memory_order_acquire) : NULL;
+    csilk_mq_stats_t mq = {0};
+    csilk_mq_get_stats(mq_ptr, &mq);
+    if (mq.queue_depth > 1000) {
+        if (reason_out) {
+            *reason_out = "mq_saturated";
+        }
+        return -1;
+    }
+    return 0;
+}
+
+static void
+mq_ws_room_on_message(csilk_mq_ctx_t* ctx)
+{
+    const char*    topic = csilk_mq_get_topic(ctx);
+    size_t         payload_len = 0;
+    const uint8_t* payload = (const uint8_t*)csilk_mq_get_payload(ctx, &payload_len);
+
+    if (!topic || strncmp(topic, "ws.room.", 8) != 0) {
+        return;
+    }
+
+    csilk_ws_room_deliver_fn deliver =
+        atomic_load_explicit(&g_ws_room_deliver_cb, memory_order_acquire);
+    if (!deliver) {
+        return;
+    }
+
+    const char*     room_name = topic + 8;
+    csilk_server_t* server = (ctx && ctx->mq) ? ctx->mq->server : NULL;
+    deliver(server, room_name, payload, payload_len);
+}
+
+static int
+mq_ws_subscribe(csilk_ctx_t* c, const char* topic, csilk_ws_room_deliver_fn deliver)
+{
+    if (!c || !topic || !deliver) {
+        return -1;
+    }
+    atomic_store_explicit(&g_ws_room_deliver_cb, deliver, memory_order_release);
+    csilk_mq_t* mq = csilk_ctx_get_mq(c);
+    if (!mq) {
+        return -1;
+    }
+    csilk_mq_subscribe(mq, topic, mq_ws_room_on_message);
+    return 0;
+}
+
+static int
+mq_ws_publish(csilk_ctx_t* c, const char* topic, const uint8_t* payload, size_t len)
+{
+    if (!c || !topic) {
+        return -1;
+    }
+    csilk_mq_t* mq = csilk_ctx_get_mq(c);
+    if (!mq) {
+        return -1;
+    }
+    csilk_mq_publish(mq, topic, (const char*)payload, len);
+    return 0;
+}
+
+static int
+mq_publish_raw(void* mq, const char* topic, const char* payload, size_t len)
+{
+    if (!mq || !topic) {
+        return -1;
+    }
+    csilk_mq_publish((csilk_mq_t*)mq, topic, payload, len);
+    return 0;
+}
+
+static const csilk_mq_runtime_ops_t g_mq_runtime_ops = {
+    .ws_subscribe = mq_ws_subscribe,
+    .ws_publish = mq_ws_publish,
+    .publish_raw = mq_publish_raw,
+};
+
 static void
 mq_register_observability(void)
 {
     _csilk_metrics_register_collector("mq", mq_metrics_collect);
     _csilk_admin_register_stats("mq", mq_admin_stats);
     _csilk_admin_register_monitor("mq", mq_admin_monitor_open, mq_admin_monitor_close);
+    _csilk_ready_register_check("mq", mq_ready_check);
+    _csilk_register_mq_runtime_ops(&g_mq_runtime_ops);
 }
 
 #if defined(__GNUC__) || defined(__clang__)

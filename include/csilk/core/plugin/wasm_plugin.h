@@ -10,6 +10,7 @@
 #define CSILK_CORE_WASM_PLUGIN_H
 
 #include "csilk/csilk.h"
+#include "csilk/core/plugin/wasm.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -19,9 +20,6 @@ extern "C" {
 
 /** @brief Error code returned when plugin execution runs out of fuel. */
 #define CSILK_WASM_ERR_OUT_OF_FUEL (-2)
-
-/** @brief Opaque handle for WebAssembly Plugin instance. */
-typedef struct csilk_wasm_plugin_s csilk_wasm_plugin_t;
 
 /**
  * @brief Set the maximum instruction fuel limit for a WASM plugin instance.
@@ -69,13 +67,6 @@ int csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, con
  * @return 1 if valid, 0 otherwise.
  */
 int csilk_wasm_plugin_is_valid(const csilk_wasm_plugin_t* plugin);
-
-/**
- * @brief Free resources associated with a loaded WebAssembly plugin instance.
- *
- * @param plugin Plugin handle to release.
- */
-void csilk_wasm_plugin_free(csilk_wasm_plugin_t* plugin);
 
 /* --- WASM Host C-ABI Context API --- */
 

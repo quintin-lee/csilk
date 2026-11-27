@@ -119,6 +119,7 @@ void csilk_app_log_json(csilk_app_t* app, int enable);
  * @param h Middleware handler function. */
 void csilk_app_use(csilk_app_t* app, csilk_handler_t h);
 
+#ifdef CSILK_HAS_WASM
 struct csilk_wasm_plugin_s;
 typedef struct csilk_wasm_plugin_s csilk_wasm_plugin_t;
 
@@ -131,6 +132,7 @@ typedef struct csilk_wasm_plugin_s csilk_wasm_plugin_t;
  * @return 0 on success, -1 on failure or exhausted middleware slots.
  */
 int csilk_app_use_wasm(csilk_app_t* app, csilk_wasm_plugin_t* plugin, const char* func_name);
+#endif
 
 /** @brief Register a dual-parameter middleware with a config pointer (csilk#9c).
  *

@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
+#include "../core/internal/obs_registry.h"
 
 /**
  * @brief Request ID middleware handler.
@@ -127,17 +128,13 @@ csilk_ready_check_handler(csilk_ctx_t* c)
     int         is_healthy = 1;
     const char* reason = NULL;
 
-    /* 1. Check MQ Health */
-    unsigned int mq_depth = 0;
-#ifdef CSILK_HAS_MQ
-    csilk_mq_stats_t mq = {0};
-    csilk_mq_get_stats(csilk_server_get_mq(csilk_ctx_get_server(c)), &mq);
-    mq_depth = mq.queue_depth;
-    if (mq_depth > 1000) { /* Arbitrary threshold for saturation */
+    /* 1. Check optional subsystem readiness hooks (e.g. MQ queue depth) */
+    if (_csilk_ready_run_checks(c, &reason) != 0) {
         is_healthy = 0;
-        reason = "mq_saturated";
+        if (!reason) {
+            reason = "subsystem_unhealthy";
+        }
     }
-#endif
 
     /* 2. Check Connection Health */
     int active = 0, pooled = 0;
@@ -148,11 +145,8 @@ csilk_ready_check_handler(csilk_ctx_t* c)
     }
 
     if (!is_healthy) {
-        CSILK_LOG_W("HealthCheck: Readiness probe failed: %s (MQ queue depth: %u, active "
-                    "connections: %d)",
-                    reason,
-                    mq_depth,
-                    active);
+        CSILK_LOG_W(
+            "HealthCheck: Readiness probe failed: %s (active connections: %d)", reason, active);
     }
 
     csilk_arena_t* arena = csilk_get_arena(c);

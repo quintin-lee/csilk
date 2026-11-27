@@ -47,6 +47,27 @@ typedef void (*csilk_admin_stats_visit_fn)(const char*          name,
 /** @brief WebSocket monitor lifecycle callback invoked by /admin/ws. */
 typedef void (*csilk_admin_monitor_fn)(csilk_ctx_t* c);
 
+/** @brief Readiness check callback; return 0 if healthy, -1 if unhealthy (setting *reason_out). */
+typedef int (*csilk_ready_check_fn)(csilk_ctx_t* c, const char** reason_out);
+
+/** @brief Delivery callback invoked by optional MQ broker for WebSocket room messages. */
+typedef void (*csilk_ws_room_deliver_fn)(csilk_server_t* server,
+                                         const char*     room_name,
+                                         const uint8_t*  payload,
+                                         size_t          len);
+
+/**
+ * @brief Optional MQ runtime operations table registered by csilk_mq.
+ *
+ * Allows Web Core (ws_room.c, session_store.c) to delegate to MQ at runtime
+ * without compile-time #ifdef CSILK_HAS_MQ or upward link dependencies.
+ */
+typedef struct {
+    int (*ws_subscribe)(csilk_ctx_t* c, const char* topic, csilk_ws_room_deliver_fn deliver);
+    int (*ws_publish)(csilk_ctx_t* c, const char* topic, const uint8_t* payload, size_t len);
+    int (*publish_raw)(void* mq, const char* topic, const char* payload, size_t len);
+} csilk_mq_runtime_ops_t;
+
 /**
  * @brief Register (idempotently by @p name) a Prometheus metrics collector.
  *
@@ -88,5 +109,25 @@ CSILK_INTERNAL void _csilk_admin_notify_monitor_open(csilk_ctx_t* c);
  * @brief Notify all registered subsystem monitors when an admin WS closes.
  */
 CSILK_INTERNAL void _csilk_admin_notify_monitor_close(csilk_ctx_t* c);
+
+/**
+ * @brief Register (idempotently by @p name) a readiness probe callback.
+ */
+CSILK_INTERNAL int _csilk_ready_register_check(const char* name, csilk_ready_check_fn fn);
+
+/**
+ * @brief Run all registered readiness probes; returns 0 if all pass, -1 on first failure.
+ */
+CSILK_INTERNAL int _csilk_ready_run_checks(csilk_ctx_t* c, const char** reason_out);
+
+/**
+ * @brief Register (or clear with NULL) the optional MQ runtime operations table.
+ */
+CSILK_INTERNAL void _csilk_register_mq_runtime_ops(const csilk_mq_runtime_ops_t* ops);
+
+/**
+ * @brief Retrieve the currently registered MQ runtime operations table (or NULL).
+ */
+CSILK_INTERNAL const csilk_mq_runtime_ops_t* _csilk_get_mq_runtime_ops(void);
 
 #endif /* CSILK_OBS_REGISTRY_H */
