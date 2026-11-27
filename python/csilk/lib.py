@@ -223,6 +223,7 @@ CsilkHandler = ctypes.CFUNCTYPE(None, CsilkCtxPtr)
 CsilkWsMessageCallback = ctypes.CFUNCTYPE(None, CsilkCtxPtr, ctypes.POINTER(ctypes.c_uint8), ctypes.c_size_t, ctypes.c_int)
 CsilkHeaderCb = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p)
 CsilkMqHandler = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+CsilkDispatchCb = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
 
 CsilkWfHandler = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, CsilkDataPtr, ctypes.c_void_p)
 CsilkWfRouter = ctypes.CFUNCTYPE(ctypes.c_void_p, CsilkDataPtr)
@@ -403,765 +404,394 @@ def load_lib():
     _attach_test_support(lib, search_dirs)
     return lib
 
+def has_symbol(lib, name: str) -> bool:
+    """Return True if ``lib`` exports or binds the C symbol ``name``.
+
+    Args:
+        lib: Loaded csilk shared library handle (e.g., from ``get_bindings()``).
+        name: C symbol name to probe (e.g., ``"csilk_ai_new"``).
+    """
+    return getattr(lib, name, None) is not None
+
+
+def require_symbol(lib, name: str, feature: str):
+    """Return ``lib.<name>`` or raise ``NotImplementedError`` if absent.
+
+    Args:
+        lib: Loaded csilk shared library handle (e.g., from ``get_bindings()``).
+        name: Required C symbol name (e.g., ``"csilk_ai_new"``).
+        feature: Feature or CMake build flag name (e.g., ``"CSILK_ENABLE_AI"``).
+
+    Raises:
+        NotImplementedError: When ``lib`` was built without ``feature`` support.
+    """
+    if not has_symbol(lib, name):
+        raise NotImplementedError(
+            f"csilk built without {feature} support (missing {name})"
+        )
+    return getattr(lib, name)
+
+
+def _bind(lib, name: str, restype, argtypes, optional: bool = False) -> bool:
+    """Bind ``restype`` and ``argtypes`` on ``lib.<name>``.
+
+    Core symbols (``optional=False``) raise ``AttributeError`` immediately when
+    missing. Optional symbols are bound only when present in ``lib``.
+    """
+    if optional and not has_symbol(lib, name):
+        return False
+    fn = getattr(lib, name)
+    fn.restype = restype
+    fn.argtypes = argtypes
+    return True
+
+
+_CORE_SYMBOL_SPECS = (
+    # App management
+    ("csilk_app_new", CsilkAppPtr, [ctypes.c_char_p]),
+    ("csilk_app_free", None, [CsilkAppPtr]),
+    ("csilk_app_add_route", None, [CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler]),
+    ("csilk_app_static", None, [CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p]),
+    ("csilk_app_enable_openapi", None, [CsilkAppPtr, ctypes.c_int]),
+    ("csilk_app_set_server_config", None, [CsilkAppPtr, CsilkServerConfig]),
+    # Logger
+    ("csilk_app_log_level", None, [CsilkAppPtr, ctypes.c_int]),
+    ("csilk_app_log_file", None, [CsilkAppPtr, ctypes.c_char_p, ctypes.c_size_t]),
+    ("csilk_app_log_json", None, [CsilkAppPtr, ctypes.c_int]),
+    # Middleware application
+    ("csilk_app_use", None, [CsilkAppPtr, CsilkHandler]),
+    ("csilk_app_use_group", None, [CsilkAppPtr, ctypes.c_char_p, CsilkHandler]),
+    ("csilk_app_apply_config", None, [CsilkAppPtr]),
+    ("csilk_app_run", ctypes.c_int, [CsilkAppPtr, ctypes.c_int]),
+    ("csilk_app_server", CsilkServerPtr, [CsilkAppPtr]),
+    ("csilk_app_router", ctypes.c_void_p, [CsilkAppPtr]),
+    # Server management
+    ("csilk_server_stop", None, [CsilkServerPtr]),
+    # Route Groups
+    ("csilk_group_new", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_char_p]),
+    ("csilk_group_group", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_char_p]),
+    ("csilk_group_use", None, [ctypes.c_void_p, CsilkHandler]),
+    (
+        "csilk_group_add_route_extended_perm",
+        None,
+        [
+            ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler,
+            ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
+            ctypes.c_char_p, ctypes.c_char_p,
+        ],
+    ),
+    ("csilk_group_free", None, [ctypes.c_void_p]),
+    # Context getters
+    ("csilk_get_method", ctypes.c_char_p, [CsilkCtxPtr]),
+    ("csilk_get_path", ctypes.c_char_p, [CsilkCtxPtr]),
+    ("csilk_get_body", ctypes.c_void_p, [CsilkCtxPtr, ctypes.POINTER(ctypes.c_size_t)]),
+    ("csilk_get_body_len", ctypes.c_size_t, [CsilkCtxPtr]),
+    ("csilk_get_query", ctypes.c_char_p, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_get_param", ctypes.c_char_p, [CsilkCtxPtr, ctypes.c_char_p]),
+    # Context path parameters iterator
+    ("csilk_get_params_count", ctypes.c_int, [CsilkCtxPtr]),
+    ("csilk_get_param_key", ctypes.c_char_p, [CsilkCtxPtr, ctypes.c_int]),
+    ("csilk_get_param_value", ctypes.c_char_p, [CsilkCtxPtr, ctypes.c_int]),
+    # Context states
+    ("csilk_is_websocket", ctypes.c_int, [CsilkCtxPtr]),
+    ("csilk_is_sse", ctypes.c_int, [CsilkCtxPtr]),
+    ("csilk_is_aborted", ctypes.c_int, [CsilkCtxPtr]),
+    ("csilk_get_header", ctypes.c_char_p, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_get_response_header", ctypes.c_char_p, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_get_request_id", ctypes.c_char_p, [CsilkCtxPtr]),
+    ("csilk_set_request_id", None, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_set_request_header", None, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]),
+    ("csilk_get_status", ctypes.c_int, [CsilkCtxPtr]),
+    ("csilk_set_status", None, [CsilkCtxPtr, ctypes.c_int]),
+    ("csilk_ctx_set_websocket", None, [CsilkCtxPtr, ctypes.c_int]),
+    ("csilk_ctx_set_sse", None, [CsilkCtxPtr, ctypes.c_int]),
+    ("csilk_ctx_set_async", None, [CsilkCtxPtr, ctypes.c_int]),
+    ("csilk_ctx_acquire_async", CsilkAsyncToken, [CsilkCtxPtr]),
+    ("csilk_ctx_release_async", None, [ctypes.POINTER(CsilkAsyncToken)]),
+    ("csilk_async_token_validate", ctypes.c_int, [ctypes.POINTER(CsilkAsyncToken)]),
+    ("csilk_is_async", ctypes.c_int, [CsilkCtxPtr]),
+    ("csilk_dispatch", None, [CsilkCtxPtr, CsilkDispatchCb, ctypes.c_void_p]),
+    # Response helpers
+    ("csilk_status", None, [CsilkCtxPtr, ctypes.c_int]),
+    ("csilk_string", None, [CsilkCtxPtr, ctypes.c_int, ctypes.c_char_p]),
+    ("csilk_set_header", None, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]),
+    ("csilk_file", None, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_redirect", None, [CsilkCtxPtr, ctypes.c_int, ctypes.c_char_p]),
+    ("csilk_add_header", None, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]),
+    ("csilk_json_error", None, [CsilkCtxPtr, ctypes.c_int, ctypes.c_char_p]),
+    ("csilk_redirect_simple", None, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_response_write", ctypes.c_int32, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_size_t]),
+    ("csilk_response_get_write_queue_size", ctypes.c_size_t, [CsilkCtxPtr]),
+    ("csilk_response_is_writable", ctypes.c_int32, [CsilkCtxPtr]),
+    ("csilk_response_set_watermarks", None, [CsilkCtxPtr, ctypes.c_size_t, ctypes.c_size_t, ctypes.c_size_t]),
+    ("csilk_response_end", None, [CsilkCtxPtr]),
+    ("csilk_push_promise", ctypes.c_int32, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]),
+    # Middleware flow
+    ("csilk_next", None, [CsilkCtxPtr]),
+    ("csilk_abort", None, [CsilkCtxPtr]),
+    # WebSockets
+    ("csilk_ws_handshake", None, [CsilkCtxPtr]),
+    ("csilk_ws_send", None, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_int]),
+    ("csilk_ws_close", None, [CsilkCtxPtr, ctypes.c_uint16, ctypes.c_char_p]),
+    ("csilk_ws_join_room", None, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_ws_leave_room", None, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_ws_broadcast_room", None, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]),
+    # SSE
+    ("csilk_sse_init", None, [CsilkCtxPtr]),
+    ("csilk_sse_send", None, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]),
+    ("csilk_sse_close", None, [CsilkCtxPtr]),
+    # WebSocket callbacks
+    ("csilk_set_on_ws_message", None, [CsilkCtxPtr, CsilkWsMessageCallback]),
+    ("csilk_get_on_ws_message", ctypes.c_void_p, [CsilkCtxPtr]),
+    # Server hooks
+    ("csilk_server_add_hook", None, [CsilkServerPtr, ctypes.c_int, ctypes.c_void_p]),
+    ("csilk_server_set_not_found_handler", None, [CsilkServerPtr, CsilkHandler]),
+    ("csilk_server_set_spa_fallback", None, [CsilkServerPtr, ctypes.c_char_p]),
+    ("csilk_server_get_stats", None, [CsilkServerPtr, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]),
+    ("csilk_server_set_max_connections", ctypes.c_int, [CsilkServerPtr, ctypes.c_int]),
+    # Extended routing with metadata
+    (
+        "csilk_app_add_route_extended",
+        None,
+        [
+            CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler,
+            ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
+        ],
+    ),
+    (
+        "csilk_app_add_route_perm",
+        None,
+        [
+            CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler,
+            ctypes.c_char_p, ctypes.c_char_p,
+        ],
+    ),
+    (
+        "csilk_app_add_route_extended_perm",
+        None,
+        [
+            CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler,
+            ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
+            ctypes.c_char_p, ctypes.c_char_p,
+        ],
+    ),
+    # Utilities
+    ("csilk_free", None, [ctypes.c_void_p]),
+    # Cookies & Forms
+    ("csilk_get_cookie", ctypes.c_char_p, [CsilkCtxPtr, ctypes.c_char_p]),
+    (
+        "csilk_set_cookie",
+        None,
+        [
+            CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int,
+            ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int,
+        ],
+    ),
+    ("csilk_parse_form_urlencoded", None, [CsilkCtxPtr]),
+    # Hash Map Iteration
+    ("csilk_for_each_header", None, [CsilkCtxPtr, CsilkHeaderCb, ctypes.c_void_p]),
+    ("csilk_for_each_query", None, [CsilkCtxPtr, CsilkHeaderCb, ctypes.c_void_p]),
+    ("csilk_for_each_form_field", None, [CsilkCtxPtr, CsilkHeaderCb, ctypes.c_void_p]),
+    # Context Handler Info
+    ("csilk_ctx_get_handler_path", ctypes.c_char_p, [CsilkCtxPtr]),
+    ("csilk_ctx_get_handler_perm_required", ctypes.c_char_p, [CsilkCtxPtr]),
+    ("csilk_ctx_get_handler_perm_resource", ctypes.c_char_p, [CsilkCtxPtr]),
+    # Request-local context storage (opaque pointers)
+    ("csilk_set", None, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_void_p]),
+    ("csilk_get", ctypes.c_void_p, [CsilkCtxPtr, ctypes.c_char_p]),
+    # Storage functions
+    ("csilk_set_string", ctypes.c_int, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]),
+    ("csilk_get_string", ctypes.c_void_p, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_incr", ctypes.c_longlong, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_int]),
+    # Response body mutation
+    ("csilk_set_response_body", None, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_int]),
+    ("csilk_get_response_body", ctypes.c_char_p, [CsilkCtxPtr, ctypes.POINTER(ctypes.c_size_t)]),
+    # Built-in C Middlewares
+    ("csilk_recovery_handler", None, [CsilkCtxPtr]),
+    ("csilk_logger_handler", None, [CsilkCtxPtr]),
+    ("csilk_waf_middleware", None, [CsilkCtxPtr]),
+    ("csilk_request_id_middleware", None, [CsilkCtxPtr]),
+    ("csilk_health_check_handler", None, [CsilkCtxPtr]),
+    ("csilk_ready_check_handler", None, [CsilkCtxPtr]),
+    ("csilk_rate_limit_middleware", None, [CsilkCtxPtr, ctypes.c_int]),
+    ("csilk_csrf_middleware", None, [CsilkCtxPtr]),
+    ("csilk_gzip_middleware", None, [CsilkCtxPtr]),
+    ("csilk_cors_middleware", None, [CsilkCtxPtr, ctypes.POINTER(CsilkCorsConfig)]),
+    ("csilk_multipart_parse", None, [CsilkCtxPtr, CsilkMultipartHandler]),
+    # JWT Middlewares & Helpers
+    ("csilk_jwt_middleware", None, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_ctx_get_jwt_payload_json", ctypes.c_void_p, [CsilkCtxPtr]),
+    ("csilk_ctx_cleanup_jwt_payload", None, [CsilkCtxPtr]),
+    ("csilk_jwt_generate_json", ctypes.c_void_p, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]),
+    # Session Management
+    ("csilk_session_init", None, []),
+    ("csilk_session_start", None, [CsilkCtxPtr]),
+    ("csilk_session_set", None, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_void_p]),
+    ("csilk_session_get", ctypes.c_void_p, [CsilkCtxPtr, ctypes.c_char_p]),
+    ("csilk_session_destroy", None, [CsilkCtxPtr]),
+    ("csilk_session_get_id", ctypes.c_char_p, [CsilkCtxPtr]),
+    # Utilities (heap/string)
+    ("csilk_malloc", ctypes.c_void_p, [ctypes.c_size_t]),
+    ("csilk_strdup", ctypes.c_void_p, [ctypes.c_char_p]),
+    # csilk_json serialization, parsing & free
+    ("csilk_json_serialize", ctypes.c_void_p, [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]),
+    ("csilk_json_free", None, [ctypes.c_void_p]),
+    ("csilk_json_parse", ctypes.c_void_p, [ctypes.c_char_p]),
+    # Cryptographic utilities
+    ("csilk_crypto_fill_random", ctypes.c_int, [ctypes.c_void_p, ctypes.c_size_t]),
+    ("csilk_generate_uuid", None, [ctypes.c_char_p]),
+    ("csilk_csrf_generate_token", ctypes.c_int, [ctypes.c_char_p, ctypes.c_size_t]),
+    # Circuit Breaker
+    ("csilk_circuit_breaker_new", CsilkCircuitBreakerPtr, [CsilkCircuitBreakerConfigPtr]),
+    ("csilk_circuit_breaker_middleware", None, [CsilkCtxPtr, CsilkCircuitBreakerPtr]),
+    ("csilk_circuit_breaker_record_success", None, [CsilkCircuitBreakerPtr]),
+    ("csilk_circuit_breaker_record_failure", None, [CsilkCircuitBreakerPtr]),
+    ("csilk_circuit_breaker_get_state", ctypes.c_int, [CsilkCircuitBreakerPtr]),
+    ("csilk_circuit_breaker_free", None, [CsilkCircuitBreakerPtr]),
+    # Sliding Window Rate Limiter
+    ("csilk_sliding_limiter_new", CsilkSlidingLimiterPtr, [ctypes.c_int, ctypes.c_uint64]),
+    ("csilk_sliding_rate_limit_middleware", None, [CsilkCtxPtr, CsilkSlidingLimiterPtr]),
+    ("csilk_sliding_limiter_free", None, [CsilkSlidingLimiterPtr]),
+)
+
+# Test utilities are optional: production shared libraries intentionally
+# do not export the test-only context helpers.
+_TEST_SUPPORT_SYMBOL_SPECS = (
+    ("csilk_test_ctx_new", CsilkCtxPtr, []),
+    ("csilk_test_ctx_free", None, [CsilkCtxPtr]),
+)
+
+# Optional module symbol bindings (CSILK_ENABLE_* / CSILK_BUILD_FULL=ON).
+_OPTIONAL_SYMBOL_GROUPS = {
+    "db": (
+        ("csilk_db_init", None, []),
+        ("csilk_db_pool_new", ctypes.c_void_p, [ctypes.c_char_p, ctypes.c_char_p]),
+        ("csilk_db_pool_free", None, [ctypes.c_void_p]),
+        ("csilk_db_query_json", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_char_p]),
+        ("csilk_db_query_param_json", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_char_p)]),
+        ("csilk_db_exec", ctypes.c_int, [ctypes.c_void_p, ctypes.c_char_p]),
+        ("csilk_db_get_stats", None, [ctypes.POINTER(CsilkDbStats)]),
+    ),
+    "mq": (
+        ("csilk_server_get_mq", ctypes.c_void_p, [CsilkServerPtr]),
+        ("csilk_mq_use", None, [ctypes.c_void_p, ctypes.c_char_p, CsilkMqHandler]),
+        ("csilk_mq_subscribe", None, [ctypes.c_void_p, ctypes.c_char_p, CsilkMqHandler]),
+        ("csilk_mq_publish", ctypes.c_int, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]),
+        ("csilk_mq_next", None, [ctypes.c_void_p]),
+        ("csilk_mq_abort", None, [ctypes.c_void_p]),
+        ("csilk_mq_get_topic", ctypes.c_char_p, [ctypes.c_void_p]),
+        ("csilk_mq_get_payload", ctypes.c_void_p, [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]),
+        ("csilk_mq_get_stats", None, [ctypes.c_void_p, ctypes.POINTER(CsilkMqStats)]),
+        ("csilk_mq_set_persistence", ctypes.c_int, [ctypes.c_void_p, ctypes.c_char_p]),
+    ),
+    "ai": (
+        ("csilk_ai_new", ctypes.c_void_p, [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]),
+        ("csilk_ai_chat", ctypes.c_int, [ctypes.c_void_p, ctypes.POINTER(CsilkAiChatRequest), ctypes.POINTER(CsilkAiChatResponse)]),
+        ("csilk_ai_embeddings", ctypes.c_int, [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_char_p), ctypes.c_size_t, ctypes.POINTER(CsilkAiEmbeddingsResponse)]),
+        ("csilk_ai_free", None, [ctypes.c_void_p]),
+        ("csilk_ai_chat_response_free", None, [ctypes.POINTER(CsilkAiChatResponse)]),
+        ("csilk_ai_embeddings_response_free", None, [ctypes.POINTER(CsilkAiEmbeddingsResponse)]),
+        ("csilk_ai_context_new", ctypes.c_void_p, [ctypes.c_size_t]),
+        ("csilk_ai_context_add", None, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]),
+        ("csilk_ai_context_clear", None, [ctypes.c_void_p]),
+        ("csilk_ai_context_free", None, [ctypes.c_void_p]),
+        ("csilk_ai_get_stats", None, [ctypes.POINTER(CsilkAiStats)]),
+        ("csilk_ai_stats_to_json", ctypes.c_char_p, [ctypes.POINTER(CsilkAiStats)]),
+        ("csilk_ai_register_monitor", None, [ctypes.c_void_p]),
+    ),
+    "vector": (
+        ("csilk_vector_db_new", ctypes.c_void_p, [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]),
+        ("csilk_vector_db_upsert", ctypes.c_int, [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(CsilkVectorPoint), ctypes.c_size_t]),
+        ("csilk_vector_db_search", ctypes.c_int, [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_float), ctypes.c_size_t, ctypes.c_int, ctypes.POINTER(CsilkVectorSearchResponse)]),
+        ("csilk_vector_db_free", None, [ctypes.c_void_p]),
+        ("csilk_vector_db_new_embedded_mmap", ctypes.c_void_p, [ctypes.c_char_p]),
+        ("csilk_vector_db_save_embedded", ctypes.c_int, [ctypes.c_void_p, ctypes.c_char_p]),
+        ("csilk_vector_search_response_free", None, [ctypes.POINTER(CsilkVectorSearchResponse)]),
+    ),
+    "mcp": (),
+    "workflow": (
+        ("csilk_wf_serve_ui", None, [CsilkAppPtr, ctypes.c_char_p]),
+        ("csilk_wf_new", ctypes.c_void_p, [ctypes.c_char_p]),
+        ("csilk_wf_free", None, [ctypes.c_void_p]),
+        ("csilk_wf_add", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]),
+        ("csilk_wf_add_ai", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]),
+        ("csilk_wf_add_vector_search", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]),
+        ("csilk_wf_register_tool", None, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]),
+        ("csilk_wf_set_tool_discovery", None, [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]),
+        ("csilk_wf_get_node", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_char_p]),
+        ("csilk_wf_node_set_entry", None, [ctypes.c_void_p, ctypes.c_int]),
+        ("csilk_wf_bind", None, [ctypes.c_void_p, ctypes.c_void_p]),
+        ("csilk_wf_on", None, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]),
+        ("csilk_wf_on_loop", None, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]),
+        ("csilk_wf_on_error", None, [ctypes.c_void_p, ctypes.c_void_p]),
+        ("csilk_wf_route", None, [ctypes.c_void_p, ctypes.c_void_p]),
+        ("csilk_wf_node_set_join", None, [ctypes.c_void_p, ctypes.c_int]),
+        ("csilk_wf_node_set_interactive", None, [ctypes.c_void_p, ctypes.c_int]),
+        ("csilk_wf_node_set_schema", None, [ctypes.c_void_p, ctypes.c_char_p]),
+        ("csilk_wf_signal_continue", None, [ctypes.c_void_p, ctypes.c_char_p, CsilkDataPtr, ctypes.c_void_p]),
+        ("csilk_wf_node_set_timeout", None, [ctypes.c_void_p, ctypes.c_int]),
+        ("csilk_wf_set_ttl", None, [ctypes.c_void_p, ctypes.c_int]),
+        ("csilk_wf_node_set_retry", None, [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]),
+        ("csilk_wf_node_set_remote", None, [ctypes.c_void_p, ctypes.c_int]),
+        ("csilk_wf_enable_distributed", None, [ctypes.c_void_p, ctypes.c_void_p]),
+        ("csilk_wf_set_persistence", None, [ctypes.c_void_p, ctypes.c_char_p]),
+        ("csilk_wf_run", ctypes.c_char_p, [ctypes.c_void_p, CsilkDataPtr, ctypes.c_void_p]),
+        ("csilk_wf_resume", None, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]),
+        ("csilk_wf_run_traced", None, [ctypes.c_void_p, CsilkDataPtr, ctypes.c_void_p]),
+        ("csilk_wf_trace_to_json", ctypes.c_void_p, [ctypes.c_void_p]),
+        ("csilk_wf_trace_free", None, [ctypes.c_void_p]),
+        # Memory Helpers (Arena-backed)
+        ("csilk_wf_data_new", CsilkDataPtr, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]),
+        ("csilk_wf_strdup", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_char_p]),
+        ("csilk_wf_alloc", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_size_t]),
+        # Declarative API
+        ("csilk_wf_register_handler", None, [ctypes.c_char_p, ctypes.c_void_p]),
+        ("csilk_wf_load_yaml", ctypes.c_void_p, [ctypes.c_char_p]),
+        ("csilk_wf_from_json", ctypes.c_void_p, [ctypes.c_char_p]),
+        ("csilk_wf_to_mermaid", ctypes.c_void_p, [ctypes.c_void_p]),
+        ("csilk_wf_register_monitor", None, [ctypes.c_void_p, CsilkCtxPtr]),
+        ("csilk_wf_set_budget", None, [ctypes.c_void_p, ctypes.c_int]),
+    ),
+    "perm": (
+        ("csilk_perm_init", None, []),
+        ("csilk_perm_set_default", ctypes.c_int, [ctypes.c_char_p]),
+        ("csilk_perm_check", ctypes.c_int, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]),
+        ("csilk_perm_require", None, [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]),
+        ("csilk_perm_simple_init", None, []),
+        ("csilk_perm_simple_allow", ctypes.c_int, [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]),
+        ("csilk_perm_simple_clear", None, []),
+        ("csilk_perm_auto_middleware", None, [CsilkCtxPtr]),
+    ),
+    "observability": (
+        ("csilk_admin_serve", None, [CsilkAppPtr, ctypes.c_char_p]),
+        ("csilk_admin_serve_secure", None, [CsilkAppPtr, ctypes.c_char_p, CsilkHandler]),
+        ("csilk_trace_middleware", None, [CsilkCtxPtr]),
+        ("csilk_ctx_get_trace_id", ctypes.c_char_p, [CsilkCtxPtr]),
+        ("csilk_ctx_get_span_id", ctypes.c_char_p, [CsilkCtxPtr]),
+    ),
+    "grpc": (),
+    "wasm": (),
+    "bypass": (),
+    "http3": (),
+}
+
+
 def get_bindings():
     global _cached_lib
     if _cached_lib is not None:
         return _cached_lib
-    
+
     lib = load_lib()
-    
-    # App management
-    lib.csilk_app_new.restype = CsilkAppPtr
-    lib.csilk_app_new.argtypes = [ctypes.c_char_p]
-    
-    lib.csilk_app_free.restype = None
-    lib.csilk_app_free.argtypes = [CsilkAppPtr]
-    
-    lib.csilk_app_add_route.restype = None
-    lib.csilk_app_add_route.argtypes = [CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler]
-    
-    lib.csilk_app_static.restype = None
-    lib.csilk_app_static.argtypes = [CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p]
-    
-    lib.csilk_app_enable_openapi.restype = None
-    lib.csilk_app_enable_openapi.argtypes = [CsilkAppPtr, ctypes.c_int]
 
-    lib.csilk_app_set_server_config.restype = None
-    lib.csilk_app_set_server_config.argtypes = [CsilkAppPtr, CsilkServerConfig]
-    
-    # Logger
-    lib.csilk_app_log_level.restype = None
-    lib.csilk_app_log_level.argtypes = [CsilkAppPtr, ctypes.c_int]
-    
-    lib.csilk_app_log_file.restype = None
-    lib.csilk_app_log_file.argtypes = [CsilkAppPtr, ctypes.c_char_p, ctypes.c_size_t]
-    
-    lib.csilk_app_log_json.restype = None
-    lib.csilk_app_log_json.argtypes = [CsilkAppPtr, ctypes.c_int]
-    
-    # Middleware application
-    lib.csilk_app_use.restype = None
-    lib.csilk_app_use.argtypes = [CsilkAppPtr, CsilkHandler]
-    
-    lib.csilk_app_use_group.restype = None
-    lib.csilk_app_use_group.argtypes = [CsilkAppPtr, ctypes.c_char_p, CsilkHandler]
-    
-    lib.csilk_app_apply_config.restype = None
-    lib.csilk_app_apply_config.argtypes = [CsilkAppPtr]
-    
-    lib.csilk_app_run.restype = ctypes.c_int
-    lib.csilk_app_run.argtypes = [CsilkAppPtr, ctypes.c_int]
-    
-    lib.csilk_app_server.restype = CsilkServerPtr
-    lib.csilk_app_server.argtypes = [CsilkAppPtr]
+    for name, restype, argtypes in _CORE_SYMBOL_SPECS:
+        _bind(lib, name, restype, argtypes, optional=False)
 
-    lib.csilk_app_router.restype = ctypes.c_void_p
-    lib.csilk_app_router.argtypes = [CsilkAppPtr]
-    
-    # Server management
-    lib.csilk_server_stop.restype = None
-    lib.csilk_server_stop.argtypes = [CsilkServerPtr]
+    for name, restype, argtypes in _TEST_SUPPORT_SYMBOL_SPECS:
+        _bind(lib, name, restype, argtypes, optional=True)
 
-    # Route Groups
-    lib.csilk_group_new.restype = ctypes.c_void_p
-    lib.csilk_group_new.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    lib.csilk_group_group.restype = ctypes.c_void_p
-    lib.csilk_group_group.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    lib.csilk_group_use.restype = None
-    lib.csilk_group_use.argtypes = [ctypes.c_void_p, CsilkHandler]
-
-    lib.csilk_group_add_route_extended_perm.restype = None
-    lib.csilk_group_add_route_extended_perm.argtypes = [
-        ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler,
-        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
-        ctypes.c_char_p, ctypes.c_char_p
-    ]
-
-    lib.csilk_group_free.restype = None
-    lib.csilk_group_free.argtypes = [ctypes.c_void_p]
-    
-    # Context getters
-    lib.csilk_get_method.restype = ctypes.c_char_p
-    lib.csilk_get_method.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_get_path.restype = ctypes.c_char_p
-    lib.csilk_get_path.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_get_body.restype = ctypes.c_void_p
-    lib.csilk_get_body.argtypes = [CsilkCtxPtr, ctypes.POINTER(ctypes.c_size_t)]
-    
-    lib.csilk_get_body_len.restype = ctypes.c_size_t
-    lib.csilk_get_body_len.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_get_query.restype = ctypes.c_char_p
-    lib.csilk_get_query.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_get_param.restype = ctypes.c_char_p
-    lib.csilk_get_param.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    # Context path parameters iterator
-    lib.csilk_get_params_count.restype = ctypes.c_int
-    lib.csilk_get_params_count.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_get_param_key.restype = ctypes.c_char_p
-    lib.csilk_get_param_key.argtypes = [CsilkCtxPtr, ctypes.c_int]
-    
-    lib.csilk_get_param_value.restype = ctypes.c_char_p
-    lib.csilk_get_param_value.argtypes = [CsilkCtxPtr, ctypes.c_int]
-    
-    # Context states
-    lib.csilk_is_websocket.restype = ctypes.c_int
-    lib.csilk_is_websocket.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_is_sse.restype = ctypes.c_int
-    lib.csilk_is_sse.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_is_aborted.restype = ctypes.c_int
-    lib.csilk_is_aborted.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_get_header.restype = ctypes.c_char_p
-    lib.csilk_get_header.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_get_response_header.restype = ctypes.c_char_p
-    lib.csilk_get_response_header.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_get_request_id.restype = ctypes.c_char_p
-    lib.csilk_get_request_id.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_set_request_id.restype = None
-    lib.csilk_set_request_id.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_set_request_header.restype = None
-    lib.csilk_set_request_header.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
-    
-    lib.csilk_get_status.restype = ctypes.c_int
-    lib.csilk_get_status.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_set_status.restype = None
-    lib.csilk_set_status.argtypes = [CsilkCtxPtr, ctypes.c_int]
-    
-    lib.csilk_ctx_set_websocket.restype = None
-    lib.csilk_ctx_set_websocket.argtypes = [CsilkCtxPtr, ctypes.c_int]
-    
-    lib.csilk_ctx_set_sse.restype = None
-    lib.csilk_ctx_set_sse.argtypes = [CsilkCtxPtr, ctypes.c_int]
-
-    lib.csilk_ctx_set_async.restype = None
-    lib.csilk_ctx_set_async.argtypes = [CsilkCtxPtr, ctypes.c_int]
-
-    lib.csilk_ctx_acquire_async.restype = CsilkAsyncToken
-    lib.csilk_ctx_acquire_async.argtypes = [CsilkCtxPtr]
-
-    lib.csilk_ctx_release_async.restype = None
-    lib.csilk_ctx_release_async.argtypes = [ctypes.POINTER(CsilkAsyncToken)]
-
-    lib.csilk_async_token_validate.restype = ctypes.c_int
-    lib.csilk_async_token_validate.argtypes = [ctypes.POINTER(CsilkAsyncToken)]
-
-    lib.csilk_is_async.restype = ctypes.c_int
-    lib.csilk_is_async.argtypes = [CsilkCtxPtr]
-
-    CsilkDispatchCb = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
-    lib.csilk_dispatch.restype = None
-    lib.csilk_dispatch.argtypes = [CsilkCtxPtr, CsilkDispatchCb, ctypes.c_void_p]
-    
-    # Response helpers
-    lib.csilk_status.restype = None
-    lib.csilk_status.argtypes = [CsilkCtxPtr, ctypes.c_int]
-    
-    lib.csilk_string.restype = None
-    lib.csilk_string.argtypes = [CsilkCtxPtr, ctypes.c_int, ctypes.c_char_p]
-    
-    lib.csilk_set_header.restype = None
-    lib.csilk_set_header.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
-    
-    lib.csilk_file.restype = None
-    lib.csilk_file.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_redirect.restype = None
-    lib.csilk_redirect.argtypes = [CsilkCtxPtr, ctypes.c_int, ctypes.c_char_p]
-
-    lib.csilk_add_header.restype = None
-    lib.csilk_add_header.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
-
-    lib.csilk_json_error.restype = None
-    lib.csilk_json_error.argtypes = [CsilkCtxPtr, ctypes.c_int, ctypes.c_char_p]
-
-    lib.csilk_redirect_simple.restype = None
-    lib.csilk_redirect_simple.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-
-    lib.csilk_response_write.restype = ctypes.c_int32
-    lib.csilk_response_write.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_size_t]
-
-    lib.csilk_response_get_write_queue_size.restype = ctypes.c_size_t
-    lib.csilk_response_get_write_queue_size.argtypes = [CsilkCtxPtr]
-
-    lib.csilk_response_is_writable.restype = ctypes.c_int32
-    lib.csilk_response_is_writable.argtypes = [CsilkCtxPtr]
-
-    lib.csilk_response_set_watermarks.restype = None
-    lib.csilk_response_set_watermarks.argtypes = [CsilkCtxPtr, ctypes.c_size_t, ctypes.c_size_t, ctypes.c_size_t]
-
-    lib.csilk_response_end.restype = None
-    lib.csilk_response_end.argtypes = [CsilkCtxPtr]
-
-
-    lib.csilk_push_promise.restype = ctypes.c_int32
-    lib.csilk_push_promise.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
-    
-    # Middleware flow
-    lib.csilk_next.restype = None
-    lib.csilk_next.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_abort.restype = None
-    lib.csilk_abort.argtypes = [CsilkCtxPtr]
-    
-    # WebSockets
-    lib.csilk_ws_handshake.restype = None
-    lib.csilk_ws_handshake.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_ws_send.restype = None
-    lib.csilk_ws_send.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_int]
-    
-    lib.csilk_ws_close.restype = None
-    lib.csilk_ws_close.argtypes = [CsilkCtxPtr, ctypes.c_uint16, ctypes.c_char_p]
-    
-    lib.csilk_ws_join_room.restype = None
-    lib.csilk_ws_join_room.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_ws_leave_room.restype = None
-    lib.csilk_ws_leave_room.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_ws_broadcast_room.restype = None
-    lib.csilk_ws_broadcast_room.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
-    
-    # SSE
-    lib.csilk_sse_init.restype = None
-    lib.csilk_sse_init.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_sse_send.restype = None
-    lib.csilk_sse_send.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
-    
-    lib.csilk_sse_close.restype = None
-    lib.csilk_sse_close.argtypes = [CsilkCtxPtr]
-    
-    # WebSocket callbacks
-    lib.csilk_set_on_ws_message.restype = None
-    lib.csilk_set_on_ws_message.argtypes = [CsilkCtxPtr, CsilkWsMessageCallback]
-    
-    lib.csilk_get_on_ws_message.restype = ctypes.c_void_p
-    lib.csilk_get_on_ws_message.argtypes = [CsilkCtxPtr]
-    
-    # Server hooks
-    lib.csilk_server_add_hook.restype = None
-    lib.csilk_server_add_hook.argtypes = [CsilkServerPtr, ctypes.c_int, ctypes.c_void_p]
-    
-    lib.csilk_server_set_not_found_handler.restype = None
-    lib.csilk_server_set_not_found_handler.argtypes = [CsilkServerPtr, CsilkHandler]
-    
-    lib.csilk_server_set_spa_fallback.restype = None
-    lib.csilk_server_set_spa_fallback.argtypes = [CsilkServerPtr, ctypes.c_char_p]
-    
-    lib.csilk_server_get_stats.restype = None
-    lib.csilk_server_get_stats.argtypes = [CsilkServerPtr, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
-    
-    lib.csilk_server_set_max_connections.restype = ctypes.c_int
-    lib.csilk_server_set_max_connections.argtypes = [CsilkServerPtr, ctypes.c_int]
-    
-    # Extended routing with metadata
-    lib.csilk_app_add_route_extended.restype = None
-    lib.csilk_app_add_route_extended.argtypes = [
-        CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler,
-        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p
-    ]
-    
-    lib.csilk_app_add_route_perm.restype = None
-    lib.csilk_app_add_route_perm.argtypes = [
-        CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler,
-        ctypes.c_char_p, ctypes.c_char_p
-    ]
-    
-    lib.csilk_app_add_route_extended_perm.restype = None
-    lib.csilk_app_add_route_extended_perm.argtypes = [
-        CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler,
-        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
-        ctypes.c_char_p, ctypes.c_char_p
-    ]
-    
-    # Utilities
-    lib.csilk_free.restype = None
-    lib.csilk_free.argtypes = [ctypes.c_void_p]
-    
-    # Cookies & Forms
-    lib.csilk_get_cookie.restype = ctypes.c_char_p
-    lib.csilk_get_cookie.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_set_cookie.restype = None
-    lib.csilk_set_cookie.argtypes = [
-        CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int,
-        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int
-    ]
-    
-    lib.csilk_parse_form_urlencoded.restype = None
-    lib.csilk_parse_form_urlencoded.argtypes = [CsilkCtxPtr]
-    
-    # Hash Map Iteration
-    lib.csilk_for_each_header.restype = None
-    lib.csilk_for_each_header.argtypes = [CsilkCtxPtr, CsilkHeaderCb, ctypes.c_void_p]
-    
-    lib.csilk_for_each_query.restype = None
-    lib.csilk_for_each_query.argtypes = [CsilkCtxPtr, CsilkHeaderCb, ctypes.c_void_p]
-    
-    lib.csilk_for_each_form_field.restype = None
-    lib.csilk_for_each_form_field.argtypes = [CsilkCtxPtr, CsilkHeaderCb, ctypes.c_void_p]
-    
-    # Context Handler Info
-    lib.csilk_ctx_get_handler_path.restype = ctypes.c_char_p
-    lib.csilk_ctx_get_handler_path.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_ctx_get_handler_perm_required.restype = ctypes.c_char_p
-    lib.csilk_ctx_get_handler_perm_required.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_ctx_get_handler_perm_resource.restype = ctypes.c_char_p
-    lib.csilk_ctx_get_handler_perm_resource.argtypes = [CsilkCtxPtr]
-    
-    # Request-local context storage (opaque pointers)
-    lib.csilk_set.restype = None
-    lib.csilk_set.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_void_p]
-
-    lib.csilk_get.restype = ctypes.c_void_p
-    lib.csilk_get.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-
-    # Test utilities are optional: production shared libraries intentionally
-    # do not export the test-only context helpers.
-    try:
-        lib.csilk_test_ctx_new.restype = CsilkCtxPtr
-        lib.csilk_test_ctx_new.argtypes = []
-
-        lib.csilk_test_ctx_free.restype = None
-        lib.csilk_test_ctx_free.argtypes = [CsilkCtxPtr]
-    except AttributeError:
-        pass
-
-    # Storage functions
-    lib.csilk_set_string.restype = ctypes.c_int
-    lib.csilk_set_string.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
-    
-    lib.csilk_get_string.restype = ctypes.c_void_p
-    lib.csilk_get_string.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_incr.restype = ctypes.c_longlong
-    lib.csilk_incr.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_int]
-    
-    # Response body mutation
-    lib.csilk_set_response_body.restype = None
-    lib.csilk_set_response_body.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_int]
-    
-    lib.csilk_get_response_body.restype = ctypes.c_char_p
-    lib.csilk_get_response_body.argtypes = [CsilkCtxPtr, ctypes.POINTER(ctypes.c_size_t)]
-    
-    # Built-in C Middlewares
-    lib.csilk_recovery_handler.restype = None
-    lib.csilk_recovery_handler.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_logger_handler.restype = None
-    lib.csilk_logger_handler.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_waf_middleware.restype = None
-    lib.csilk_waf_middleware.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_request_id_middleware.restype = None
-    lib.csilk_request_id_middleware.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_health_check_handler.restype = None
-    lib.csilk_health_check_handler.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_ready_check_handler.restype = None
-    lib.csilk_ready_check_handler.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_rate_limit_middleware.restype = None
-    lib.csilk_rate_limit_middleware.argtypes = [CsilkCtxPtr, ctypes.c_int]
-    
-    lib.csilk_csrf_middleware.restype = None
-    lib.csilk_csrf_middleware.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_gzip_middleware.restype = None
-    lib.csilk_gzip_middleware.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_cors_middleware.restype = None
-    lib.csilk_cors_middleware.argtypes = [CsilkCtxPtr, ctypes.POINTER(CsilkCorsConfig)]
-
-    lib.csilk_multipart_parse.restype = None
-    lib.csilk_multipart_parse.argtypes = [CsilkCtxPtr, CsilkMultipartHandler]
-    
-    # JWT Middlewares & Helpers
-    lib.csilk_jwt_middleware.restype = None
-    lib.csilk_jwt_middleware.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_ctx_get_jwt_payload_json.restype = ctypes.c_void_p
-    lib.csilk_ctx_get_jwt_payload_json.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_ctx_cleanup_jwt_payload.restype = None
-    lib.csilk_ctx_cleanup_jwt_payload.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_jwt_generate_json.restype = ctypes.c_void_p
-    lib.csilk_jwt_generate_json.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
-
-    
-    # Session Management
-    lib.csilk_session_init.restype = None
-    lib.csilk_session_init.argtypes = []
-    
-    lib.csilk_session_start.restype = None
-    lib.csilk_session_start.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_session_set.restype = None
-    lib.csilk_session_set.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_void_p]
-    
-    lib.csilk_session_get.restype = ctypes.c_void_p
-    lib.csilk_session_get.argtypes = [CsilkCtxPtr, ctypes.c_char_p]
-    
-    lib.csilk_session_destroy.restype = None
-    lib.csilk_session_destroy.argtypes = [CsilkCtxPtr]
-    
-    lib.csilk_session_get_id.restype = ctypes.c_char_p
-    lib.csilk_session_get_id.argtypes = [CsilkCtxPtr]
-    
-    # Message Queue (MQ) Event Bus
-    lib.csilk_server_get_mq.restype = ctypes.c_void_p
-    lib.csilk_server_get_mq.argtypes = [CsilkServerPtr]
-    
-    lib.csilk_mq_use.restype = None
-    lib.csilk_mq_use.argtypes = [ctypes.c_void_p, ctypes.c_char_p, CsilkMqHandler]
-    
-    lib.csilk_mq_subscribe.restype = None
-    lib.csilk_mq_subscribe.argtypes = [ctypes.c_void_p, ctypes.c_char_p, CsilkMqHandler]
-    
-    lib.csilk_mq_publish.restype = ctypes.c_int
-    lib.csilk_mq_publish.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t]
-    
-    lib.csilk_mq_next.restype = None
-    lib.csilk_mq_next.argtypes = [ctypes.c_void_p]
-    
-    lib.csilk_mq_abort.restype = None
-    lib.csilk_mq_abort.argtypes = [ctypes.c_void_p]
-    
-    lib.csilk_mq_get_topic.restype = ctypes.c_char_p
-    lib.csilk_mq_get_topic.argtypes = [ctypes.c_void_p]
-    
-    lib.csilk_mq_get_payload.restype = ctypes.c_void_p
-    lib.csilk_mq_get_payload.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
-    
-    lib.csilk_mq_get_stats.restype = None
-    lib.csilk_mq_get_stats.argtypes = [ctypes.c_void_p, ctypes.POINTER(CsilkMqStats)]
-    
-    lib.csilk_mq_set_persistence.restype = ctypes.c_int
-    lib.csilk_mq_set_persistence.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-    
-    # Admin Dashboard
-    lib.csilk_admin_serve.restype = None
-    lib.csilk_admin_serve.argtypes = [CsilkAppPtr, ctypes.c_char_p]
-    
-    lib.csilk_admin_serve_secure.restype = None
-    lib.csilk_admin_serve_secure.argtypes = [CsilkAppPtr, ctypes.c_char_p, CsilkHandler]
-    
-    # Utilities
-    lib.csilk_malloc.restype = ctypes.c_void_p
-    lib.csilk_malloc.argtypes = [ctypes.c_size_t]
-
-    lib.csilk_strdup.restype = ctypes.c_void_p
-    lib.csilk_strdup.argtypes = [ctypes.c_char_p]
-
-    # Workflow Engine
-    lib.csilk_wf_serve_ui.restype = None
-    lib.csilk_wf_serve_ui.argtypes = [CsilkAppPtr, ctypes.c_char_p]
-
-    lib.csilk_wf_new.restype = ctypes.c_void_p
-    lib.csilk_wf_new.argtypes = [ctypes.c_char_p]
-
-    lib.csilk_wf_free.restype = None
-    lib.csilk_wf_free.argtypes = [ctypes.c_void_p]
-
-    lib.csilk_wf_add.restype = ctypes.c_void_p
-    lib.csilk_wf_add.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
-
-    lib.csilk_wf_add_ai.restype = ctypes.c_void_p
-    lib.csilk_wf_add_ai.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-
-    lib.csilk_wf_add_vector_search.restype = ctypes.c_void_p
-    lib.csilk_wf_add_vector_search.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-
-    lib.csilk_wf_register_tool.restype = None
-    lib.csilk_wf_register_tool.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]
-
-    lib.csilk_wf_set_tool_discovery.restype = None
-    lib.csilk_wf_set_tool_discovery.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
-
-    lib.csilk_wf_get_node.restype = ctypes.c_void_p
-    lib.csilk_wf_get_node.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    lib.csilk_wf_node_set_entry.restype = None
-    lib.csilk_wf_node_set_entry.argtypes = [ctypes.c_void_p, ctypes.c_int]
-
-    lib.csilk_wf_bind.restype = None
-    lib.csilk_wf_bind.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-
-    lib.csilk_wf_on.restype = None
-    lib.csilk_wf_on.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-
-    lib.csilk_wf_on_loop.restype = None
-    lib.csilk_wf_on_loop.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-
-    lib.csilk_wf_on_error.restype = None
-    lib.csilk_wf_on_error.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-
-    lib.csilk_wf_route.restype = None
-    lib.csilk_wf_route.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-
-    lib.csilk_wf_node_set_join.restype = None
-    lib.csilk_wf_node_set_join.argtypes = [ctypes.c_void_p, ctypes.c_int]
-
-    lib.csilk_wf_node_set_interactive.restype = None
-    lib.csilk_wf_node_set_interactive.argtypes = [ctypes.c_void_p, ctypes.c_int]
-
-    lib.csilk_wf_node_set_schema.restype = None
-    lib.csilk_wf_node_set_schema.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    lib.csilk_wf_signal_continue.restype = None
-    lib.csilk_wf_signal_continue.argtypes = [ctypes.c_void_p, ctypes.c_char_p, CsilkDataPtr, ctypes.c_void_p]
-
-    lib.csilk_wf_node_set_timeout.restype = None
-    lib.csilk_wf_node_set_timeout.argtypes = [ctypes.c_void_p, ctypes.c_int]
-
-    lib.csilk_wf_set_ttl.restype = None
-    lib.csilk_wf_set_ttl.argtypes = [ctypes.c_void_p, ctypes.c_int]
-
-    lib.csilk_wf_node_set_retry.restype = None
-    lib.csilk_wf_node_set_retry.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
-
-    lib.csilk_wf_node_set_remote.restype = None
-    lib.csilk_wf_node_set_remote.argtypes = [ctypes.c_void_p, ctypes.c_int]
-
-    lib.csilk_wf_enable_distributed.restype = None
-    lib.csilk_wf_enable_distributed.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
-
-    lib.csilk_wf_set_persistence.restype = None
-    lib.csilk_wf_set_persistence.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    lib.csilk_wf_run.restype = ctypes.c_char_p
-    lib.csilk_wf_run.argtypes = [ctypes.c_void_p, CsilkDataPtr, ctypes.c_void_p]
-
-    lib.csilk_wf_resume.restype = None
-    lib.csilk_wf_resume.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-
-    lib.csilk_wf_run_traced.restype = None
-    lib.csilk_wf_run_traced.argtypes = [ctypes.c_void_p, CsilkDataPtr, ctypes.c_void_p]
-
-    lib.csilk_wf_trace_to_json.restype = ctypes.c_void_p
-    lib.csilk_wf_trace_to_json.argtypes = [ctypes.c_void_p]
-
-    lib.csilk_wf_trace_free.restype = None
-    lib.csilk_wf_trace_free.argtypes = [ctypes.c_void_p]
-
-    # Memory Helpers (Arena-backed)
-    lib.csilk_wf_data_new.restype = CsilkDataPtr
-    lib.csilk_wf_data_new.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
-
-    lib.csilk_wf_strdup.restype = ctypes.c_void_p
-    lib.csilk_wf_strdup.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    lib.csilk_wf_alloc.restype = ctypes.c_void_p
-    lib.csilk_wf_alloc.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
-
-    # Declarative API
-    lib.csilk_wf_register_handler.restype = None
-    lib.csilk_wf_register_handler.argtypes = [ctypes.c_char_p, ctypes.c_void_p]
-
-    lib.csilk_wf_load_yaml.restype = ctypes.c_void_p
-    lib.csilk_wf_load_yaml.argtypes = [ctypes.c_char_p]
-
-    lib.csilk_wf_from_json.restype = ctypes.c_void_p
-    lib.csilk_wf_from_json.argtypes = [ctypes.c_char_p]
-
-    lib.csilk_wf_to_mermaid.restype = ctypes.c_void_p
-    lib.csilk_wf_to_mermaid.argtypes = [ctypes.c_void_p]
-
-    lib.csilk_wf_register_monitor.restype = None
-    lib.csilk_wf_register_monitor.argtypes = [ctypes.c_void_p, CsilkCtxPtr]
-
-    lib.csilk_wf_set_budget.restype = None
-    lib.csilk_wf_set_budget.argtypes = [ctypes.c_void_p, ctypes.c_int]
-
-    # AI Engine Drivers
-    lib.csilk_ai_new.restype = ctypes.c_void_p
-    lib.csilk_ai_new.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
-
-    lib.csilk_ai_chat.restype = ctypes.c_int
-    lib.csilk_ai_chat.argtypes = [ctypes.c_void_p, ctypes.POINTER(CsilkAiChatRequest), ctypes.POINTER(CsilkAiChatResponse)]
-
-    lib.csilk_ai_embeddings.restype = ctypes.c_int
-    lib.csilk_ai_embeddings.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_char_p), ctypes.c_size_t, ctypes.POINTER(CsilkAiEmbeddingsResponse)]
-
-    lib.csilk_ai_free.restype = None
-    lib.csilk_ai_free.argtypes = [ctypes.c_void_p]
-
-    lib.csilk_ai_chat_response_free.restype = None
-    lib.csilk_ai_chat_response_free.argtypes = [ctypes.POINTER(CsilkAiChatResponse)]
-
-    lib.csilk_ai_embeddings_response_free.restype = None
-    lib.csilk_ai_embeddings_response_free.argtypes = [ctypes.POINTER(CsilkAiEmbeddingsResponse)]
-
-    lib.csilk_ai_context_new.restype = ctypes.c_void_p
-    lib.csilk_ai_context_new.argtypes = [ctypes.c_size_t]
-
-    lib.csilk_ai_context_add.restype = None
-    lib.csilk_ai_context_add.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
-
-    lib.csilk_ai_context_clear.restype = None
-    lib.csilk_ai_context_clear.argtypes = [ctypes.c_void_p]
-
-    lib.csilk_ai_context_free.restype = None
-    lib.csilk_ai_context_free.argtypes = [ctypes.c_void_p]
-
-    lib.csilk_ai_get_stats.restype = None
-    lib.csilk_ai_get_stats.argtypes = [ctypes.POINTER(CsilkAiStats)]
-
-    lib.csilk_ai_stats_to_json.restype = ctypes.c_char_p
-    lib.csilk_ai_stats_to_json.argtypes = [ctypes.POINTER(CsilkAiStats)]
-
-    lib.csilk_ai_register_monitor.restype = None
-    lib.csilk_ai_register_monitor.argtypes = [ctypes.c_void_p]
-
-    # Database
-    lib.csilk_db_init.restype = None
-    lib.csilk_db_init.argtypes = []
-
-    lib.csilk_db_pool_new.restype = ctypes.c_void_p
-    lib.csilk_db_pool_new.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
-
-    lib.csilk_db_pool_free.restype = None
-    lib.csilk_db_pool_free.argtypes = [ctypes.c_void_p]
-
-    lib.csilk_db_query_json.restype = ctypes.c_void_p
-    lib.csilk_db_query_json.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    lib.csilk_db_query_param_json.restype = ctypes.c_void_p
-    lib.csilk_db_query_param_json.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_char_p)]
-
-    lib.csilk_db_exec.restype = ctypes.c_int
-    lib.csilk_db_exec.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    lib.csilk_db_get_stats.restype = None
-    lib.csilk_db_get_stats.argtypes = [ctypes.POINTER(CsilkDbStats)]
-
-    # csilk_json serialization \& free
-    lib.csilk_json_serialize.restype = ctypes.c_void_p
-    lib.csilk_json_serialize.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_size_t)]
-
-    lib.csilk_json_free.restype = None
-    lib.csilk_json_free.argtypes = [ctypes.c_void_p]
-
-    # Cryptographic utilities
-    lib.csilk_crypto_fill_random.restype = ctypes.c_int
-    lib.csilk_crypto_fill_random.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
-
-    lib.csilk_generate_uuid.restype = None
-    lib.csilk_generate_uuid.argtypes = [ctypes.c_char_p]
-
-    lib.csilk_csrf_generate_token.restype = ctypes.c_int
-    lib.csilk_csrf_generate_token.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
-
-    # csilk_json parsing
-    lib.csilk_json_parse.restype = ctypes.c_void_p
-    lib.csilk_json_parse.argtypes = [ctypes.c_char_p]
-
-    # Permission management
-    lib.csilk_perm_init.restype = None
-    lib.csilk_perm_init.argtypes = []
-
-    lib.csilk_perm_set_default.restype = ctypes.c_int
-    lib.csilk_perm_set_default.argtypes = [ctypes.c_char_p]
-
-    lib.csilk_perm_check.restype = ctypes.c_int
-    lib.csilk_perm_check.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
-
-    lib.csilk_perm_require.restype = None
-    lib.csilk_perm_require.argtypes = [CsilkCtxPtr, ctypes.c_char_p, ctypes.c_char_p]
-
-    lib.csilk_perm_simple_init.restype = None
-    lib.csilk_perm_simple_init.argtypes = []
-
-    lib.csilk_perm_simple_allow.restype = ctypes.c_int
-    lib.csilk_perm_simple_allow.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
-
-    lib.csilk_perm_simple_clear.restype = None
-    lib.csilk_perm_simple_clear.argtypes = []
-
-    lib.csilk_perm_auto_middleware.restype = None
-    lib.csilk_perm_auto_middleware.argtypes = [CsilkCtxPtr]
-
-    # Vector Database
-    lib.csilk_vector_db_new.restype = ctypes.c_void_p
-    lib.csilk_vector_db_new.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p]
-
-    lib.csilk_vector_db_upsert.restype = ctypes.c_int
-    lib.csilk_vector_db_upsert.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(CsilkVectorPoint), ctypes.c_size_t]
-
-    lib.csilk_vector_db_search.restype = ctypes.c_int
-    lib.csilk_vector_db_search.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_float), ctypes.c_size_t, ctypes.c_int, ctypes.POINTER(CsilkVectorSearchResponse)]
-
-    lib.csilk_vector_db_free.restype = None
-    lib.csilk_vector_db_free.argtypes = [ctypes.c_void_p]
-
-    lib.csilk_vector_db_new_embedded_mmap.restype = ctypes.c_void_p
-    lib.csilk_vector_db_new_embedded_mmap.argtypes = [ctypes.c_char_p]
-
-    lib.csilk_vector_db_save_embedded.restype = ctypes.c_int
-    lib.csilk_vector_db_save_embedded.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-
-    lib.csilk_vector_search_response_free.restype = None
-    lib.csilk_vector_search_response_free.argtypes = [ctypes.POINTER(CsilkVectorSearchResponse)]
-
-    # OpenTelemetry W3C Tracing
-    lib.csilk_trace_middleware.restype = None
-    lib.csilk_trace_middleware.argtypes = [CsilkCtxPtr]
-
-    lib.csilk_ctx_get_trace_id.restype = ctypes.c_char_p
-    lib.csilk_ctx_get_trace_id.argtypes = [CsilkCtxPtr]
-
-    lib.csilk_ctx_get_span_id.restype = ctypes.c_char_p
-    lib.csilk_ctx_get_span_id.argtypes = [CsilkCtxPtr]
-
-    # Circuit Breaker
-    lib.csilk_circuit_breaker_new.restype = CsilkCircuitBreakerPtr
-    lib.csilk_circuit_breaker_new.argtypes = [CsilkCircuitBreakerConfigPtr]
-
-    lib.csilk_circuit_breaker_middleware.restype = None
-    lib.csilk_circuit_breaker_middleware.argtypes = [CsilkCtxPtr, CsilkCircuitBreakerPtr]
-
-    lib.csilk_circuit_breaker_record_success.restype = None
-    lib.csilk_circuit_breaker_record_success.argtypes = [CsilkCircuitBreakerPtr]
-
-    lib.csilk_circuit_breaker_record_failure.restype = None
-    lib.csilk_circuit_breaker_record_failure.argtypes = [CsilkCircuitBreakerPtr]
-
-    lib.csilk_circuit_breaker_get_state.restype = ctypes.c_int
-    lib.csilk_circuit_breaker_get_state.argtypes = [CsilkCircuitBreakerPtr]
-
-    lib.csilk_circuit_breaker_free.restype = None
-    lib.csilk_circuit_breaker_free.argtypes = [CsilkCircuitBreakerPtr]
-
-    # Sliding Window Rate Limiter
-    lib.csilk_sliding_limiter_new.restype = CsilkSlidingLimiterPtr
-    lib.csilk_sliding_limiter_new.argtypes = [ctypes.c_int, ctypes.c_uint64]
-
-    lib.csilk_sliding_rate_limit_middleware.restype = None
-    lib.csilk_sliding_rate_limit_middleware.argtypes = [CsilkCtxPtr, CsilkSlidingLimiterPtr]
-
-    lib.csilk_sliding_limiter_free.restype = None
-    lib.csilk_sliding_limiter_free.argtypes = [CsilkSlidingLimiterPtr]
+    for specs in _OPTIONAL_SYMBOL_GROUPS.values():
+        for name, restype, argtypes in specs:
+            _bind(lib, name, restype, argtypes, optional=True)
 
     _cached_lib = lib
     return lib
