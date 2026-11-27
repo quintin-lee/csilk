@@ -1,5 +1,5 @@
 /**
- * @file example_observability.c
+ * @file example_hooks_request_id.c
  * @brief Request ID propagation, custom cache middleware, and server hooks.
  *
  * Demonstrates observability patterns: per-request tracing IDs, a lightweight

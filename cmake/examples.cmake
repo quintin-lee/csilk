@@ -58,8 +58,8 @@ target_link_libraries(example_rest_api csilk)
 add_executable(example_security_stack examples/middleware/example_security_stack.c)
 target_link_libraries(example_security_stack csilk)
 
-add_executable(example_observability examples/middleware/example_observability.c)
-target_link_libraries(example_observability csilk)
+add_executable(example_hooks_request_id examples/middleware/example_hooks_request_id.c)
+target_link_libraries(example_hooks_request_id csilk)
 
 add_executable(example_form_security examples/middleware/example_form_security.c)
 target_link_libraries(example_form_security csilk)
