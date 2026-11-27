@@ -272,11 +272,11 @@ test_dynamic_library_reload(void)
     char compile_cmd[1400];
     snprintf(compile_cmd,
              sizeof(compile_cmd),
-             "cc -shared -fPIC -I%s %s -L. -lcsilk -Wl,-rpath,'%s' %s -o %s",
+             "cc -shared -fPIC -I%s %s %s -L. -lcsilk -Wl,-rpath,'%s' -o %s",
              have_src_include ? "../include" : "include",
              have_gen_include ? "-I./include" : "",
-             bd,
              src_file,
+             bd,
              so_file);
     int rc = system(compile_cmd);
     if (rc != 0) {
