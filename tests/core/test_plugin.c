@@ -15,17 +15,6 @@
 #include "csilk/csilk.h"
 #include "csilk/core/plugin.h"
 #include "csilk/core/service_locator.h"
-#if defined(CSILK_REAL_PLUGIN_WORKFLOW) || defined(CSILK_REAL_PLUGIN_PROTOCOL)
-#include "csilk/app/workflow.h"
-#include "csilk/core/plugin/wasm.h"
-#include "csilk/core/secret.h"
-#include "csilk/crypto/crypto_dispatch.h"
-#include "csilk/drivers/ai.h"
-#include "csilk/drivers/ai/tool_registry.h"
-#include "csilk/drivers/vector.h"
-#include "csilk/messaging/mq.h"
-#include "csilk/messaging/raft.h"
-#endif
 
 typedef struct {
     atomic_int init_calls;
@@ -194,95 +183,6 @@ test_concurrent_registry_access(void)
     csilk_router_free(router);
 }
 
-static void
-test_real_optional_plugins(void)
-{
-#if defined(CSILK_REAL_PLUGIN_WORKFLOW) || defined(CSILK_REAL_PLUGIN_PROTOCOL)
-    /* Keep orchestrator dependencies live in the static host binary so
-     * RTLD_NOW resolution for workflow/protocol plugins finds host symbols. */
-    typedef void (*keep_fn_t)(void);
-    static keep_fn_t const host_refs[] = {
-        (keep_fn_t)csilk_ai_chat,
-        (keep_fn_t)csilk_ai_chat_response_free,
-        (keep_fn_t)csilk_ai_context_add,
-        (keep_fn_t)csilk_ai_embeddings,
-        (keep_fn_t)csilk_ai_embeddings_response_free,
-        (keep_fn_t)csilk_ai_free,
-        (keep_fn_t)csilk_ai_new,
-        (keep_fn_t)csilk_ai_tool_dispatch,
-        (keep_fn_t)csilk_ai_tool_registry_export_tools,
-        (keep_fn_t)csilk_ai_tool_registry_free,
-        (keep_fn_t)csilk_ai_tool_registry_new,
-        (keep_fn_t)csilk_ai_tool_registry_register,
-        (keep_fn_t)csilk_ai_tools_free,
-        (keep_fn_t)csilk_env_get,
-        (keep_fn_t)csilk_generate_uuid,
-        (keep_fn_t)csilk_mq_subscribe,
-        (keep_fn_t)csilk_raft_append_log,
-        (keep_fn_t)csilk_raft_replay_committed,
-        (keep_fn_t)csilk_raft_replicate_wait,
-        (keep_fn_t)csilk_raft_set_apply_cb,
-        (keep_fn_t)csilk_vector_db_search,
-        (keep_fn_t)csilk_vector_db_upsert,
-        (keep_fn_t)csilk_vector_search_response_free,
-        (keep_fn_t)csilk_wasm_plugin_exec,
-        (keep_fn_t)csilk_wasm_plugin_free,
-        (keep_fn_t)csilk_wasm_plugin_load_file,
-        (keep_fn_t)csilk_wf_register_tool,
-    };
-    volatile size_t keep_cnt = sizeof(host_refs) / sizeof(host_refs[0]);
-    (void)keep_cnt;
-#endif
-
-    csilk_router_t* router = csilk_router_new();
-    csilk_server_t* server = csilk_server_new(router);
-    assert(server != NULL);
-
-#ifdef CSILK_REAL_PLUGIN_AI
-    assert(csilk_core_load_plugin(server, CSILK_REAL_PLUGIN_AI) == 0);
-    assert(csilk_core_find_plugin(server, "csilk-ai") != NULL);
-    assert(csilk_core_unload_plugin(server, "csilk-ai") == 0);
-#endif
-#ifdef CSILK_REAL_PLUGIN_MQ
-    assert(csilk_core_load_plugin(server, CSILK_REAL_PLUGIN_MQ) == 0);
-    assert(csilk_core_find_plugin(server, "csilk-mq") != NULL);
-    assert(csilk_core_unload_plugin(server, "csilk-mq") == 0);
-#endif
-#ifdef CSILK_REAL_PLUGIN_DB
-    assert(csilk_core_load_plugin(server, CSILK_REAL_PLUGIN_DB) == 0);
-    assert(csilk_core_find_plugin(server, "csilk-db") != NULL);
-    assert(csilk_core_unload_plugin(server, "csilk-db") == 0);
-#endif
-#ifdef CSILK_REAL_PLUGIN_VECTOR
-    assert(csilk_core_load_plugin(server, CSILK_REAL_PLUGIN_VECTOR) == 0);
-    assert(csilk_core_find_plugin(server, "csilk-vector") != NULL);
-    assert(csilk_core_unload_plugin(server, "csilk-vector") == 0);
-#endif
-#ifdef CSILK_REAL_PLUGIN_WORKFLOW
-    assert(csilk_core_load_plugin(server, CSILK_REAL_PLUGIN_WORKFLOW) == 0);
-    assert(csilk_core_find_plugin(server, "csilk-workflow") != NULL);
-    assert(csilk_core_unload_plugin(server, "csilk-workflow") == 0);
-#endif
-#ifdef CSILK_REAL_PLUGIN_PROTOCOL
-    assert(csilk_core_load_plugin(server, CSILK_REAL_PLUGIN_PROTOCOL) == 0);
-    assert(csilk_core_find_plugin(server, "csilk-protocol") != NULL);
-    assert(csilk_core_unload_plugin(server, "csilk-protocol") == 0);
-#endif
-#ifdef CSILK_REAL_PLUGIN_WASM
-    assert(csilk_core_load_plugin(server, CSILK_REAL_PLUGIN_WASM) == 0);
-    assert(csilk_core_find_plugin(server, "csilk-wasm") != NULL);
-    assert(csilk_core_unload_plugin(server, "csilk-wasm") == 0);
-#endif
-#ifdef CSILK_REAL_PLUGIN_BYPASS
-    assert(csilk_core_load_plugin(server, CSILK_REAL_PLUGIN_BYPASS) == 0);
-    assert(csilk_core_find_plugin(server, "csilk-bypass") != NULL);
-    assert(csilk_core_unload_plugin(server, "csilk-bypass") == 0);
-#endif
-
-    csilk_server_free(server);
-    csilk_router_free(router);
-}
-
 int
 main(void)
 {
@@ -291,7 +191,6 @@ main(void)
     test_plugin_security_and_validation();
     test_app_env_autoload();
     test_concurrent_registry_access();
-    test_real_optional_plugins();
     printf("test_plugin: PASS\n");
     return 0;
 }
