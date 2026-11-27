@@ -4,7 +4,7 @@
  *
  * Feeds arbitrary byte buffers into csilk_wasm_plugin_load() and
  * csilk_wasm_plugin_execute() to catch crashes, UAF, and invalid section
- * parsing in both the stub and WAMR paths.
+ * parsing in the WAMR path.
  *
  * @copyright MIT License
  */

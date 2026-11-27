@@ -2,9 +2,8 @@
  * @file wasm.h
  * @brief Native WASM/WASI plugin sandbox and execution engine.
  *
- * @note Real WebAssembly bytecode execution requires building with
- *       -DCSILK_ENABLE_WAMR=ON. When WAMR is disabled, plugin load functions
- *       fail closed with ENOTSUP.
+ * @note WebAssembly bytecode execution requires building with
+ *       -DCSILK_ENABLE_WASM=ON (which links the WAMR runtime).
  *
  * @copyright MIT License
  */

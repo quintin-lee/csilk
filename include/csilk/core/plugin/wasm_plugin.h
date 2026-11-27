@@ -2,9 +2,8 @@
  * @file wasm_plugin.h
  * @brief WebAssembly (WASM) Dynamic Sandbox Plugin Engine for csilk.
  *
- * @note Real WebAssembly bytecode execution requires building with
- *       -DCSILK_ENABLE_WAMR=ON. When WAMR is disabled, plugin load functions
- *       fail closed with ENOTSUP.
+ * @note WebAssembly bytecode execution requires building with
+ *       -DCSILK_ENABLE_WASM=ON (which links the WAMR runtime).
  */
 
 #ifndef CSILK_CORE_WASM_PLUGIN_H
