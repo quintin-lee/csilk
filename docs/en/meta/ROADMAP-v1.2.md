@@ -64,8 +64,8 @@ v1.2.0 focuses on **protocol completeness** (HTTP/3, gRPC), **session abstractio
 |---|---|
 | 6.1 OpenTelemetry 2.0 AI Trace ↔ HTTP W3C Spans & Context-Aware LLM Inference (`csilk_ai_chat_ctx`) | ✅ `src/middleware/otlp_trace.c`, `src/drivers/ai/ai.c`, `include/csilk/drivers/ai.h` |
 | 6.2 Multi-Agent Work-Stealing Grid ↔ Workflow Integration (`csilk_wf_set_grid`, `csilk_wf_submit_grid_task`) | ✅ `src/workflow/wf_grid.c`, `include/csilk/app/workflow.h` |
-| 6.3 WebAssembly (WAMR) Fuel Metering, App Middleware (`csilk_app_use_wasm`) & Workflow Node (`csilk_wf_add_wasm_plugin_node`) | ✅ `src/core/plugin/wasm_plugin.c`, `src/app/app.c`, `src/workflow/wf_tools.c` |
-| 6.4 Eliminate Non-Threadsafe `strtok` & Implement SSRF Protection Engine (`csilk_security_*`) | ✅ `src/core/primitives/ssrf.c`, `include/csilk/core/security.h`, `src/drivers/ai/llama.c` |
+| 6.3 WebAssembly (WAMR) Fuel Metering, App Middleware (`csilk_app_use_wasm`) & Workflow Node (`csilk_wf_add_wasm_plugin_node`) | ✅ `src/core/plugin/wasm_plugin.c`, `include/csilk/app/app.h`, `src/workflow/wf_tools.c` |
+| 6.4 Eliminate Non-Threadsafe `strtok` & Implement SSRF Protection Engine (`csilk_security_*`) | ✅ `src/core/primitives/ssrf.c`, `include/csilk/core/security.h` |
 | 6.5 Triple-Component Atomic Hot Update Engine (`csilk_hot_update`) | ✅ `src/core/server/server_rcu.c`, `include/csilk/core/server/hot_reload.h` |
 | 6.6 Keep-Alive Idle Connection Lazy Arena Allocation & On-Demand Recycling | ✅ `src/core/server/connection_io.c`, `src/core/http/http1_pipeline.c` |
 | 6.7 Full ABI SOVERSION 2 Compatibility Gate (876 pure exports, 100% `csilk_*`) | ✅ `scripts/check_abi_compatibility.sh` |

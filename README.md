@@ -268,7 +268,7 @@ make
 #   -DCSILK_ENABLE_WORKFLOW=OFF          Optional DAG Workflow & ReAct agent engine (enables AI, MQ, WASM)
 #   -DCSILK_ENABLE_MCP=OFF               Optional Model Context Protocol (enables AI)
 #   -DCSILK_ENABLE_GRPC=OFF              Optional gRPC framing & JSON transcoding gateway
-#   -DCSILK_ENABLE_WASM=OFF              Optional WASM plugin sandbox (pair with -DCSILK_ENABLE_WAMR=ON for runtime)
+#   -DCSILK_ENABLE_WASM=OFF              Optional WASM plugin sandbox (WAMR 2.4.4 runtime)
 #   -DCSILK_ENABLE_PERM=OFF              Optional RBAC permission driver
 #   -DCSILK_ENABLE_HTTP3=OFF             Optional HTTP/3 QUIC transport (requires ngtcp2/nghttp3)
 #   -DCSILK_ENABLE_OBSERVABILITY=OFF     Optional OTLP tracing/exporter, CPU flamegraph & Admin Dashboard
@@ -291,9 +291,9 @@ gcovr -r build_cov --filter src/  # 69% line coverage
 
 ## Modular Sub-Libraries & Integration
 
-> **Core vs Optional Module Architecture**: By default (`-DCSILK_BUILD_FULL=OFF`), csilk builds only the **Web Core** (11 targets: `base`, `json`, `crypto`, `reflection`, `runtime`, `tls`, `http2`, `http`, `protocols`, `middleware`, `app`) with zero `sqlite3` or `libcurl` dependencies. Enable all domain subsystems with `-DCSILK_BUILD_FULL=ON` or selectively via `-DCSILK_ENABLE_*`. `csilk_wasm` supports real WebAssembly execution via WAMR 2.4.4 (`-DCSILK_ENABLE_WAMR=ON`), and `csilk_h3` provides real `ngtcp2` + `nghttp3` HTTP/3 QUIC adapters (`-DCSILK_ENABLE_HTTP3=ON`); both fail closed (`ENOTSUP`/`NULL`) when their underlying runtime library is absent.
+> **Core vs Optional Module Architecture**: By default (`-DCSILK_BUILD_FULL=OFF`), csilk builds only the **Web Core** (4 layered libraries: `base`, `runtime`, `http`, `app`, plus 8 compatibility aliases for `json`, `crypto`, `reflection`, `core`, `tls`, `http2`, `protocols`, `middleware`) with zero `sqlite3` or `libcurl` dependencies. Enable all domain subsystems with `-DCSILK_BUILD_FULL=ON` or selectively via `-DCSILK_ENABLE_*`. `csilk_wasm` supports real WebAssembly execution via WAMR 2.4.4 (`-DCSILK_ENABLE_WASM=ON`), and `csilk_h3` provides real `ngtcp2` + `nghttp3` HTTP/3 QUIC adapters (`-DCSILK_ENABLE_HTTP3=ON`); both fail closed (`ENOTSUP`/`NULL`) when their underlying runtime library is absent.
 
-csilk is decomposed into 11 always-built Web Core modules plus 11 optional domain modules (alongside the `csilk::core` compatibility alias and `csilk::csilk` umbrella), available as static (`.a`) and shared (`.so`) libraries:
+csilk is decomposed into 4 layered Web Core libraries (with 8 compatibility aliases covering all 11 logical Core modules) plus 11 optional domain modules (alongside the `csilk::csilk` umbrella), available as static (`.a`) and shared (`.so`) libraries:
 
 | Module Target | Shared Target | Static Archive | Dynamic Library | Description |
 |:---|:---|:---|:---|:---|
@@ -318,7 +318,7 @@ csilk is decomposed into 11 always-built Web Core modules plus 11 optional domai
 | `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | *(Optional `-DCSILK_ENABLE_AI`)* LLM client drivers (OpenAI, Ollama, Anthropic), tool registry, AI tracing |
 | `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | *(Optional `-DCSILK_ENABLE_MQ`)* Internal event bus, PubSub, WAL persistence, Raft consensus |
 | `csilk::workflow` | `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | *(Optional `-DCSILK_ENABLE_WORKFLOW`)* Workflow DAG scheduler, WAL resume, YAML DSL, ReAct agent loop, Agent Skills |
-| `csilk::wasm` | `csilk::wasm_shared` | `libcsilk-wasm.a` | `libcsilk-wasm.so` | *(Optional `-DCSILK_ENABLE_WASM`)* WebAssembly plugin sandbox (WAMR 2.4.4 runtime when `-DCSILK_ENABLE_WAMR=ON`) |
+| `csilk::wasm` | `csilk::wasm_shared` | `libcsilk-wasm.a` | `libcsilk-wasm.so` | *(Optional `-DCSILK_ENABLE_WASM`)* WebAssembly plugin sandbox (WAMR 2.4.4 runtime) |
 | `csilk::csilk` | `csilk::shared` | `libcsilk.a` | `libcsilk.so` | Umbrella target aggregating Web Core plus all currently enabled optional modules |
 
 ### CMake Integration

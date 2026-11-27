@@ -197,12 +197,12 @@ Router uses a segment-prefix trie. Swaps are serialized under `server->config_mu
 
 ### Key module dependency graph
 
-Web Core (11 modules, always built with `-DCSILK_BUILD_FULL=OFF`, zero SQLite3/libcurl dependencies) forms the base layer; all 12 optional domain modules (`CSILK_ENABLE_*` / `-DCSILK_BUILD_FULL=ON`) depend cleanly downward without Web Core up-references. Arrows point from dependent → dependency (`A ──→ B` = A links against B):
+Web Core (4 layered physical libraries `base`, `runtime`, `http`, `app` + 8 compatibility aliases for 11 logical modules, always built with `-DCSILK_BUILD_FULL=OFF`, zero SQLite3/libcurl dependencies) forms the base layer; optional domain modules (`CSILK_ENABLE_*` / `-DCSILK_BUILD_FULL=ON`) depend strictly downward without Web Core up-references (optional integrations register via runtime registries in `obs_registry.h`). Arrows point from dependent → dependency (`A ──→ B` = A links against B):
 ```
-# Web Core (always built)
-app           ──→ { http, protocols, middleware, reflection } (+ optional db, ai, mq, wasm if enabled)
-middleware    ──→ { http, runtime, json, tls, zlib, openssl, threads } (+ optional mq if enabled)
-protocols     ──→ { http, http2, runtime, json, reflection } (+ optional mq if enabled)
+# Web Core (always built — 4 physical layer libraries + 8 compat aliases)
+app           ──→ { http, protocols, middleware, reflection }
+middleware    ──→ { http, runtime, json, tls, zlib, openssl, threads }
+protocols     ──→ { http, http2, runtime, json, reflection }
 http          ──→ { runtime, json, tls, http2, zlib, openssl, llhttp }
 http2         ──→ { runtime, tls, nghttp2 }
 tls           ──→ { runtime, openssl }
@@ -213,7 +213,7 @@ json          ──→ yyjson
 base          ──→ { threads, {libuv|liburing}, m }
 
 # Optional Domain Modules (CSILK_ENABLE_* = OFF by default, ON via -DCSILK_BUILD_FULL=ON)
-observability ──→ { app, middleware, http, runtime, json, threads } (+ optional grpc, db, ai, mq)
+observability ──→ { app, middleware, http, runtime, json, threads }
 workflow      ──→ { runtime, json, ai, mq, wasm, yaml, m }
 mcp           ──→ { protocols, http, runtime, json, ai, curl }
 grpc          ──→ { middleware, http, runtime, json }
@@ -223,7 +223,7 @@ ai            ──→ { runtime, json, curl }
 vector        ──→ { runtime, json, curl, m }
 permission    ──→ { runtime, json }
 mq            ──→ runtime
-wasm          ──→ { runtime, optional vmlib }
+wasm          ──→ { app, runtime, optional vmlib }
 bypass        ──→ runtime
 umbrella      ──→ { Web Core + all enabled CSILK_ENABLE_* modules }
 ```

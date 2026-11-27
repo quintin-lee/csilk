@@ -64,8 +64,8 @@ v1.2.0 聚焦于**协议完整性**（HTTP/3、gRPC）、**会话抽象**（可�
 |---|---|
 | 6.1 OpenTelemetry 2.0 AI Trace ↔ HTTP W3C Spans & 上下文自动埋点 (`csilk_ai_chat_ctx`) | ✅ `src/middleware/otlp_trace.c`、`src/drivers/ai/ai.c`、`include/csilk/drivers/ai.h` |
 | 6.2 去中心化 Multi-Agent 任务网格 ↔ Workflow 引擎深度融合 (`csilk_wf_set_grid`, `csilk_wf_submit_grid_task`) | ✅ `src/workflow/wf_grid.c`、`include/csilk/app/workflow.h` |
-| 6.3 WebAssembly (WAMR) 沙箱 Fuel 计量、App 中间件 (`csilk_app_use_wasm`) 与 Workflow 节点 (`csilk_wf_add_wasm_plugin_node`) | ✅ `src/core/plugin/wasm_plugin.c`、`src/app/app.c`、`src/workflow/wf_tools.c` |
-| 6.4 全局消除线程不安全 `strtok` 并实现 SSRF 防护过滤引擎 (`csilk_security_*`) | ✅ `src/core/primitives/ssrf.c`、`include/csilk/core/security.h`、`src/drivers/ai/llama.c` |
+| 6.3 WebAssembly (WAMR) 沙箱 Fuel 计量、App 中间件 (`csilk_app_use_wasm`) 与 Workflow 节点 (`csilk_wf_add_wasm_plugin_node`) | ✅ `src/core/plugin/wasm_plugin.c`、`include/csilk/app/app.h`、`src/workflow/wf_tools.c` |
+| 6.4 全局消除线程不安全 `strtok` 并实现 SSRF 防护过滤引擎 (`csilk_security_*`) | ✅ `src/core/primitives/ssrf.c`、`include/csilk/core/security.h` |
 | 6.5 三组件原子热更新统一执行器 (`csilk_hot_update`) | ✅ `src/core/server/server_rcu.c`、`include/csilk/core/server/hot_reload.h` |
 | 6.6 空闲 Keep-Alive 连接 Arena 延迟分配与按需回收 | ✅ `src/core/server/connection_io.c`、`src/core/http/http1_pipeline.c` |
 | 6.7 全量 ABI SOVERSION 2 兼容性验证（876 纯净导出，100% `csilk_*`） | ✅ `scripts/check_abi_compatibility.sh` |

@@ -13,9 +13,9 @@
 |:--------:|:-----:|---|
 | **CRITICAL** | 1 | ~~JWT signature OOB read~~ ✅ **Fixed** |
 | **HIGH** | 7 | ~~Zero-salt bcrypt~~ ✅ **Fixed**, ~~predictable CSRF tokens~~ ✅ **Fixed**, ~~weak nonce fallback~~ ✅ **Fixed**, ~~Redis injection~~ ✅ **Fixed**, ~~SQL injection (prepared stmts added)~~ ✅ **Mitigated**, ~~WebSocket key truncation~~ ✅ **Fixed**, ~~static path traversal~~ ✅ **Fixed** |
-| **MEDIUM** | 9 | ~~Rate-limit saturation~~ ✅ **Fixed**, session binding (open), ~~session value lifetime APIs~~ ✅ **Mitigated**, ~~CORS credential leak~~ ✅ **Fixed**, ~~gzip expansion / bounds~~ ✅ **Fixed**, ~~URL invalid `%XX` escaping~~ ✅ **Fixed**, config validation (⚠️ partial), reflection mass assignment (open), ~~hot-reload temp file TOCTOU~~ ✅ **Fixed** |
+| **MEDIUM** | 9 | ~~Rate-limit saturation~~ ✅ **Fixed**, session binding (open), ~~session value lifetime APIs~~ ✅ **Mitigated**, ~~CORS credential leak~~ ✅ **Fixed**, ~~gzip expansion / bounds~~ ✅ **Fixed**, ~~URL invalid `%XX` escaping~~ ✅ **Fixed**, ~~config validation~~ ✅ **Fixed**, reflection mass assignment (open), ~~hot-reload temp file TOCTOU~~ ✅ **Fixed** |
 | **LOW** | 5 | `constant_time_compare` vs `CRYPTO_memcmp`, key buffer cleansing, ~~JWT unknown alg label~~ ✅ **Fixed**, HMAC NULL acceptance, ~~nonce fallback~~ ✅ **Fixed** |
-| **INFO** | 11 | ~~I1 DB pool timeout~~, ~~I2 streaming body limit~~, ~~I3 CRLF sanitization~~, ~~I7 `volatile` removal~~, ~~I10 RCU swap order~~, ~~I11 `g_dist_mutex`~~ ✅ **Fixed**; ~~I6/I9~~ 📝 **Verified Safe / By Design**; ~~I8 admin auth~~ ⚠️ **Partial**; I4/I5 open |
+| **INFO** | 11 | ~~I1 DB pool timeout~~, ~~I2 streaming body limit~~, ~~I3 CRLF sanitization~~, ~~I5 base_url SSRF check~~, ~~I7 `volatile` removal~~, ~~I10 RCU swap order~~, ~~I11 `g_dist_mutex`~~ ✅ **Fixed**; ~~I6/I9~~ 📝 **Verified Safe / By Design**; ~~I8 admin auth~~ ⚠️ **Partial**; I4 open |
 
 > **Update 2026-11-16**: Several findings have been fixed in the current codebase:
 > C1 (JWT OOB), H1 (bcrypt zero salt), H2 (CSRF PRNG), H4 (Redis format-string), M1 (ratelimit saturation).
@@ -271,18 +271,11 @@ Invalid `%XX` sequences are passed through unchanged instead of being rejected o
 
 **Fix**: Reject or normalize invalid percent-encoding.
 
-### M7. Config Validation Gaps  ⚠️ **PARTIALLY MITIGATED**
-**File**: `src/core/config/config.c:120-325, 512-620`
+### M7. Config Validation Gaps  ✅ **FIXED**
+**File**: `src/core/config/config.c`
 **Impact**: Misconfiguration leading to security issues
 
-> **Status**: Partially mitigated. `csilk_config_validate()` (`config.c:512-620`) validates `port`/`http3_port` in `[1, 65535]`, non-negative `idle_timeout_ms` and `max_connections`, positive body/header/backlog/worker bounds, and TLS certificate paths. Remaining gaps in the YAML parser: `atoi()`/`atoll()` without `strtol` overflow checks, missing `base_url` validation, and unbounded YAML nesting depth.
-
-- `atoi()`/`atoll()` used without range checks on port values during parse (`validated post-parse`)
-- Remaining timeouts (`read_timeout_ms`, `write_timeout_ms`, `request_timeout_ms`) not checked in `csilk_config_validate()`
-- `base_url` not validated for protocol or path traversal
-- YAML depth unbounded
-
-**Fix**: Switch YAML integer parsing to bounded `strtol()`/`strtoll()` and validate `base_url`, remaining timeouts, and nesting depth.
+> **Status**: Fixed. YAML integer parsing now uses bounded `strtol()`/`strtoll()` helpers (`parse_int_strtol`, `parse_ll_clamped`, `parse_timeout_ms`), string updates free prior values on duplicate keys, YAML nesting depth is capped at `CONFIG_YAML_MAX_DEPTH` (32), and `csilk_config_validate()` checks `idle_timeout_ms`/`read_timeout_ms`/`write_timeout_ms`/`request_timeout_ms` range (`<= INT_MAX`) plus `ai.base_url` scheme/SSRF safety via `csilk_security_url_is_ssrf_safe()`.
 
 ### M8. Mass Assignment via Reflection
 **File**: `src/reflection/reflect_marshal.c`
@@ -347,7 +340,7 @@ NULL key → empty string; NULL data → empty string. No validation.
 | I2 | ~~No request body size enforcement during streaming~~ ✅ **Fixed** (`http1_parse.c:on_body()` enforces `max_body_size` incrementally and returns `HPE_USER`) | Slow-loris / oversized body capped mid-stream |
 | I3 | ~~No CRLF validation on HTTP headers~~ ✅ **Fixed** (`header_map.c:506-528` & `response.c:135` strip CR/LF, CWE-113) | Response splitting prevented |
 | I4 | WAF pattern matching (`waf.c`) is case-insensitive with scan budgets (`256 KB` body / `64 KB` value) and inspects `url.c`-canonicalized `%25`/decoded input, but does not perform extra multi-round unescaping | Double-encoding evasion remains policy/caller scope |
-| I5 | `ssrf.c` provides `csilk_security_url_is_ssrf_safe()`, not yet wired into AI driver `base_url` validation | SSRF risk if AI endpoints come from untrusted config |
+| I5 | ~~`ssrf.c` provides `csilk_security_url_is_ssrf_safe()`, not yet wired into AI driver `base_url` validation~~ ✅ **Fixed** | Validated in `csilk_config_validate()` and enforced across AI/Vector/MCP HTTP drivers via `drivers/curl_common.h` |
 | I6 | 📝 **Verified Safe**: `lfqueue.h` `relaxed` store on producer `next` precedes `acq_rel` head exchange and `release` `prev->next` link, paired with `acquire` loads on consumer (Vyukov MPSC) | Ordering is sound on ARM/x86 |
 | I7 | ~~`volatile` used for mutex-protected indices in thread pool~~ ✅ **Fixed / Obsolete** | No `volatile` index fields remain in `src/core/` |
 | I8 | ⚠️ **Partially Mitigated**: `csilk_admin_serve()` fails closed and `csilk_admin_serve_secure()` (`admin.c:478-501`) requires non-NULL `auth_middleware` | Auth enforced; rate limiting remains caller opt-in |
@@ -364,8 +357,8 @@ NULL key → empty string; NULL data → empty string. No validation.
 | **P0** | ~~C1 (JWT OOB)~~ ✅ Fixed | — | Completed |
 | **P1** | ~~H1, H2, H3, H4, H6, H7~~ ✅ Fixed, ~~H5~~ ✅ Mitigated (prepared statements + doc warning) | — | Completed |
 | **P2** | ~~M1, M4, M5, M6, M9, I1, I2, I3, I7, I10, I11~~ ✅ Fixed, ~~M3~~ ✅ Mitigated | — | Completed |
-| **P3** | M2, M7 (YAML `strtol`/depth/remaining timeouts), M8 (session binding, config parsing, reflection allowlists) | 6h | Next release |
-| **P4** | L1, L2, L4, I4, I5, I8 (Hardening, docs) | 12h | Ongoing |
+| **P3** | ~~M7~~ ✅ Fixed, M2, M8 (session binding, reflection allowlists) | 6h | Next release |
+| **P4** | ~~I5~~ ✅ Fixed, L1, L2, L4, I4, I8 (Hardening, docs) | 12h | Ongoing |
 
 ---
 
