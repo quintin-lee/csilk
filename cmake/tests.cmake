@@ -151,6 +151,7 @@ set(CSILK_CORE_TESTS
     test_bounded_buf
     test_cpu_hardware_profile
     test_io_backend
+    test_io_equivalence
     test_secret
     test_python_abi
     test_hot_update_atomic
@@ -310,7 +311,7 @@ set(CSILK_PROTOCOL_TESTS
     test_h2_header_bench
 )
 if(CSILK_ENABLE_HTTP3)
-  list(APPEND CSILK_PROTOCOL_TESTS test_h3 test_h3_worker test_http3_skeleton)
+  list(APPEND CSILK_PROTOCOL_TESTS test_h3 test_h3_worker test_h3_e2e test_http3_skeleton)
 endif()
 if(CSILK_ENABLE_MCP)
   list(APPEND CSILK_PROTOCOL_TESTS

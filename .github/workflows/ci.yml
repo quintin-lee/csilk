@@ -334,6 +334,12 @@ jobs:
         ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
         LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
 
+    - name: Verify libuv vs io_uring behavioral equivalence
+      run: bash ./scripts/check_uring_equivalence.sh --uv-bin build/test_io_equivalence --uring-bin build_uring/test_io_equivalence
+      env:
+        ASAN_OPTIONS: detect_leaks=1:symbolize=1:abort_on_error=1
+        LSAN_OPTIONS: suppressions=${{ github.workspace }}/cmake/.lsan-suppressions
+
 
   tsan:
     name: ThreadSanitizer
