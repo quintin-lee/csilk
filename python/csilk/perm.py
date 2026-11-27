@@ -5,7 +5,7 @@ engine, plus a built-in simple RBAC driver that can be used without an
 external database.
 """
 
-from csilk.lib import get_bindings
+from csilk.lib import get_bindings, require_symbol
 
 
 class Perm:
@@ -23,6 +23,10 @@ class Perm:
 
     _rule_refs = []  # Keep byte references alive to prevent GC
 
+    def __new__(cls, *args, **kwargs):
+        require_symbol(get_bindings(), "csilk_perm_init", "CSILK_ENABLE_PERM")
+        return super().__new__(cls)
+
     @staticmethod
     def init():
         """Initialise the pluggable permission subsystem.
@@ -30,7 +34,7 @@ class Perm:
         Must be called once before any other ``Perm`` method.
         """
         lib = get_bindings()
-        lib.csilk_perm_init()
+        require_symbol(lib, "csilk_perm_init", "CSILK_ENABLE_PERM")()
 
     @staticmethod
     def set_default(driver_name: str):
@@ -42,7 +46,8 @@ class Perm:
             RuntimeError: If the driver cannot be set.
         """
         lib = get_bindings()
-        res = lib.csilk_perm_set_default(driver_name.encode('utf-8'))
+        fn = require_symbol(lib, "csilk_perm_set_default", "CSILK_ENABLE_PERM")
+        res = fn(driver_name.encode('utf-8'))
         if res != 0:
             raise RuntimeError(f"Failed to set default permission driver to '{driver_name}'")
 
@@ -59,7 +64,8 @@ class Perm:
             0 if allowed, non-zero if denied.
         """
         lib = get_bindings()
-        return lib.csilk_perm_check(ctx._ctx, permission.encode('utf-8'), resource.encode('utf-8'))
+        fn = require_symbol(lib, "csilk_perm_check", "CSILK_ENABLE_PERM")
+        return fn(ctx._ctx, permission.encode('utf-8'), resource.encode('utf-8'))
 
     @staticmethod
     def require(ctx, permission: str, resource: str):
@@ -74,7 +80,8 @@ class Perm:
             resource: Target resource identifier.
         """
         lib = get_bindings()
-        lib.csilk_perm_require(ctx._ctx, permission.encode('utf-8'), resource.encode('utf-8'))
+        fn = require_symbol(lib, "csilk_perm_require", "CSILK_ENABLE_PERM")
+        fn(ctx._ctx, permission.encode('utf-8'), resource.encode('utf-8'))
 
     @staticmethod
     def simple_init():
@@ -83,7 +90,7 @@ class Perm:
         Call before adding rules via :meth:`simple_allow`.
         """
         lib = get_bindings()
-        lib.csilk_perm_simple_init()
+        require_symbol(lib, "csilk_perm_simple_init", "CSILK_ENABLE_PERM")()
 
     @staticmethod
     def simple_allow(role: str, permission: str, resource: str) -> int:
@@ -98,20 +105,22 @@ class Perm:
             0 on success, non-zero on failure.
         """
         lib = get_bindings()
+        fn = require_symbol(lib, "csilk_perm_simple_allow", "CSILK_ENABLE_PERM")
         role_bytes = role.encode('utf-8')
         perm_bytes = permission.encode('utf-8')
         res_bytes = resource.encode('utf-8')
 
         Perm._rule_refs.append((role_bytes, perm_bytes, res_bytes))
 
-        return lib.csilk_perm_simple_allow(role_bytes, perm_bytes, res_bytes)
+        return fn(role_bytes, perm_bytes, res_bytes)
 
     @staticmethod
     def simple_clear():
         """Remove all rules from the in-memory RBAC driver."""
         lib = get_bindings()
+        fn = require_symbol(lib, "csilk_perm_simple_clear", "CSILK_ENABLE_PERM")
         Perm._rule_refs.clear()
-        lib.csilk_perm_simple_clear()
+        fn()
 
     @staticmethod
     def auto_middleware(ctx):
@@ -121,4 +130,5 @@ class Perm:
         route definition and checks them against the current context.
         """
         lib = get_bindings()
-        lib.csilk_perm_auto_middleware(ctx._ctx)
+        fn = require_symbol(lib, "csilk_perm_auto_middleware", "CSILK_ENABLE_PERM")
+        fn(ctx._ctx)

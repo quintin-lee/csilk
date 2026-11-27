@@ -3,7 +3,7 @@
 Provides CircuitBreaker, SlidingLimiter, and OTLP Tracing wrappers.
 """
 
-from csilk.lib import get_bindings, CsilkCircuitBreakerConfig
+from csilk.lib import get_bindings, require_symbol, CsilkCircuitBreakerConfig
 
 class CircuitBreaker:
     """High-level Python wrapper for csilk C Circuit Breaker."""
@@ -69,4 +69,5 @@ class SlidingLimiter:
 def trace_middleware(ctx):
     """Invoke OpenTelemetry W3C Trace Context middleware on a request context."""
     lib = get_bindings()
-    lib.csilk_trace_middleware(ctx._ctx)
+    fn = require_symbol(lib, "csilk_trace_middleware", "CSILK_ENABLE_OBSERVABILITY")
+    fn(ctx._ctx)

@@ -7,7 +7,7 @@ Wraps the csilk C AI engine, which supports multiple AI providers
 import ctypes
 import json
 from csilk.lib import (
-    get_bindings, CsilkAiMessage, CsilkAiChatRequest, CsilkAiChatResponse,
+    get_bindings, require_symbol, CsilkAiMessage, CsilkAiChatRequest, CsilkAiChatResponse,
     CsilkAiEmbeddingsResponse, CsilkAiStats, CsilkAiStreamCb, CsilkAiContext
 )
 
@@ -25,6 +25,10 @@ class AI:
         vectors = ai.generate_embeddings("text-embedding-3-small", ["hello"])
         print(AI.get_stats())
     """
+
+    def __new__(cls, *args, **kwargs):
+        require_symbol(get_bindings(), "csilk_ai_new", "CSILK_ENABLE_AI")
+        return super().__new__(cls)
 
     def __init__(self, driver_name: str, api_key: str = None, base_url: str = None):
         """Open an AI driver instance.
@@ -47,7 +51,7 @@ class AI:
 
     def free(self):
         """Release the AI driver and all associated resources."""
-        if self._ai:
+        if getattr(self, "_ai", None):
             self._lib.csilk_ai_free(self._ai)
             self._ai = None
 
@@ -64,8 +68,9 @@ class AI:
             and ``duration_us_total``.
         """
         lib = get_bindings()
+        fn = require_symbol(lib, "csilk_ai_get_stats", "CSILK_ENABLE_AI")
         stats = CsilkAiStats()
-        lib.csilk_ai_get_stats(ctypes.byref(stats))
+        fn(ctypes.byref(stats))
         return {
             "requests_total": stats.requests_total,
             "tokens_total": stats.tokens_total,
@@ -78,7 +83,9 @@ class AI:
     @staticmethod
     def register_monitor(ctx):
         """Register a context for AI workflow monitoring."""
-        get_bindings().csilk_ai_register_monitor(ctx._ctx)
+        lib = get_bindings()
+        fn = require_symbol(lib, "csilk_ai_register_monitor", "CSILK_ENABLE_AI")
+        fn(ctx._ctx)
 
     def chat(self, model: str, messages: list, temperature: float = 0.7,
              max_tokens: int = 1024, on_chunk=None, timeout_ms: int = 0) -> dict:
@@ -216,6 +223,10 @@ class AIContext:
             print(msg["role"], ":", msg["content"])
     """
 
+    def __new__(cls, *args, **kwargs):
+        require_symbol(get_bindings(), "csilk_ai_context_new", "CSILK_ENABLE_AI")
+        return super().__new__(cls)
+
     def __init__(self, max_history: int = 0):
         """Create a new AI conversation context.
 
@@ -232,7 +243,7 @@ class AIContext:
 
     def free(self):
         """Release the conversation context."""
-        if self._ctx:
+        if getattr(self, "_ctx", None):
             self._lib.csilk_ai_context_free(self._ctx)
             self._ctx = None
 

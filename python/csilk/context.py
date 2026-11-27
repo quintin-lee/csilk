@@ -7,7 +7,7 @@ along with session storage and a case-insensitive dict for headers.
 import ctypes
 import json
 import time
-from csilk.lib import get_bindings
+from csilk.lib import get_bindings, has_symbol
 
 _python_sessions = {}
 
@@ -865,12 +865,16 @@ class Context:
     @property
     def trace_id(self):
         """Get the active OpenTelemetry W3C trace ID from context, or None."""
+        if not has_symbol(self._lib, "csilk_ctx_get_trace_id"):
+            return None
         res = self._lib.csilk_ctx_get_trace_id(self._ctx)
         return res.decode('utf-8') if res else None
 
     @property
     def span_id(self):
         """Get the active OpenTelemetry W3C span ID from context, or None."""
+        if not has_symbol(self._lib, "csilk_ctx_get_span_id"):
+            return None
         res = self._lib.csilk_ctx_get_span_id(self._ctx)
         return res.decode('utf-8') if res else None
 

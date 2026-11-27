@@ -11,7 +11,7 @@ etc.) are provided as module-level functions for convenience.
 import asyncio
 import ctypes
 import time
-from csilk.lib import get_bindings, CsilkHandler, CsilkCtxPtr
+from csilk.lib import get_bindings, require_symbol, CsilkHandler, CsilkCtxPtr
 from csilk.context import Context
 
 
@@ -483,9 +483,10 @@ class App:
         ``None`` if the server has not been initialised yet.
         """
         if not hasattr(self, "_mq_obj"):
+            get_mq = require_symbol(self._lib, "csilk_server_get_mq", "CSILK_ENABLE_MQ")
             server = self._lib.csilk_app_server(self._app)
             if server:
-                mq_ptr = self._lib.csilk_server_get_mq(server)
+                mq_ptr = get_mq(server)
                 if mq_ptr:
                     self._mq_obj = MQ(mq_ptr)
                 else:
@@ -500,7 +501,10 @@ class App:
         Args:
             path: URL prefix (e.g. ``"/admin"``).
         """
-        self._lib.csilk_admin_serve(self._app, path.encode('utf-8'))
+        admin_serve_fn = require_symbol(
+            self._lib, "csilk_admin_serve", "CSILK_ENABLE_OBSERVABILITY"
+        )
+        admin_serve_fn(self._app, path.encode('utf-8'))
 
     def admin_serve_secure(self, path, auth_middleware):
         """Serve the admin dashboard behind a custom auth middleware.
@@ -510,6 +514,9 @@ class App:
             auth_middleware: Middleware ``(Context) -> None`` that
                              rejects unauthorised requests.
         """
+        admin_serve_secure_fn = require_symbol(
+            self._lib, "csilk_admin_serve_secure", "CSILK_ENABLE_OBSERVABILITY"
+        )
         import weakref
         app_ref = weakref.proxy(self)
         @CsilkHandler
@@ -524,7 +531,7 @@ class App:
                     ctx.string(500, f"Internal Server Error: {str(e)}")
 
         self._handlers.append(wrapper)
-        self._lib.csilk_admin_serve_secure(self._app, path.encode('utf-8'), wrapper)
+        admin_serve_secure_fn(self._app, path.encode('utf-8'), wrapper)
 
     # Run / Stop
     def run(self, port):
@@ -815,6 +822,10 @@ class MqContext:
     Wraps an opaque C ``csilk_mq_ctx_t`` pointer.
     """
 
+    def __new__(cls, *args, **kwargs):
+        require_symbol(get_bindings(), "csilk_mq_get_topic", "CSILK_ENABLE_MQ")
+        return super().__new__(cls)
+
     def __init__(self, ctx_ptr):
         self._ctx = ctx_ptr
         self._lib = get_bindings()
@@ -848,6 +859,10 @@ class MQ:
     Use through the ``App.mq`` property.  Messages are delivered
     asynchronously within the server process.
     """
+
+    def __new__(cls, *args, **kwargs):
+        require_symbol(get_bindings(), "csilk_mq_publish", "CSILK_ENABLE_MQ")
+        return super().__new__(cls)
 
     def __init__(self, mq_ptr):
         self._mq = mq_ptr

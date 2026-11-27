@@ -7,7 +7,7 @@ similarity search.
 
 import ctypes
 import json
-from csilk.lib import get_bindings, CsilkVectorPoint, CsilkVectorSearchResponse
+from csilk.lib import get_bindings, require_symbol, CsilkVectorPoint, CsilkVectorSearchResponse
 
 
 class VectorDB:
@@ -21,6 +21,10 @@ class VectorDB:
         ])
         results = vdb.search("my_collection", [0.1, 0.2, ...], limit=5)
     """
+
+    def __new__(cls, *args, **kwargs):
+        require_symbol(get_bindings(), "csilk_vector_db_new", "CSILK_ENABLE_VECTOR")
+        return super().__new__(cls)
 
     def __init__(self, driver_name: str, endpoint: str, api_key: str = None):
         """Open a connection to a vector database.
@@ -191,7 +195,10 @@ class VectorDB:
         """
         instance = cls.__new__(cls)
         instance._lib = get_bindings()
-        instance._db = instance._lib.csilk_vector_db_new_embedded_mmap(filepath.encode("utf-8"))
+        fn = require_symbol(
+            instance._lib, "csilk_vector_db_new_embedded_mmap", "CSILK_ENABLE_VECTOR"
+        )
+        instance._db = fn(filepath.encode("utf-8"))
         if not instance._db:
             raise RuntimeError(f"Failed to open vector DB mmap at '{filepath}'")
         return instance

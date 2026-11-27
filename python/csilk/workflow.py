@@ -8,7 +8,7 @@ nodes with conditional routing, retries, tool calling, and tracing.
 import ctypes
 import json
 from csilk.lib import (
-    get_bindings, CsilkAppPtr, CsilkCtxPtr,
+    get_bindings, require_symbol, CsilkAppPtr, CsilkCtxPtr,
     CsilkData, CsilkDataPtr, CsilkAiConfig, CsilkVectorSearchConfig,
     CsilkWfToolEntry, CsilkWfHandler, CsilkWfRouter,
     CsilkWfToolFn, CsilkWfRunCallback, CsilkWfRunTracedCallback,
@@ -65,6 +65,10 @@ class WorkflowContext:
     single node handler invocation.
     """
 
+    def __new__(cls, *args, **kwargs):
+        require_symbol(get_bindings(), "csilk_wf_strdup", "CSILK_ENABLE_WORKFLOW")
+        return super().__new__(cls)
+
     def __init__(self, ctx_ptr):
         self._ptr = ctx_ptr
         self._lib = get_bindings()
@@ -89,6 +93,10 @@ class WorkflowContext:
 
 
 class WorkflowNode:
+    def __new__(cls, *args, **kwargs):
+        require_symbol(get_bindings(), "csilk_wf_node_set_entry", "CSILK_ENABLE_WORKFLOW")
+        return super().__new__(cls)
+
     def __init__(self, node_ptr):
         self._ptr = node_ptr
         self._lib = get_bindings()
@@ -180,6 +188,10 @@ class Workflow:
         wf.run("start", callback=lambda res: print(res))
     """
 
+    def __new__(cls, *args, **kwargs):
+        require_symbol(get_bindings(), "csilk_wf_new", "CSILK_ENABLE_WORKFLOW")
+        return super().__new__(cls)
+
     def __init__(self, name_or_ptr):
         """Create a new workflow or wrap an existing C pointer.
 
@@ -207,7 +219,7 @@ class Workflow:
 
     def free(self):
         """Release the workflow and all associated resources."""
-        if self._wf and self._owned:
+        if getattr(self, "_wf", None) and getattr(self, "_owned", False):
             self._lib.csilk_wf_free(self._wf)
             self._wf = None
 
@@ -220,6 +232,7 @@ class Workflow:
     def register_handler(cls, name, handler_fn):
         """Globally register a handler function by name (for declarative workflows)."""
         lib = get_bindings()
+        fn = require_symbol(lib, "csilk_wf_register_handler", "CSILK_ENABLE_WORKFLOW")
         @CsilkWfHandler
         def wrapper(ctx_ptr, input_ptr, user_data):
             try:
@@ -231,7 +244,7 @@ class Workflow:
                 traceback.print_exc()
             return None
         cls._global_handlers.append(wrapper)
-        lib.csilk_wf_register_handler(name.encode('utf-8'), wrapper)
+        fn(name.encode('utf-8'), wrapper)
 
     @classmethod
     def load_yaml(cls, path):
@@ -241,7 +254,8 @@ class Workflow:
             A new ``Workflow`` instance, or ``None`` on failure.
         """
         lib = get_bindings()
-        ptr = lib.csilk_wf_load_yaml(path.encode('utf-8'))
+        fn = require_symbol(lib, "csilk_wf_load_yaml", "CSILK_ENABLE_WORKFLOW")
+        ptr = fn(path.encode('utf-8'))
         return cls(ptr) if ptr else None
 
     @classmethod
@@ -252,13 +266,16 @@ class Workflow:
             A new ``Workflow`` instance, or ``None`` on failure.
         """
         lib = get_bindings()
-        ptr = lib.csilk_wf_from_json(json_str.encode('utf-8'))
+        fn = require_symbol(lib, "csilk_wf_from_json", "CSILK_ENABLE_WORKFLOW")
+        ptr = fn(json_str.encode('utf-8'))
         return cls(ptr) if ptr else None
 
     @staticmethod
     def serve_ui(app, path="/workflow/ui"):
         """Serve the workflow visualisation UI at *path* on the given app."""
-        get_bindings().csilk_wf_serve_ui(app._app, path.encode('utf-8'))
+        lib = get_bindings()
+        fn = require_symbol(lib, "csilk_wf_serve_ui", "CSILK_ENABLE_WORKFLOW")
+        fn(app._app, path.encode('utf-8'))
 
     def add(self, node_id, handler_fn=None):
         """Add a custom handler node to the workflow.

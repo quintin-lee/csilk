@@ -7,7 +7,7 @@ Redis drivers.
 
 import ctypes
 import json
-from csilk.lib import get_bindings, CsilkDbStats
+from csilk.lib import get_bindings, require_symbol, CsilkDbStats
 
 
 class DBPool:
@@ -20,6 +20,10 @@ class DBPool:
         pool.exec("DELETE FROM temp")
         print(DBPool.get_stats())
     """
+
+    def __new__(cls, *args, **kwargs):
+        require_symbol(get_bindings(), "csilk_db_pool_new", "CSILK_ENABLE_DB")
+        return super().__new__(cls)
 
     def __init__(self, driver_name: str, dsn: str):
         """Open a connection pool.
@@ -39,7 +43,7 @@ class DBPool:
 
     def free(self):
         """Release the pool and all underlying connections."""
-        if self._pool:
+        if getattr(self, "_pool", None):
             self._lib.csilk_db_pool_free(self._pool)
             self._pool = None
 
@@ -111,8 +115,9 @@ class DBPool:
             ``errors_total``, and ``duration_us_total``.
         """
         lib = get_bindings()
+        fn = require_symbol(lib, "csilk_db_get_stats", "CSILK_ENABLE_DB")
         stats = CsilkDbStats()
-        lib.csilk_db_get_stats(ctypes.byref(stats))
+        fn(ctypes.byref(stats))
         return {
             "queries_total": stats.queries_total,
             "execs_total": stats.execs_total,
