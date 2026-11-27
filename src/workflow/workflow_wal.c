@@ -19,6 +19,8 @@
 
 #include "csilk/app/workflow_wal.h"
 #include "csilk/core/sync.h"
+#include "workflow_internal.h"
+#include "../messaging/wal_common.h"
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -85,16 +87,12 @@ wal_writer_thread(void* arg)
             header.timestamp = (uint64_t)time(NULL);
             header.payload_len = (uint32_t)task->len;
 
-            if (write(fd, &header, sizeof(header)) == sizeof(header)) {
+            if (_csilk_wal_write_all(fd, &header, sizeof(header)) == 0) {
                 if (task->len > 0 && task->payload) {
-                    (void)write(fd, task->payload, task->len);
+                    (void)_csilk_wal_write_all(fd, task->payload, task->len);
                 }
             }
-#ifdef __APPLE__
-            fsync(fd);
-#else
-            fdatasync(fd);
-#endif
+            (void)_csilk_wal_fsync_fd(fd);
             close(fd);
         }
 
@@ -213,4 +211,39 @@ _wf_wal_append(const char* wal_path, csilk_wf_event_type_t type, const void* pay
     csilk_mutex_unlock(&g_wal_mutex);
 
     return 0;
+}
+
+void
+_wf_wal_log_event(csilk_wf_ctx_t*       ctx,
+                  csilk_wf_event_type_t type,
+                  const char*           node_id,
+                  csilk_data_t*         data)
+{
+    if (!ctx || !ctx->wal_path) {
+        return;
+    }
+
+    const char* nid = node_id ? node_id : "";
+    const char* d_type = (data && data->type) ? data->type : "";
+    const char* d_val = (data && data->value) ? (char*)data->value : "";
+
+    size_t node_id_len = strlen(nid) + 1;
+    size_t type_len = strlen(d_type) + 1;
+    size_t val_len = strlen(d_val) + 1;
+
+    size_t total_len = node_id_len + type_len + val_len;
+    char*  payload = malloc(total_len);
+    if (!payload) {
+        return;
+    }
+
+    char* p = payload;
+    memcpy(p, nid, node_id_len);
+    p += node_id_len;
+    memcpy(p, d_type, type_len);
+    p += type_len;
+    memcpy(p, d_val, val_len);
+
+    _wf_wal_append(ctx->wal_path, type, payload, total_len);
+    free(payload);
 }

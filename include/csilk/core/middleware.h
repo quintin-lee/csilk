@@ -75,6 +75,38 @@ void csilk_logger_handler(csilk_ctx_t* c);
  *  @param c  The request context. */
 void csilk_waf_middleware(csilk_ctx_t* c);
 
+/* --- Userspace IP/CIDR & Payload WAF Filter --- */
+
+/** @brief Opaque handle for stateful IP/CIDR and payload pattern WAF filter. */
+typedef struct csilk_waf_filter_s csilk_waf_filter_t;
+
+/** @brief Action returned by csilk_waf_filter_inspect(). */
+typedef enum {
+    CSILK_WAF_ACTION_PASS = 0,
+    CSILK_WAF_ACTION_DROP = 1,
+} csilk_waf_action_t;
+
+/** @brief Create a thread-safe userspace IP/CIDR + payload pattern WAF filter. */
+csilk_waf_filter_t* csilk_waf_filter_new(void);
+
+/** @brief Add an IPv4 CIDR filtering rule (e.g., "192.168.1.0/24" or "10.0.0.1"). */
+int csilk_waf_filter_add_ip_rule(csilk_waf_filter_t* filter, const char* ip_cidr, uint8_t action);
+
+/** @brief Convenience wrapper to block an IPv4 address or CIDR. */
+int csilk_waf_filter_block_ip(csilk_waf_filter_t* filter, const char* ip_str);
+
+/** @brief Add a payload substring pattern rule to drop matching requests. */
+int csilk_waf_filter_block_pattern(csilk_waf_filter_t* filter, const char* pattern);
+
+/** @brief Inspect a host-order IPv4 source address and optional payload against filter rules. */
+csilk_waf_action_t csilk_waf_filter_inspect(csilk_waf_filter_t* filter,
+                                            uint32_t            src_ip,
+                                            const uint8_t*      payload,
+                                            size_t              len);
+
+/** @brief Free a WAF filter instance. */
+void csilk_waf_filter_free(csilk_waf_filter_t* filter);
+
 /** @brief Request ID middleware.
  * Generates a unique ID for each request and sets X-Request-Id header.
  * @param c The request context. */

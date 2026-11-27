@@ -4,16 +4,34 @@
  * @copyright MIT License
  */
 
+#include <arpa/inet.h>
 #include <ctype.h>
-#include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "csilk/csilk.h"
+#include "csilk/core/middleware.h"
+#include "csilk/core/sync.h"
 
 typedef struct {
     const char* pattern;
     size_t      len;
 } waf_pattern_t;
+
+typedef struct {
+    uint32_t ip;
+    uint32_t prefix_len;
+    uint8_t  action;
+} waf_ip_rule_t;
+
+struct csilk_waf_filter_s {
+    waf_ip_rule_t rules[256];
+    size_t        rule_count;
+    char*         patterns[128];
+    size_t        pattern_count;
+    csilk_mutex_t mutex;
+};
 
 /** @brief Common patterns for SQL Injection attacks. */
 static waf_pattern_t sql_rules[] = {
@@ -483,4 +501,160 @@ csilk_waf_middleware(csilk_ctx_t* c)
     }
 
     csilk_next(c);
+}
+
+/* --- Stateful IP/CIDR & Payload WAF Filter --- */
+
+static const void*
+_csilk_waf_memmem(const void* haystack, size_t haystacklen, const void* needle, size_t needlelen)
+{
+    if (!haystack || !needle || needlelen == 0 || haystacklen < needlelen) {
+        return NULL;
+    }
+    const unsigned char* h = (const unsigned char*)haystack;
+    const unsigned char* n = (const unsigned char*)needle;
+    for (size_t i = 0; i <= haystacklen - needlelen; i++) {
+        if (h[i] == n[0] && memcmp(h + i, n, needlelen) == 0) {
+            return h + i;
+        }
+    }
+    return NULL;
+}
+
+csilk_waf_filter_t*
+csilk_waf_filter_new(void)
+{
+    csilk_waf_filter_t* filter = calloc(1, sizeof(csilk_waf_filter_t));
+    if (!filter) {
+        return NULL;
+    }
+    csilk_mutex_init(&filter->mutex);
+    return filter;
+}
+
+int
+csilk_waf_filter_add_ip_rule(csilk_waf_filter_t* filter, const char* ip_cidr, uint8_t action)
+{
+    if (!filter || !ip_cidr) {
+        return -1;
+    }
+
+    csilk_mutex_lock(&filter->mutex);
+
+    if (filter->rule_count >= 256) {
+        csilk_mutex_unlock(&filter->mutex);
+        return -1;
+    }
+
+    char ip_str[64];
+    snprintf(ip_str, sizeof(ip_str), "%s", ip_cidr);
+    char*    slash = strchr(ip_str, '/');
+    uint32_t prefix_len = 32;
+
+    if (slash) {
+        *slash = '\0';
+        char* endptr = NULL;
+        long  parsed = strtol(slash + 1, &endptr, 10);
+        if (endptr == slash + 1 || *endptr != '\0' || parsed < 0 || parsed > 32) {
+            csilk_mutex_unlock(&filter->mutex);
+            CSILK_LOG_E("WAF Filter: Invalid IPv4 prefix length: %ld (must be 0-32)", parsed);
+            return -1;
+        }
+        prefix_len = (uint32_t)parsed;
+    }
+
+    struct in_addr addr;
+    if (inet_pton(AF_INET, ip_str, &addr) != 1) {
+        csilk_mutex_unlock(&filter->mutex);
+        return -1;
+    }
+
+    waf_ip_rule_t* rule = &filter->rules[filter->rule_count++];
+    rule->ip = ntohl(addr.s_addr);
+    rule->prefix_len = prefix_len;
+    rule->action = action;
+
+    csilk_mutex_unlock(&filter->mutex);
+    return 0;
+}
+
+int
+csilk_waf_filter_block_ip(csilk_waf_filter_t* filter, const char* ip_str)
+{
+    return csilk_waf_filter_add_ip_rule(filter, ip_str, CSILK_WAF_ACTION_DROP);
+}
+
+int
+csilk_waf_filter_block_pattern(csilk_waf_filter_t* filter, const char* pattern)
+{
+    if (!filter || !pattern) {
+        return -1;
+    }
+
+    csilk_mutex_lock(&filter->mutex);
+    if (filter->pattern_count >= 128) {
+        csilk_mutex_unlock(&filter->mutex);
+        return -1;
+    }
+
+    filter->patterns[filter->pattern_count] = strdup(pattern);
+    if (!filter->patterns[filter->pattern_count]) {
+        csilk_mutex_unlock(&filter->mutex);
+        return -1;
+    }
+
+    filter->pattern_count++;
+    csilk_mutex_unlock(&filter->mutex);
+    return 0;
+}
+
+csilk_waf_action_t
+csilk_waf_filter_inspect(csilk_waf_filter_t* filter,
+                         uint32_t            src_ip,
+                         const uint8_t*      payload,
+                         size_t              len)
+{
+    if (!filter) {
+        return CSILK_WAF_ACTION_PASS;
+    }
+
+    csilk_mutex_lock(&filter->mutex);
+
+    for (size_t i = 0; i < filter->rule_count; i++) {
+        uint32_t plen = filter->rules[i].prefix_len;
+        uint32_t mask = (plen == 0) ? 0U : (plen >= 32U ? 0xFFFFFFFFU : (~0U << (32U - plen)));
+        if ((src_ip & mask) == (filter->rules[i].ip & mask) &&
+            filter->rules[i].action == CSILK_WAF_ACTION_DROP) {
+            csilk_mutex_unlock(&filter->mutex);
+            return CSILK_WAF_ACTION_DROP;
+        }
+    }
+
+    if (payload && len > 0) {
+        for (size_t i = 0; i < filter->pattern_count; i++) {
+            if (filter->patterns[i] &&
+                _csilk_waf_memmem(payload, len, filter->patterns[i], strlen(filter->patterns[i]))) {
+                csilk_mutex_unlock(&filter->mutex);
+                return CSILK_WAF_ACTION_DROP;
+            }
+        }
+    }
+
+    csilk_mutex_unlock(&filter->mutex);
+    return CSILK_WAF_ACTION_PASS;
+}
+
+void
+csilk_waf_filter_free(csilk_waf_filter_t* filter)
+{
+    if (!filter) {
+        return;
+    }
+    csilk_mutex_lock(&filter->mutex);
+    for (size_t i = 0; i < filter->pattern_count; i++) {
+        free(filter->patterns[i]);
+    }
+    csilk_mutex_unlock(&filter->mutex);
+    csilk_mutex_destroy(&filter->mutex);
+    free(filter);
 }

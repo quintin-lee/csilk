@@ -13,6 +13,7 @@
 #include "csilk/core/sync.h"
 #include "csilk/messaging/raft.h"
 #include "csilk/messaging/wal_uring.h"
+#include "wal_common.h"
 
 #define CSILK_RAFT_MAGIC 0x52414654       /* "RAFT" RPC Magic Header */
 #define CSILK_RAFT_META_MAGIC 0x524D4554  /* "RMET" Metadata Magic */
@@ -226,17 +227,6 @@ struct csilk_raft_node_s {
     int apply_cb_pending;
     int snapshot_apply_cb_pending;
 };
-
-/* --- Shared WAL durability helpers (wal_common.c) --- */
-uint32_t _csilk_wal_crc32(uint32_t crc, const void* data, size_t len);
-int      _csilk_wal_write_all(int fd, const void* buf, size_t len);
-int      _csilk_wal_writev_all(int fd, const struct iovec* iov, int iovcnt);
-int      _csilk_wal_read_all(int fd, void* buf, size_t len);
-int      _csilk_wal_fsync_fd(int fd);
-int      _csilk_wal_fsync_dir(const char* file_path);
-int      _csilk_wal_mkdir_p(const char* dir);
-int      _csilk_wal_write_atomic(const char* path, const void* data, size_t len);
-uint64_t _csilk_raft_now_ms(void);
 
 /* --- Raft WAL internal operations (raft_wal.c) --- */
 int  _raft_wal_open_and_recover(csilk_raft_node_t* node);

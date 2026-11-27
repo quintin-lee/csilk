@@ -17,6 +17,7 @@
 
 #include "csilk/core/sync.h"
 #include "raft_internal.h"
+#include "wal_common.h"
 
 static uint32_t     s_crc32_table[256];
 static csilk_once_t s_crc32_once = CSILK_ONCE_INIT;
