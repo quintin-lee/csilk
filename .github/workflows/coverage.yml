@@ -73,7 +73,7 @@ jobs:
           libbson-dev libsqlite3-dev libuv1-dev lcov gcovr
 
     - name: Configure CMake with coverage
-      run: cmake -B build -S . -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Debug -DUSE_COVERAGE=ON -DENABLE_OOM_TEST=OFF
+      run: cmake -B build -S . -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Debug -DCSILK_BUILD_FULL=ON -DUSE_COVERAGE=ON -DENABLE_OOM_TEST=OFF
 
     - name: Build
       run: cmake --build build -j$(nproc)
