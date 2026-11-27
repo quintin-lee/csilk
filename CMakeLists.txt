@@ -104,29 +104,31 @@ if(LLHTTP_SOURCES)
 endif()
 
 # Conditional driver sources
-if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
-  list(APPEND CSILK_DB_SOURCES src/drivers/db/mysql.c)
-  list(APPEND CSILK_SOURCES src/drivers/db/mysql.c)
-  set(CSILK_HAS_MYSQL TRUE)
-endif()
+if(CSILK_ENABLE_DB)
+  if(MYSQL_LIB AND MYSQL_INCLUDE_DIR)
+    list(APPEND CSILK_DB_SOURCES src/drivers/db/mysql.c)
+    list(APPEND CSILK_SOURCES src/drivers/db/mysql.c)
+    set(CSILK_HAS_MYSQL TRUE)
+  endif()
 
-if(PQ_LIB AND PQ_INCLUDE_DIR)
-  list(APPEND CSILK_DB_SOURCES src/drivers/db/postgres.c)
-  list(APPEND CSILK_SOURCES src/drivers/db/postgres.c)
-  set(CSILK_HAS_POSTGRES TRUE)
-endif()
+  if(PQ_LIB AND PQ_INCLUDE_DIR)
+    list(APPEND CSILK_DB_SOURCES src/drivers/db/postgres.c)
+    list(APPEND CSILK_SOURCES src/drivers/db/postgres.c)
+    set(CSILK_HAS_POSTGRES TRUE)
+  endif()
 
-if(HAS_MONGODB)
-  list(APPEND CSILK_DB_SOURCES src/drivers/db/mongodb.c)
-  list(APPEND CSILK_SOURCES src/drivers/db/mongodb.c)
-endif()
+  if(HAS_MONGODB)
+    list(APPEND CSILK_DB_SOURCES src/drivers/db/mongodb.c)
+    list(APPEND CSILK_SOURCES src/drivers/db/mongodb.c)
+  endif()
 
-if(HIREDIS_LIB AND HIREDIS_INCLUDE_DIR)
-  list(APPEND CSILK_DB_SOURCES src/drivers/db/redis.c
-                               src/drivers/db/redis_storage.c)
-  list(APPEND CSILK_SOURCES src/drivers/db/redis.c
-                            src/drivers/db/redis_storage.c)
-  set(CSILK_HAS_REDIS TRUE)
+  if(HIREDIS_LIB AND HIREDIS_INCLUDE_DIR)
+    list(APPEND CSILK_DB_SOURCES src/drivers/db/redis.c
+                                 src/drivers/db/redis_storage.c)
+    list(APPEND CSILK_SOURCES src/drivers/db/redis.c
+                              src/drivers/db/redis_storage.c)
+    set(CSILK_HAS_REDIS TRUE)
+  endif()
 endif()
 
 include(cmake/targets.cmake)
@@ -148,7 +150,9 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set_tests_properties(test_multi_worker PROPERTIES TIMEOUT 30)
 
     # Concurrent scenario tests involve thread spawning or multiple streams
-    set_tests_properties(test_mq_concurrent PROPERTIES TIMEOUT 30)
+    if(TEST test_mq_concurrent)
+      set_tests_properties(test_mq_concurrent PROPERTIES TIMEOUT 30)
+    endif()
     set_tests_properties(test_ws_concurrent PROPERTIES TIMEOUT 15)
     set_tests_properties(test_sse_concurrent PROPERTIES TIMEOUT 15)
 
@@ -196,30 +200,40 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         target_link_options(fuzz_websocket PRIVATE -fsanitize=fuzzer)
         target_link_libraries(fuzz_websocket csilk)
 
-        add_executable(fuzz_raft_rpc fuzz/fuzz_raft_rpc.c)
-        target_compile_options(fuzz_raft_rpc PRIVATE -fsanitize=fuzzer -std=c23)
-        target_link_options(fuzz_raft_rpc PRIVATE -fsanitize=fuzzer)
-        target_link_libraries(fuzz_raft_rpc csilk)
+        if(CSILK_ENABLE_MQ)
+          add_executable(fuzz_raft_rpc fuzz/fuzz_raft_rpc.c)
+          target_compile_options(fuzz_raft_rpc PRIVATE -fsanitize=fuzzer -std=c23)
+          target_link_options(fuzz_raft_rpc PRIVATE -fsanitize=fuzzer)
+          target_link_libraries(fuzz_raft_rpc csilk)
+        endif()
 
-        add_executable(fuzz_mcp fuzz/fuzz_mcp.c)
-        target_compile_options(fuzz_mcp PRIVATE -fsanitize=fuzzer -std=c23)
-        target_link_options(fuzz_mcp PRIVATE -fsanitize=fuzzer)
-        target_link_libraries(fuzz_mcp csilk)
+        if(CSILK_ENABLE_MCP)
+          add_executable(fuzz_mcp fuzz/fuzz_mcp.c)
+          target_compile_options(fuzz_mcp PRIVATE -fsanitize=fuzzer -std=c23)
+          target_link_options(fuzz_mcp PRIVATE -fsanitize=fuzzer)
+          target_link_libraries(fuzz_mcp csilk)
+        endif()
 
-        add_executable(fuzz_sql_rewrite fuzz/fuzz_sql_rewrite.c)
-        target_compile_options(fuzz_sql_rewrite PRIVATE -fsanitize=fuzzer -std=c23)
-        target_link_options(fuzz_sql_rewrite PRIVATE -fsanitize=fuzzer)
-        target_link_libraries(fuzz_sql_rewrite csilk)
+        if(CSILK_ENABLE_DB)
+          add_executable(fuzz_sql_rewrite fuzz/fuzz_sql_rewrite.c)
+          target_compile_options(fuzz_sql_rewrite PRIVATE -fsanitize=fuzzer -std=c23)
+          target_link_options(fuzz_sql_rewrite PRIVATE -fsanitize=fuzzer)
+          target_link_libraries(fuzz_sql_rewrite csilk)
+        endif()
 
-        add_executable(fuzz_wasm fuzz/fuzz_wasm.c)
-        target_compile_options(fuzz_wasm PRIVATE -fsanitize=fuzzer -std=c23)
-        target_link_options(fuzz_wasm PRIVATE -fsanitize=fuzzer)
-        target_link_libraries(fuzz_wasm csilk)
+        if(CSILK_ENABLE_WASM)
+          add_executable(fuzz_wasm fuzz/fuzz_wasm.c)
+          target_compile_options(fuzz_wasm PRIVATE -fsanitize=fuzzer -std=c23)
+          target_link_options(fuzz_wasm PRIVATE -fsanitize=fuzzer)
+          target_link_libraries(fuzz_wasm csilk)
+        endif()
 
-        add_executable(fuzz_h3 fuzz/fuzz_h3.c)
-        target_compile_options(fuzz_h3 PRIVATE -fsanitize=fuzzer -std=c23)
-        target_link_options(fuzz_h3 PRIVATE -fsanitize=fuzzer)
-        target_link_libraries(fuzz_h3 csilk)
+        if(CSILK_ENABLE_HTTP3)
+          add_executable(fuzz_h3 fuzz/fuzz_h3.c)
+          target_compile_options(fuzz_h3 PRIVATE -fsanitize=fuzzer -std=c23)
+          target_link_options(fuzz_h3 PRIVATE -fsanitize=fuzzer)
+          target_link_libraries(fuzz_h3 csilk)
+        endif()
     endif()
   endif()
 
@@ -248,6 +262,17 @@ if(CSILK_BUILD_TESTS AND CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
           -DCSILK_BUILD_DIR=${CMAKE_BINARY_DIR}
           -DCSILK_BUILD_SHARED=${CSILK_BUILD_SHARED}
           -DCSILK_USE_URING=${CSILK_USE_URING}
+          -DCSILK_ENABLE_DB=${CSILK_ENABLE_DB}
+          -DCSILK_ENABLE_MQ=${CSILK_ENABLE_MQ}
+          -DCSILK_ENABLE_AI=${CSILK_ENABLE_AI}
+          -DCSILK_ENABLE_VECTOR=${CSILK_ENABLE_VECTOR}
+          -DCSILK_ENABLE_MCP=${CSILK_ENABLE_MCP}
+          -DCSILK_ENABLE_WORKFLOW=${CSILK_ENABLE_WORKFLOW}
+          -DCSILK_ENABLE_GRPC=${CSILK_ENABLE_GRPC}
+          -DCSILK_ENABLE_WASM=${CSILK_ENABLE_WASM}
+          -DCSILK_ENABLE_BYPASS=${CSILK_ENABLE_BYPASS}
+          -DCSILK_ENABLE_PERM=${CSILK_ENABLE_PERM}
+          -DCSILK_ENABLE_HTTP3=${CSILK_ENABLE_HTTP3}
           -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
           -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
           -DUSE_ASAN=${USE_ASAN}

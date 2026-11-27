@@ -45,26 +45,50 @@ option(DEBUG_ARENA "Enable arena redzone guards for buffer overflow detection" O
 option(CSILK_BUILD_SHARED "Build shared library (in addition to static)" ON)
 option(CSILK_DEPRECATE_CTX_TYPES "Enable compiler deprecation warnings for direct internal context struct access" ON)
 option(CSILK_ENABLE_WAMR "Integrate WAMR (WebAssembly Micro Runtime) for real WASM plugin execution" OFF)
-if(CSILK_ENABLE_WAMR)
-    set(CSILK_ENABLE_EXPERIMENTAL_STUBS OFF CACHE BOOL "" FORCE)
-    message(STATUS "WAMR enabled — CSILK_ENABLE_EXPERIMENTAL_STUBS forced OFF")
-endif()
-option(CSILK_ENABLE_EXPERIMENTAL_STUBS
-       "Enable experimental/simulated stub modules (AF_XDP/DPDK memory-ring simulations, WASM stub VM, HTTP/3 UDP listener placeholder)"
-       OFF)
-if(CSILK_ENABLE_EXPERIMENTAL_STUBS)
-    message(STATUS "Experimental/simulated stubs ENABLED (AF_XDP/DPDK in-memory rings, WASM fuel-only stub VM, HTTP/3 UDP listener skeleton)")
-else()
-    message(STATUS "Experimental/simulated stubs DISABLED (fail-closed stubs for AF_XDP, DPDK, WASM VM, HTTP/3 listener)")
-endif()
 
-# HTTP/3 (QUIC) groundwork — ngtcp2/nghttp3 FetchContent
-option(CSILK_ENABLE_HTTP3 "Enable ngtcp2/nghttp3 FetchContent for HTTP/3 QUIC groundwork (v1.1 architectural only)" OFF)
+# HTTP/3 (QUIC) — ngtcp2/nghttp3 FetchContent or system libraries
+option(CSILK_ENABLE_HTTP3 "Enable ngtcp2/nghttp3 HTTP/3 QUIC transport" OFF)
 
 # Linux seccomp/namespaces micro-sandbox for Agent Skills (v1.2)
 option(CSILK_ENABLE_SECCOMP_SANDBOX "Enable Linux seccomp/namespaces isolation for Agent Skills" ON)
 if(CSILK_ENABLE_SECCOMP_SANDBOX)
     add_compile_definitions(CSILK_HAS_SECCOMP_SANDBOX=1)
+endif()
+
+# ── Modular domain feature toggles ─────────────────────────────────────────
+# By default, csilk builds only the lightweight HTTP Web Core (zero SQLite3 or
+# libcurl hard dependencies). Enable individual domain modules or set
+# -DCSILK_BUILD_FULL=ON to build the full feature set.
+option(CSILK_BUILD_FULL "Enable all optional domain modules (DB, MQ, AI, Vector, MCP, Workflow, gRPC, WASM, Bypass, Perm)" OFF)
+
+option(CSILK_ENABLE_DB       "Build database drivers, migrations, and connection pools (requires SQLite3)" ${CSILK_BUILD_FULL})
+option(CSILK_ENABLE_MQ       "Build message queue, PubSub, WAL, and Raft consensus" ${CSILK_BUILD_FULL})
+option(CSILK_ENABLE_AI       "Build LLM client drivers, AI trace, and tool registry (requires libcurl)" ${CSILK_BUILD_FULL})
+option(CSILK_ENABLE_VECTOR   "Build embedded HNSW and Milvus/Qdrant vector drivers (requires libcurl)" ${CSILK_BUILD_FULL})
+option(CSILK_ENABLE_MCP      "Build Model Context Protocol server/client/stdio pool (requires AI + libcurl)" ${CSILK_BUILD_FULL})
+option(CSILK_ENABLE_WORKFLOW "Build AI workflow DAG engine, DSL, grid, and skill sandbox (requires AI + MQ + WASM)" ${CSILK_BUILD_FULL})
+option(CSILK_ENABLE_GRPC     "Build gRPC wire codec and HTTP/JSON transcoding gateway" ${CSILK_BUILD_FULL})
+option(CSILK_ENABLE_WASM     "Build WASM plugin module (real execution requires CSILK_ENABLE_WAMR=ON)" ${CSILK_BUILD_FULL})
+option(CSILK_ENABLE_BYPASS   "Build Linux AF_XDP kernel-bypass module" ${CSILK_BUILD_FULL})
+option(CSILK_ENABLE_PERM     "Build RBAC permission module" ${CSILK_BUILD_FULL})
+
+# Enforce transitive feature dependencies
+if(CSILK_ENABLE_WAMR AND NOT CSILK_ENABLE_WASM)
+    set(CSILK_ENABLE_WASM ON CACHE BOOL "Build WASM plugin module (enabled by CSILK_ENABLE_WAMR)" FORCE)
+endif()
+if(CSILK_ENABLE_MCP AND NOT CSILK_ENABLE_AI)
+    set(CSILK_ENABLE_AI ON CACHE BOOL "Build LLM client drivers (enabled by CSILK_ENABLE_MCP)" FORCE)
+endif()
+if(CSILK_ENABLE_WORKFLOW)
+    if(NOT CSILK_ENABLE_AI)
+        set(CSILK_ENABLE_AI ON CACHE BOOL "Build LLM client drivers (enabled by CSILK_ENABLE_WORKFLOW)" FORCE)
+    endif()
+    if(NOT CSILK_ENABLE_MQ)
+        set(CSILK_ENABLE_MQ ON CACHE BOOL "Build message queue (enabled by CSILK_ENABLE_WORKFLOW)" FORCE)
+    endif()
+    if(NOT CSILK_ENABLE_WASM)
+        set(CSILK_ENABLE_WASM ON CACHE BOOL "Build WASM plugin module (enabled by CSILK_ENABLE_WORKFLOW)" FORCE)
+    endif()
 endif()
 
 # ── Configurable compile-time constants ────────────────────────────────────
@@ -76,16 +100,3 @@ set(CSILK_ARENA_TIER_COUNT 3   CACHE STRING "Number of arena chunk size tiers")
 set(CSILK_MAX_TLS_CHUNKS  8   CACHE STRING "Max cached arena chunks per tier")
 set(CSILK_TLS_DISPATCH_CAPACITY 128 CACHE STRING "TLS dispatch queue capacity (per worker)")
 set(CSILK_WF_CLUSTER_MAX_BINDINGS 128 CACHE STRING "Max workflow-to-Raft cluster bindings")
-
-# ── Plugin build options ─────────────────────────────────────────────────
-# Each optional module can be built as a standalone shared-library plugin
-# instead of being linked into the monolithic libcsilk.
-option(CSILK_BUILD_PLUGIN_AI     "Build csilk-ai plugin (LLM drivers)"     OFF)
-option(CSILK_BUILD_PLUGIN_MQ     "Build csilk-mq plugin (message queue)"   OFF)
-option(CSILK_BUILD_PLUGIN_DB     "Build csilk-db plugin (database drivers)" OFF)
-option(CSILK_BUILD_PLUGIN_VECTOR "Build csilk-vector plugin (HNSW index)"  OFF)
-option(CSILK_BUILD_PLUGIN_WORKFLOW "Build csilk-workflow plugin (AI agent graph)" OFF)
-option(CSILK_BUILD_PLUGIN_PROTOCOL "Build csilk-protocol plugin (WS/SSE/MCP)" OFF)
-option(CSILK_BUILD_PLUGIN_WASM   "Build csilk-wasm plugin (WASM sandbox)"  OFF)
-option(CSILK_BUILD_PLUGIN_BYPASS "Build csilk-bypass plugin (AF_XDP/DPDK)" OFF)
-set(CSILK_PLUGIN_DIR "${CMAKE_BINARY_DIR}/plugins" CACHE PATH "Install directory for plugin .so files")

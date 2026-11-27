@@ -32,8 +32,17 @@ function(csilk_compile_setup TARGET)
       "$<$<BOOL:${CSILK_HAS_REDIS}>:HAS_REDIS>"
       "$<$<BOOL:${CSILK_HAS_WAMR}>:HAS_WAMR>"
       "$<$<BOOL:${CSILK_USE_URING_ONLY}>:CSILK_USE_URING>"
-      "$<$<BOOL:${CSILK_ENABLE_EXPERIMENTAL_STUBS}>:CSILK_ENABLE_EXPERIMENTAL_STUBS=1>"
-      "$<$<NOT:$<BOOL:${CSILK_ENABLE_EXPERIMENTAL_STUBS}>>:CSILK_ENABLE_EXPERIMENTAL_STUBS=0>"
+      "$<$<BOOL:${CSILK_ENABLE_DB}>:CSILK_HAS_DB=1>"
+      "$<$<BOOL:${CSILK_ENABLE_MQ}>:CSILK_HAS_MQ=1>"
+      "$<$<BOOL:${CSILK_ENABLE_AI}>:CSILK_HAS_AI=1>"
+      "$<$<BOOL:${CSILK_ENABLE_VECTOR}>:CSILK_HAS_VECTOR=1>"
+      "$<$<BOOL:${CSILK_ENABLE_MCP}>:CSILK_HAS_MCP=1>"
+      "$<$<BOOL:${CSILK_ENABLE_WORKFLOW}>:CSILK_HAS_WORKFLOW=1>"
+      "$<$<BOOL:${CSILK_ENABLE_GRPC}>:CSILK_HAS_GRPC=1>"
+      "$<$<BOOL:${CSILK_ENABLE_WASM}>:CSILK_HAS_WASM=1>"
+      "$<$<BOOL:${CSILK_ENABLE_BYPASS}>:CSILK_HAS_BYPASS=1>"
+      "$<$<BOOL:${CSILK_ENABLE_PERM}>:CSILK_HAS_PERM=1>"
+      "$<$<BOOL:${CSILK_ENABLE_HTTP3}>:CSILK_HAS_HTTP3=1>"
       "CSILK_HEADER_BUCKETS=${CSILK_HEADER_BUCKETS}"
       "CSILK_MAX_PARAMS=${CSILK_MAX_PARAMS}"
       "CSILK_MAX_STORAGE=${CSILK_MAX_STORAGE}"
@@ -99,7 +108,7 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
   set_target_properties(${TARGET} PROPERTIES
       PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
       VERSION "${CSILK_VERSION}"
-      SOVERSION "1"
+      SOVERSION "2"
       INTERFACE_COMPILE_FEATURES c_std_23
       POSITION_INDEPENDENT_CODE ON
   )
@@ -210,113 +219,52 @@ function(csilk_add_module NAME SOURCE_VAR OUTPUT_NAME)
       PARENT_SCOPE)
 endfunction()
 
-# ── Module implementations ──────────────────────────────────────────────
+# ── Core Web & HTTP Modules (Always Built) ───────────────────────────────
 csilk_add_module(csilk_base CSILK_BASE_SOURCES "csilk-base")
 csilk_add_module(csilk_json CSILK_JSON_SOURCES "csilk-json")
 csilk_add_module(csilk_crypto CSILK_CRYPTO_SOURCES "csilk-crypto")
+csilk_add_module(csilk_reflection CSILK_REFLECTION_SOURCES "csilk-reflection")
 csilk_add_module(csilk_runtime CSILK_RUNTIME_SOURCES "csilk-runtime")
-csilk_add_module(csilk_wasm CSILK_WASM_SOURCES "csilk-wasm")
-csilk_add_module(csilk_bypass CSILK_BYPASS_SOURCES "csilk-bypass")
 csilk_add_module(csilk_tls CSILK_TLS_SOURCES "csilk-tls")
-csilk_add_module(csilk_mq CSILK_MQ_SOURCES "csilk-mq")
 csilk_add_module(csilk_http2 CSILK_HTTP2_SOURCES "csilk-http2")
 csilk_add_module(csilk_http CSILK_HTTP_SOURCES "csilk-http")
-csilk_add_module(csilk_db CSILK_DB_SOURCES "csilk-db")
-csilk_add_module(csilk_vector CSILK_VECTOR_SOURCES "csilk-vector")
-csilk_add_module(csilk_ai CSILK_AI_SOURCES "csilk-ai")
-csilk_add_module(csilk_reflection CSILK_REFLECTION_SOURCES "csilk-reflection")
-csilk_add_module(csilk_permission CSILK_PERMISSION_SOURCES "csilk-permission")
-csilk_add_module(csilk_workflow CSILK_WORKFLOW_SOURCES "csilk-workflow")
 csilk_add_module(csilk_protocols CSILK_PROTOCOLS_SOURCES "csilk-protocols")
 csilk_add_module(csilk_middleware CSILK_MIDDLEWARE_SOURCES "csilk-middleware")
 csilk_add_module(csilk_app CSILK_APP_SOURCES "csilk-app")
 
-# ── Plugin targets (built as standalone shared libraries) ────────────────
-# Plugin targets reuse the OBJECT libraries from csilk_add_module and compile
-# their dedicated plugin entry file with -DCSILK_PLUGIN_BUILD.  Core symbols
-# (including the single process-wide plugin/service registry) resolve against
-# the host binary or shared runtime at dlopen() time rather than linking a
-# duplicate static copy of csilk_runtime into each .so.
-#
-# Every plugin shares the same target shape: a SHARED library owning its entry
-# file plus a module's OBJECT closure, installed to ${CSILK_PLUGIN_DIR} with a
-# stable soname and CSILK_PLUGIN_BUILD define.  csilk_add_plugin() collapses
-# that boilerplate; callers only supply the name, entry source, and the
-# module OBJECT library whose objects the plugin reuses.
-function(csilk_add_plugin NAME OUTPUT_NAME ENTRY_FILE MODULE_OBJECTS)
-  add_library(${NAME} SHARED ${ENTRY_FILE} $<TARGET_OBJECTS:${MODULE_OBJECTS}>)
-  set_target_properties(${NAME} PROPERTIES
-      OUTPUT_NAME "${OUTPUT_NAME}"
-      LIBRARY_OUTPUT_DIRECTORY "${CSILK_PLUGIN_DIR}"
-      SOVERSION 1
-      VERSION "${CSILK_VERSION}")
-  csilk_target_setup(${NAME} PUBLIC SHARED)
-  target_compile_definitions(${NAME} PRIVATE CSILK_PLUGIN_BUILD)
-endfunction()
-
-if(CSILK_BUILD_PLUGIN_AI)
-  csilk_add_plugin(csilk_plugin_ai csilk_ai src/plugins/ai/ai_plugin.c csilk_ai_objects)
-  target_link_libraries(csilk_plugin_ai PRIVATE CURL::libcurl Threads::Threads)
-  if(NOT APPLE AND NOT WIN32)
-    target_link_libraries(csilk_plugin_ai PRIVATE m ${CMAKE_DL_LIBS})
-  endif()
+# ── Optional Feature Modules (Controlled via CSILK_ENABLE_* / CSILK_BUILD_FULL) ──
+if(CSILK_ENABLE_HTTP3)
+  csilk_add_module(csilk_h3 CSILK_HTTP3_SOURCES "csilk-h3")
 endif()
-
-if(CSILK_BUILD_PLUGIN_MQ)
-  csilk_add_plugin(csilk_plugin_mq csilk_mq src/plugins/mq/mq_plugin.c csilk_mq_objects)
-  target_link_libraries(csilk_plugin_mq PRIVATE Threads::Threads)
-  if(TARGET csilk::libuv)
-    target_link_libraries(csilk_plugin_mq PRIVATE csilk::libuv)
-  elseif(TARGET uring)
-    target_link_libraries(csilk_plugin_mq PRIVATE uring)
-  endif()
+if(CSILK_ENABLE_MCP)
+  csilk_add_module(csilk_mcp CSILK_MCP_SOURCES "csilk-mcp")
 endif()
-
-if(CSILK_BUILD_PLUGIN_DB)
-  csilk_add_plugin(csilk_plugin_db csilk_db src/plugins/db/db_plugin.c csilk_db_objects)
-  target_link_libraries(csilk_plugin_db PRIVATE $<TARGET_OBJECTS:csilk_crypto_objects>)
-  target_link_libraries(csilk_plugin_db PRIVATE
-      SQLite3::SQLite3 OpenSSL::Crypto Threads::Threads)
-  foreach(_plugin_db_dep csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
-    if(TARGET ${_plugin_db_dep})
-      target_link_libraries(csilk_plugin_db PRIVATE ${_plugin_db_dep})
-    endif()
-  endforeach()
+if(CSILK_ENABLE_GRPC)
+  csilk_add_module(csilk_grpc CSILK_GRPC_SOURCES "csilk-grpc")
 endif()
-
-if(CSILK_BUILD_PLUGIN_VECTOR)
-  csilk_add_plugin(csilk_plugin_vector csilk_vector src/plugins/vector/vector_plugin.c csilk_vector_objects)
-  target_link_libraries(csilk_plugin_vector PRIVATE CURL::libcurl Threads::Threads)
-  if(NOT APPLE AND NOT WIN32)
-    target_link_libraries(csilk_plugin_vector PRIVATE m)
-  endif()
+if(CSILK_ENABLE_WASM)
+  csilk_add_module(csilk_wasm CSILK_WASM_SOURCES "csilk-wasm")
 endif()
-
-if(CSILK_BUILD_PLUGIN_WORKFLOW)
-  csilk_add_plugin(csilk_plugin_workflow csilk_workflow src/plugins/workflow/workflow_plugin.c csilk_workflow_objects)
-  target_link_libraries(csilk_plugin_workflow PRIVATE Threads::Threads)
-  if(TARGET csilk::yaml)
-    target_link_libraries(csilk_plugin_workflow PRIVATE csilk::yaml)
-  endif()
-  if(NOT APPLE AND NOT WIN32)
-    target_link_libraries(csilk_plugin_workflow PRIVATE m)
-  endif()
+if(CSILK_ENABLE_BYPASS)
+  csilk_add_module(csilk_bypass CSILK_BYPASS_SOURCES "csilk-bypass")
 endif()
-
-if(CSILK_BUILD_PLUGIN_PROTOCOL)
-  csilk_add_plugin(csilk_plugin_protocol csilk_protocol src/plugins/protocol/protocol_plugin.c csilk_protocols_objects)
-  target_link_libraries(csilk_plugin_protocol PRIVATE CURL::libcurl Threads::Threads)
+if(CSILK_ENABLE_MQ)
+  csilk_add_module(csilk_mq CSILK_MQ_SOURCES "csilk-mq")
 endif()
-
-if(CSILK_BUILD_PLUGIN_WASM)
-  csilk_add_plugin(csilk_plugin_wasm csilk_wasm src/plugins/wasm/wasm_plugin_entry.c csilk_wasm_objects)
-  if(CSILK_HAS_WAMR)
-    target_link_libraries(csilk_plugin_wasm PRIVATE vmlib)
-  endif()
+if(CSILK_ENABLE_DB)
+  csilk_add_module(csilk_db CSILK_DB_SOURCES "csilk-db")
 endif()
-
-if(CSILK_BUILD_PLUGIN_BYPASS)
-  csilk_add_plugin(csilk_plugin_bypass csilk_bypass src/plugins/bypass/bypass_plugin.c csilk_bypass_objects)
+if(CSILK_ENABLE_VECTOR)
+  csilk_add_module(csilk_vector CSILK_VECTOR_SOURCES "csilk-vector")
+endif()
+if(CSILK_ENABLE_AI)
+  csilk_add_module(csilk_ai CSILK_AI_SOURCES "csilk-ai")
+endif()
+if(CSILK_ENABLE_PERM)
+  csilk_add_module(csilk_permission CSILK_PERMISSION_SOURCES "csilk-permission")
+endif()
+if(CSILK_ENABLE_WORKFLOW)
+  csilk_add_module(csilk_workflow CSILK_WORKFLOW_SOURCES "csilk-workflow")
 endif()
 
 # ── Compatibility target ─────────────────────────────────────────────────
@@ -347,11 +295,13 @@ endif()
 
 csilk_link_module(csilk_json yyjson)
 csilk_link_module(csilk_crypto csilk_base OpenSSL::Crypto Threads::Threads)
+csilk_link_module(csilk_reflection csilk_base csilk_json)
 
 csilk_link_module(csilk_runtime
     csilk_base
     csilk_crypto
     csilk_json
+    csilk_reflection
     Threads::Threads
 )
 if(TARGET csilk::yaml)
@@ -373,27 +323,15 @@ if(NOT APPLE AND NOT WIN32)
   endif()
 endif()
 
-csilk_link_module(csilk_wasm csilk_runtime)
-if(CSILK_HAS_WAMR)
-  csilk_link_module(csilk_wasm vmlib)
-endif()
-csilk_link_module(csilk_bypass csilk_runtime)
 # csilk_io_* wrappers in <csilk/core/sys_io.h> and <csilk/core/sync.h> are
 # static inline in the libuv backend, so every module whose objects reference
-# them must link the I/O backend directly: transitive ordering inside a
-# --start-group varies across CMake/linker versions (observed on GCC 13 +
-# CMake 3.28), leaving uv_* undefined when only csilk_runtime carries libuv.
+# them must link the I/O backend directly.
 if(TARGET csilk::libuv)
   csilk_link_module(csilk_tls csilk_runtime OpenSSL::SSL OpenSSL::Crypto csilk::libuv)
-  csilk_link_module(csilk_mq csilk_runtime csilk::libuv)
 else()
   csilk_link_module(csilk_tls csilk_runtime OpenSSL::SSL OpenSSL::Crypto)
-  csilk_link_module(csilk_mq csilk_runtime)
 endif()
 csilk_link_module(csilk_http2 csilk_runtime csilk_tls nghttp2)
-if(CSILK_ENABLE_HTTP3)
-  csilk_link_module(csilk_http2 csilk::ngtcp2 csilk::nghttp3 OpenSSL::SSL OpenSSL::Crypto)
-endif()
 csilk_link_module(csilk_http
     csilk_runtime
     csilk_json
@@ -407,58 +345,12 @@ if(TARGET csilk::llhttp)
   csilk_link_module(csilk_http csilk::llhttp)
 endif()
 
-csilk_link_module(csilk_db csilk_runtime csilk_json SQLite3::SQLite3)
-foreach(DB_TARGET csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
-  if(TARGET ${DB_TARGET})
-    csilk_link_module(csilk_db ${DB_TARGET})
-  endif()
-endforeach()
-
-# vector_simd.c calls sqrt/pow directly, so -m must ride on the module
-# archive itself: transitive libm ordering after the umbrella --start-group
-# left sqrt undefined on GCC 13 / CMake 3.28 runners.
-if(NOT APPLE AND NOT WIN32)
-  csilk_link_module(csilk_vector csilk_runtime csilk_json CURL::libcurl m)
-else()
-  csilk_link_module(csilk_vector csilk_runtime csilk_json CURL::libcurl)
-endif()
-if(NOT APPLE AND NOT WIN32)
-  csilk_link_module(csilk_ai csilk_runtime csilk_json CURL::libcurl m ${CMAKE_DL_LIBS})
-else()
-  csilk_link_module(csilk_ai csilk_runtime csilk_json CURL::libcurl)
-endif()
-csilk_link_module(csilk_reflection csilk_runtime csilk_json)
-csilk_link_module(csilk_permission csilk_runtime csilk_json)
-if(NOT APPLE AND NOT WIN32)
-  csilk_link_module(csilk_workflow
-      csilk_runtime
-      csilk_json
-      csilk_ai
-      csilk_mq
-      csilk_wasm
-      m
-  )
-  csilk_link_module(csilk_workflow csilk::yaml)
-else()
-  csilk_link_module(csilk_workflow
-      csilk_runtime
-      csilk_json
-      csilk_ai
-      csilk_mq
-      csilk_wasm
-  )
-  csilk_link_module(csilk_workflow csilk::yaml)
-endif()
 csilk_link_module(csilk_protocols
     csilk_http
     csilk_http2
     csilk_runtime
     csilk_json
     csilk_reflection
-    csilk_workflow
-    csilk_mq
-    csilk_ai
-    CURL::libcurl
 )
 csilk_link_module(csilk_middleware
     csilk_http
@@ -474,60 +366,146 @@ csilk_link_module(csilk_app
     csilk_protocols
     csilk_middleware
     csilk_reflection
-    csilk_db
-    csilk_ai
 )
+
+if(CSILK_ENABLE_HTTP3)
+  csilk_link_module(csilk_h3
+      csilk_runtime
+      csilk_http
+      csilk_tls
+      csilk::ngtcp2
+      csilk::nghttp3
+      OpenSSL::SSL
+      OpenSSL::Crypto
+  )
+endif()
+if(CSILK_ENABLE_WASM)
+  csilk_link_module(csilk_wasm csilk_runtime)
+  if(CSILK_HAS_WAMR)
+    csilk_link_module(csilk_wasm vmlib)
+  endif()
+  csilk_link_module(csilk_app csilk_wasm)
+endif()
+if(CSILK_ENABLE_BYPASS)
+  csilk_link_module(csilk_bypass csilk_runtime)
+endif()
+if(CSILK_ENABLE_MQ)
+  if(TARGET csilk::libuv)
+    csilk_link_module(csilk_mq csilk_runtime csilk::libuv)
+  else()
+    csilk_link_module(csilk_mq csilk_runtime)
+  endif()
+  csilk_link_module(csilk_protocols csilk_mq)
+  csilk_link_module(csilk_middleware csilk_mq)
+  csilk_link_module(csilk_app csilk_mq)
+endif()
+if(CSILK_ENABLE_DB)
+  csilk_link_module(csilk_db csilk_runtime csilk_json SQLite3::SQLite3)
+  foreach(DB_TARGET csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
+    if(TARGET ${DB_TARGET})
+      csilk_link_module(csilk_db ${DB_TARGET})
+    endif()
+  endforeach()
+  csilk_link_module(csilk_app csilk_db)
+endif()
+if(CSILK_ENABLE_VECTOR)
+  if(NOT APPLE AND NOT WIN32)
+    csilk_link_module(csilk_vector csilk_runtime csilk_json CURL::libcurl m)
+  else()
+    csilk_link_module(csilk_vector csilk_runtime csilk_json CURL::libcurl)
+  endif()
+endif()
+if(CSILK_ENABLE_AI)
+  if(NOT APPLE AND NOT WIN32)
+    csilk_link_module(csilk_ai csilk_runtime csilk_json CURL::libcurl m ${CMAKE_DL_LIBS})
+  else()
+    csilk_link_module(csilk_ai csilk_runtime csilk_json CURL::libcurl)
+  endif()
+  csilk_link_module(csilk_app csilk_ai)
+endif()
+if(CSILK_ENABLE_PERM)
+  csilk_link_module(csilk_permission csilk_runtime csilk_json)
+endif()
+if(CSILK_ENABLE_WORKFLOW)
+  if(NOT APPLE AND NOT WIN32)
+    csilk_link_module(csilk_workflow csilk_runtime csilk_json csilk_ai csilk_mq csilk_wasm m csilk::yaml)
+  else()
+    csilk_link_module(csilk_workflow csilk_runtime csilk_json csilk_ai csilk_mq csilk_wasm csilk::yaml)
+  endif()
+endif()
+if(CSILK_ENABLE_MCP)
+  csilk_link_module(csilk_mcp csilk_protocols csilk_http csilk_runtime csilk_json csilk_ai CURL::libcurl)
+endif()
+if(CSILK_ENABLE_GRPC)
+  csilk_link_module(csilk_grpc csilk_middleware csilk_http csilk_runtime csilk_json)
+endif()
 
 # ── Umbrella targets ──────────────────────────────────────────────────────
 add_library(csilk INTERFACE)
-# The split static archives have intentional back-references (runtime teardown
-# reaches protocol and messaging implementations). A linker group preserves the
-# old monolithic link behavior for umbrella consumers without duplicating source
-# ownership. Keep this GNU/Clang-only because --start-group is not portable.
+
+set(CSILK_ENABLED_MODULES
+    csilk_runtime
+    csilk_app
+    csilk_protocols
+    csilk_middleware
+    csilk_reflection
+    csilk_http
+    csilk_http2
+    csilk_tls
+    csilk_crypto
+    csilk_json
+    csilk_base
+    yyjson
+)
+if(CSILK_ENABLE_WORKFLOW)
+  list(APPEND CSILK_ENABLED_MODULES csilk_workflow)
+endif()
+if(CSILK_ENABLE_MCP)
+  list(APPEND CSILK_ENABLED_MODULES csilk_mcp)
+endif()
+if(CSILK_ENABLE_GRPC)
+  list(APPEND CSILK_ENABLED_MODULES csilk_grpc)
+endif()
+if(CSILK_ENABLE_HTTP3)
+  list(APPEND CSILK_ENABLED_MODULES csilk_h3)
+endif()
+if(CSILK_ENABLE_PERM)
+  list(APPEND CSILK_ENABLED_MODULES csilk_permission)
+endif()
+if(CSILK_ENABLE_AI)
+  list(APPEND CSILK_ENABLED_MODULES csilk_ai)
+endif()
+if(CSILK_ENABLE_DB)
+  list(APPEND CSILK_ENABLED_MODULES csilk_db)
+endif()
+if(CSILK_ENABLE_VECTOR)
+  list(APPEND CSILK_ENABLED_MODULES csilk_vector)
+endif()
+if(CSILK_ENABLE_MQ)
+  list(APPEND CSILK_ENABLED_MODULES csilk_mq)
+endif()
+if(CSILK_ENABLE_WASM)
+  list(APPEND CSILK_ENABLED_MODULES csilk_wasm)
+endif()
+if(CSILK_ENABLE_BYPASS)
+  list(APPEND CSILK_ENABLED_MODULES csilk_bypass)
+endif()
+if(CSILK_USE_URING AND TARGET uring)
+  list(APPEND CSILK_ENABLED_MODULES uring)
+endif()
+
+# The split static archives within Web Core have intentional mutual references
+# (csilk_client_t spans http/tls/http2; server lifecycle uses protocols/swagger).
+# A linker group preserves monolithic link behavior for umbrella consumers.
 if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24 AND CMAKE_C_COMPILER_ID MATCHES "GNU|Clang" AND NOT APPLE)
-  # CMake's native RESCAN group keeps all split static archives in one
-  # linker group, including back-references from runtime teardown code.
-  # Include static uring inside the rescan group when enabled so libcsilk-runtime.a
-  # and liburing.a resolve cleanly even if an upstream archive precedes csilk.
-  if(CSILK_USE_URING AND TARGET uring)
-    target_link_libraries(csilk INTERFACE
-        "$<LINK_GROUP:RESCAN;csilk_runtime;csilk_app;csilk_workflow;csilk_protocols;csilk_permission;csilk_middleware;csilk_reflection;csilk_ai;csilk_db;csilk_vector;csilk_mq;csilk_http;csilk_http2;csilk_tls;csilk_wasm;csilk_bypass;csilk_crypto;csilk_json;csilk_base;yyjson;uring>"
-    )
-  else()
-    target_link_libraries(csilk INTERFACE
-        "$<LINK_GROUP:RESCAN;csilk_runtime;csilk_app;csilk_workflow;csilk_protocols;csilk_permission;csilk_middleware;csilk_reflection;csilk_ai;csilk_db;csilk_vector;csilk_mq;csilk_http;csilk_http2;csilk_tls;csilk_wasm;csilk_bypass;csilk_crypto;csilk_json;csilk_base;yyjson>"
-    )
-  endif()
-else()
-  # CMake 3.11–3.23 fallback. The explicit runtime-first ordering preserves
-  # the historical archive scan order on toolchains without LINK_GROUP.
   target_link_libraries(csilk INTERFACE
-      csilk_runtime
-      csilk_app
-      csilk_workflow
-      csilk_protocols
-      csilk_permission
-      csilk_middleware
-      csilk_reflection
-      csilk_ai
-      csilk_db
-      csilk_vector
-      csilk_mq
-      csilk_http
-      csilk_http2
-      csilk_tls
-      csilk_wasm
-      csilk_bypass
-      csilk_crypto
-      csilk_json
-      csilk_base
+      "$<LINK_GROUP:RESCAN;${CSILK_ENABLED_MODULES}>"
   )
+else()
+  target_link_libraries(csilk INTERFACE ${CSILK_ENABLED_MODULES})
 endif()
 # Transitive INTERFACE libraries referenced only through a LINK_GROUP genex
-# are dropped by CMake releases before 4.x, which breaks every umbrella
-# consumer (tests, examples, fuzzers, docs build) with undefined uv_*
-# symbols.  Link the I/O backend explicitly here so the closure is complete
-# on every supported CMake generation.
+# are dropped by CMake releases before 4.x. Link the I/O backend explicitly.
 if(CSILK_USE_URING)
   if(TARGET uring)
     target_link_libraries(csilk INTERFACE uring)
@@ -546,9 +524,7 @@ add_library(csilk::csilk ALIAS csilk)
 
 if(CSILK_BUILD_SHARED)
   # The monolithic shared library remains the compatibility ABI artifact.
-  # It reuses the module object closure; module shared targets are separate
-  # installable libraries and are not linked here, avoiding duplicate symbols
-  # while keeping one compilation owner per implementation source.
+  # It reuses the module object closure of enabled modules.
   add_library(csilk_shared SHARED ${CSILK_MODULE_OBJECTS})
   set_target_properties(csilk_shared PROPERTIES OUTPUT_NAME "csilk")
   csilk_target_setup(csilk_shared PUBLIC SHARED)
@@ -557,29 +533,39 @@ if(CSILK_BUILD_SHARED)
       OpenSSL::SSL
       OpenSSL::Crypto
       ZLIB::ZLIB
-      SQLite3::SQLite3
-      CURL::libcurl
       yyjson
       nghttp2
   )
+  if(CSILK_ENABLE_DB)
+    target_link_libraries(csilk_shared PRIVATE SQLite3::SQLite3)
+    foreach(_db_target csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
+      if(TARGET ${_db_target})
+        target_link_libraries(csilk_shared PRIVATE ${_db_target})
+      endif()
+    endforeach()
+  endif()
+  if(CSILK_NEED_CURL)
+    target_link_libraries(csilk_shared PRIVATE CURL::libcurl)
+  endif()
+  if(CSILK_HAS_WAMR)
+    target_link_libraries(csilk_shared PRIVATE vmlib)
+  endif()
+  if(CSILK_ENABLE_HTTP3)
+    target_link_libraries(csilk_shared PRIVATE csilk::ngtcp2 csilk::nghttp3)
+  endif()
   if(TARGET csilk::yaml)
     target_link_libraries(csilk_shared PRIVATE csilk::yaml)
   endif()
   if(TARGET csilk::llhttp)
     target_link_libraries(csilk_shared PRIVATE csilk::llhttp)
   endif()
-  foreach(_db_target csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
-    if(TARGET ${_db_target})
-      target_link_libraries(csilk_shared PRIVATE ${_db_target})
-    endif()
-  endforeach()
   if(CSILK_USE_URING)
     target_link_libraries(csilk_shared PRIVATE uring)
   else()
     target_link_libraries(csilk_shared PRIVATE csilk::libuv)
   endif()
   if(NOT APPLE AND NOT WIN32)
-    target_link_libraries(csilk_shared PRIVATE m)
+    target_link_libraries(csilk_shared PRIVATE m ${CMAKE_DL_LIBS})
   endif()
   add_library(csilk::shared ALIAS csilk_shared)
   message(STATUS "Shared library builds enabled: libcsilk*.so")

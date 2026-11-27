@@ -14,22 +14,48 @@ set(_install_targets
     csilk_crypto
     csilk_runtime
     csilk_json
-    csilk_wasm
-    csilk_bypass
     csilk_http
     csilk_tls
     csilk_http2
     csilk_protocols
     csilk_middleware
     csilk_reflection
-    csilk_permission
     csilk_app
-    csilk_db
-    csilk_vector
-    csilk_ai
-    csilk_mq
-    csilk_workflow
     yyjson)
+
+if(CSILK_ENABLE_HTTP3)
+  list(APPEND _install_targets csilk_h3)
+endif()
+if(CSILK_ENABLE_MCP)
+  list(APPEND _install_targets csilk_mcp)
+endif()
+if(CSILK_ENABLE_GRPC)
+  list(APPEND _install_targets csilk_grpc)
+endif()
+if(CSILK_ENABLE_WASM)
+  list(APPEND _install_targets csilk_wasm)
+endif()
+if(CSILK_ENABLE_BYPASS)
+  list(APPEND _install_targets csilk_bypass)
+endif()
+if(CSILK_ENABLE_PERM)
+  list(APPEND _install_targets csilk_permission)
+endif()
+if(CSILK_ENABLE_DB)
+  list(APPEND _install_targets csilk_db)
+endif()
+if(CSILK_ENABLE_VECTOR)
+  list(APPEND _install_targets csilk_vector)
+endif()
+if(CSILK_ENABLE_AI)
+  list(APPEND _install_targets csilk_ai)
+endif()
+if(CSILK_ENABLE_MQ)
+  list(APPEND _install_targets csilk_mq)
+endif()
+if(CSILK_ENABLE_WORKFLOW)
+  list(APPEND _install_targets csilk_workflow)
+endif()
 
 if(CSILK_USE_URING)
   list(APPEND _install_targets uring)
@@ -42,21 +68,46 @@ if(CSILK_BUILD_SHARED)
       csilk_crypto_shared
       csilk_runtime_shared
       csilk_json_shared
-      csilk_wasm_shared
-      csilk_bypass_shared
       csilk_http_shared
       csilk_tls_shared
       csilk_http2_shared
       csilk_protocols_shared
       csilk_middleware_shared
       csilk_reflection_shared
-      csilk_permission_shared
-      csilk_app_shared
-      csilk_db_shared
-      csilk_vector_shared
-      csilk_ai_shared
-      csilk_mq_shared
-      csilk_workflow_shared)
+      csilk_app_shared)
+  if(CSILK_ENABLE_HTTP3)
+    list(APPEND _install_targets csilk_h3_shared)
+  endif()
+  if(CSILK_ENABLE_MCP)
+    list(APPEND _install_targets csilk_mcp_shared)
+  endif()
+  if(CSILK_ENABLE_GRPC)
+    list(APPEND _install_targets csilk_grpc_shared)
+  endif()
+  if(CSILK_ENABLE_WASM)
+    list(APPEND _install_targets csilk_wasm_shared)
+  endif()
+  if(CSILK_ENABLE_BYPASS)
+    list(APPEND _install_targets csilk_bypass_shared)
+  endif()
+  if(CSILK_ENABLE_PERM)
+    list(APPEND _install_targets csilk_permission_shared)
+  endif()
+  if(CSILK_ENABLE_DB)
+    list(APPEND _install_targets csilk_db_shared)
+  endif()
+  if(CSILK_ENABLE_VECTOR)
+    list(APPEND _install_targets csilk_vector_shared)
+  endif()
+  if(CSILK_ENABLE_AI)
+    list(APPEND _install_targets csilk_ai_shared)
+  endif()
+  if(CSILK_ENABLE_MQ)
+    list(APPEND _install_targets csilk_mq_shared)
+  endif()
+  if(CSILK_ENABLE_WORKFLOW)
+    list(APPEND _install_targets csilk_workflow_shared)
+  endif()
 endif()
 
 execute_process(
@@ -94,13 +145,34 @@ set(_required_targets
     csilk::protocols
     csilk::middleware
     csilk::reflection
-    csilk::permission
-    csilk::app
-    csilk::db
-    csilk::vector
-    csilk::ai
-    csilk::mq
-    csilk::workflow)
+    csilk::app)
+if(CSILK_ENABLE_PERM)
+  list(APPEND _required_targets csilk::permission)
+endif()
+if(CSILK_ENABLE_DB)
+  list(APPEND _required_targets csilk::db)
+endif()
+if(CSILK_ENABLE_VECTOR)
+  list(APPEND _required_targets csilk::vector)
+endif()
+if(CSILK_ENABLE_AI)
+  list(APPEND _required_targets csilk::ai)
+endif()
+if(CSILK_ENABLE_MQ)
+  list(APPEND _required_targets csilk::mq)
+endif()
+if(CSILK_ENABLE_WORKFLOW)
+  list(APPEND _required_targets csilk::workflow)
+endif()
+if(CSILK_ENABLE_HTTP3)
+  list(APPEND _required_targets csilk::h3)
+endif()
+if(CSILK_ENABLE_MCP)
+  list(APPEND _required_targets csilk::mcp)
+endif()
+if(CSILK_ENABLE_GRPC)
+  list(APPEND _required_targets csilk::grpc)
+endif()
 if(CSILK_BUILD_SHARED)
   list(APPEND _required_targets
       csilk::crypto_shared
@@ -108,10 +180,14 @@ if(CSILK_BUILD_SHARED)
       csilk::protocols_shared
       csilk::middleware_shared
       csilk::reflection_shared
-      csilk::permission_shared
       csilk::app_shared
-      csilk::vector_shared
       csilk::shared)
+  if(CSILK_ENABLE_PERM)
+    list(APPEND _required_targets csilk::permission_shared)
+  endif()
+  if(CSILK_ENABLE_VECTOR)
+    list(APPEND _required_targets csilk::vector_shared)
+  endif()
 endif()
 foreach(_target IN LISTS _required_targets)
   if(NOT TARGET ${_target})
@@ -159,6 +235,25 @@ endif()
 if(DEFINED USE_ASAN AND USE_ASAN)
   list(APPEND _consumer_cmake_args "-DUSE_ASAN=${USE_ASAN}")
 endif()
+if(DEFINED CSILK_BUILD_SHARED)
+  list(APPEND _consumer_cmake_args "-DCSILK_BUILD_SHARED=${CSILK_BUILD_SHARED}")
+endif()
+foreach(_flag IN ITEMS
+    CSILK_ENABLE_DB
+    CSILK_ENABLE_MQ
+    CSILK_ENABLE_AI
+    CSILK_ENABLE_VECTOR
+    CSILK_ENABLE_MCP
+    CSILK_ENABLE_WORKFLOW
+    CSILK_ENABLE_GRPC
+    CSILK_ENABLE_WASM
+    CSILK_ENABLE_BYPASS
+    CSILK_ENABLE_PERM
+    CSILK_ENABLE_HTTP3)
+  if(DEFINED ${_flag})
+    list(APPEND _consumer_cmake_args "-D${_flag}=${${_flag}}")
+  endif()
+endforeach()
 
 execute_process(
     COMMAND "${CMAKE_COMMAND}" ${_consumer_cmake_args}

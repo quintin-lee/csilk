@@ -84,7 +84,6 @@ set(CSILK_CORE_TESTS
     test_context_sizeof
     test_context_reflect_ext
     test_async_op
-    test_ctx_lifecycle_async
     test_edge
     test_get_param
     test_mvcc_cache
@@ -135,27 +134,18 @@ set(CSILK_CORE_TESTS
     test_router_simd_fuzz_bench
     test_header_map_bench
     test_codec_prop
-
     test_hash_prop
     test_simd_router_arena
     test_uring_buf
-    test_wasm_plugin
     test_server_stats_bench
     test_swar_http
-    test_af_xdp
-    test_dpdk_pmd
     test_http1_zerocopy
-    test_af_xdp_zerocopy
     test_uring_sqpoll
     test_uring_vector
     test_uring_io
     test_uring_fs
     test_ctx_json
     test_io_op_model
-    test_io_perf_fallback
-    test_wasm_vm
-    test_wasm_fuel
-    test_wasm_wasi
     test_h2_stream_bench
     test_pool_economics
     test_performance_model
@@ -178,20 +168,25 @@ set(CSILK_CORE_TESTS
     test_lazy_arena
     test_io_poll
 )
-set(CSILK_CORE_TEST_DIRS
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core;core
-    core;core;core;core;core;core;core;core;core
-)
-
+if(CSILK_ENABLE_MQ AND CSILK_ENABLE_AI)
+  list(APPEND CSILK_CORE_TESTS test_ctx_lifecycle_async)
+endif()
+if(CSILK_ENABLE_WASM)
+  list(APPEND CSILK_CORE_TESTS
+      test_wasm_plugin
+      test_wasm_vm
+      test_wasm_fuel
+      test_wasm_wasi
+      test_wasm_real
+  )
+endif()
+if(CSILK_ENABLE_BYPASS)
+  list(APPEND CSILK_CORE_TESTS
+      test_af_xdp
+      test_af_xdp_zerocopy
+      test_io_perf_fallback
+  )
+endif()
 
 # -- Application tests --
 set(CSILK_APP_TESTS
@@ -206,62 +201,53 @@ set(CSILK_APP_TESTS
     test_hooks
     test_hooks_rcu
     test_jsonrpc_frames
-    test_app_wasm
 )
-set(CSILK_APP_TEST_DIRS
-    app;app;app;app;app;app;app;app;app;app;app;app
-)
+if(CSILK_ENABLE_WASM)
+  list(APPEND CSILK_APP_TESTS test_app_wasm)
+endif()
 
 # -- Workflow tests --
-set(CSILK_WORKFLOW_TESTS
-    test_workflow_agentic
-    test_workflow_agent_engine
-    test_workflow_agent_multi
-    test_workflow_agent_hitl
-    test_workflow_budget
-    test_workflow_context
-    test_workflow_control
-    test_workflow_distributed
-    test_workflow_dx
-    test_workflow_exec
-    test_workflow_filters
-    test_workflow_graph
-    test_workflow_interactive
-    test_workflow_jsonpath
-    test_workflow_lifecycle
-    test_workflow_loader
-    test_workflow_monitor
-    test_workflow_parallel
-    test_workflow_parallel_tools
-    test_workflow_persistence
-    test_workflow_retry
-    test_workflow_schema
-    test_workflow_streaming
-    test_workflow_timeout
-    test_workflow_tools
-    test_workflow_tracing
-    test_workflow_dsl
-    test_workflow_hotreload
-    test_wf_cluster_sm
-    test_wf_wasm_node
-    test_ai_react_loop
-    test_agent_memory
-    test_wf_tools_monitor
-    test_wf_grid
-    test_wf_grid_integration
-    test_wf_grid_raft
-)
-set(CSILK_WORKFLOW_TEST_DIRS
-    workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
-    workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
-    workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow;workflow
-    workflow
-    workflow
-    workflow
-    workflow
-    workflow
-    workflow
-)
+set(CSILK_WORKFLOW_TESTS)
+if(CSILK_ENABLE_WORKFLOW)
+  set(CSILK_WORKFLOW_TESTS
+      test_workflow_agentic
+      test_workflow_agent_engine
+      test_workflow_agent_multi
+      test_workflow_agent_hitl
+      test_workflow_budget
+      test_workflow_context
+      test_workflow_control
+      test_workflow_distributed
+      test_workflow_dx
+      test_workflow_exec
+      test_workflow_filters
+      test_workflow_graph
+      test_workflow_interactive
+      test_workflow_jsonpath
+      test_workflow_lifecycle
+      test_workflow_loader
+      test_workflow_monitor
+      test_workflow_parallel
+      test_workflow_parallel_tools
+      test_workflow_persistence
+      test_workflow_retry
+      test_workflow_schema
+      test_workflow_streaming
+      test_workflow_timeout
+      test_workflow_tools
+      test_workflow_tracing
+      test_workflow_dsl
+      test_workflow_hotreload
+      test_wf_cluster_sm
+      test_wf_wasm_node
+      test_ai_react_loop
+      test_agent_memory
+      test_wf_tools_monitor
+      test_wf_grid
+      test_wf_grid_integration
+      test_wf_grid_raft
+  )
+endif()
 
 # -- Middleware tests --
 set(CSILK_MIDDLEWARE_TESTS
@@ -279,6 +265,7 @@ set(CSILK_MIDDLEWARE_TESTS
     test_multipart
     test_ratelimit
     test_sliding_ratelimit
+    test_ratelimit_distributed
     test_keyed_ratelimit_security_headers
     test_security_headers
     test_recovery
@@ -293,51 +280,52 @@ set(CSILK_MIDDLEWARE_TESTS
     test_trace_circuit_breaker
     test_circuit_breaker
     test_otlp_exporter
-    test_grpc_gateway
     test_file
     test_validate
     test_waf
-    test_xdp_waf
-    test_xdp_waf_rules
+    test_waf_filter
     test_otlp_trace_span
     test_apm_dashboard_route
-    test_otlp_ai
 )
-set(CSILK_MIDDLEWARE_TEST_DIRS
-    middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
-    middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
-    middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware;middleware
-    middleware;middleware;middleware;middleware;middleware;middleware;middleware
-)
+if(CSILK_ENABLE_GRPC)
+  list(APPEND CSILK_MIDDLEWARE_TESTS test_grpc_gateway)
+endif()
+if(CSILK_ENABLE_AI)
+  list(APPEND CSILK_MIDDLEWARE_TESTS test_otlp_ai)
+endif()
 
 # -- Protocol tests --
+if(NOT TARGET CURL::libcurl)
+  find_package(CURL QUIET)
+endif()
 set(CSILK_PROTOCOL_TESTS
     test_swagger
-    test_openapi
     test_ws
     test_ws_room
     test_ws_concurrent
     test_h2
     test_h2_dispatch_lifecycle
     test_h2_header_bench
-    test_h3
-    test_h3_worker
-    test_mcp_jsonrpc
-    test_mcp_server_client
-    test_mcp_server_core
-    test_mcp_stdio
-    test_mcp_stdio_pool
-    test_mcp_sse_ext
-    test_grpc
 )
-set(CSILK_PROTOCOL_TEST_DIRS
-    protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols;protocols
-)
+if(CSILK_ENABLE_HTTP3)
+  list(APPEND CSILK_PROTOCOL_TESTS test_h3 test_h3_worker test_http3_skeleton)
+endif()
+if(CSILK_ENABLE_MCP)
+  list(APPEND CSILK_PROTOCOL_TESTS
+      test_mcp_jsonrpc
+      test_mcp_server_client
+      test_mcp_server_core
+      test_mcp_stdio
+      test_mcp_stdio_pool
+      test_mcp_sse_ext
+  )
+endif()
+if(CSILK_ENABLE_GRPC)
+  list(APPEND CSILK_PROTOCOL_TESTS test_grpc)
+endif()
 
 # -- Security tests --
 set(CSILK_SECURITY_TESTS
-    test_perm
-    test_perm_ext
     test_crypto_primitives
     test_jwt_security
     test_uuid
@@ -352,87 +340,107 @@ set(CSILK_SECURITY_TESTS
 set(CSILK_SECURITY_TEST_DIRS
     security;security;security;security;security;security;security;security;crypto;crypto;security;security
 )
+# Build matching directory list dynamically so ZIP_LISTS never drifts.
+set(CSILK_SECURITY_TEST_DIRS
+    security;security;security;security;security;security;crypto;crypto;security;security
+)
+if(CSILK_ENABLE_PERM)
+  list(PREPEND CSILK_SECURITY_TESTS test_perm test_perm_ext)
+  list(PREPEND CSILK_SECURITY_TEST_DIRS security security)
+endif()
 
 # -- Data / driver tests --
-set(CSILK_DATA_TESTS
-    test_db_sqlite
-    test_db_registry
-    test_db_tx_scope
-    test_db_stmt
-    test_db_migration
-    test_db_pool_concurrent
-    test_db_typed_binding
-    test_db_error_codes
-    test_db_postgres
-    test_db_mysql
-    test_db_redis
-    test_db_abstraction
-    test_db_nonblocking
-)
-set(CSILK_DATA_TEST_DIRS
-    drivers;drivers;drivers/db;drivers/db;drivers/db;drivers;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db
-)
+set(CSILK_DATA_TESTS)
+set(CSILK_DATA_TEST_DIRS)
+if(CSILK_ENABLE_DB)
+  set(CSILK_DATA_TESTS
+      test_db_sqlite
+      test_db_registry
+      test_db_tx_scope
+      test_db_stmt
+      test_db_migration
+      test_db_pool_concurrent
+      test_db_typed_binding
+      test_db_error_codes
+      test_db_postgres
+      test_db_mysql
+      test_db_redis
+      test_db_abstraction
+      test_db_nonblocking
+      test_db
+      test_mongodb
+  )
+  set(CSILK_DATA_TEST_DIRS
+      drivers;drivers;drivers/db;drivers/db;drivers/db;drivers;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db
+  )
+endif()
 
-# -- AI / driver tests --
-set(CSILK_AI_TESTS
-    test_ai
-    test_ai_ext
-    test_ai_driver_mock
-    test_openai_mock
-    test_ollama_mock
-    test_ai_anthropic
-    test_ai_llama
-    test_ai_trace
-    test_ai_ctx_trace
-    test_ai_skill
-    test_vector_db
-    test_vector_simd
-    test_vector_hnsw
-    test_vector_db_embedded
-    test_vector_milvus_qdrant_mock
-    test_db
-    test_mongodb
-)
-set(CSILK_AI_TEST_DIRS
-    drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers;drivers/vector;drivers/vector;drivers/vector;drivers/vector;drivers/db;drivers/db
-)
+# -- AI & Vector driver tests --
+set(CSILK_AI_TESTS)
+set(CSILK_AI_TEST_DIRS)
+if(CSILK_ENABLE_AI)
+  list(APPEND CSILK_AI_TESTS
+      test_ai
+      test_ai_ext
+      test_ai_driver_mock
+      test_openai_mock
+      test_ollama_mock
+      test_ai_anthropic
+      test_ai_trace
+      test_ai_ctx_trace
+  )
+  list(APPEND CSILK_AI_TEST_DIRS drivers drivers drivers drivers drivers drivers drivers drivers)
+  if(CSILK_ENABLE_WORKFLOW)
+    list(APPEND CSILK_AI_TESTS test_ai_skill)
+    list(APPEND CSILK_AI_TEST_DIRS drivers)
+  endif()
+endif()
+if(CSILK_ENABLE_VECTOR)
+  list(APPEND CSILK_AI_TESTS
+      test_vector_db
+      test_vector_simd
+      test_vector_hnsw
+      test_vector_db_embedded
+      test_vector_milvus_qdrant_mock
+  )
+  list(APPEND CSILK_AI_TEST_DIRS drivers drivers/vector drivers/vector drivers/vector drivers/vector)
+endif()
 
 # -- Reflection tests --
 set(CSILK_REFLECTION_TESTS
     test_reflect
 )
-set(CSILK_REFLECTION_TEST_DIRS
-    reflection
-)
 
 # -- Messaging tests --
-set(CSILK_MESSAGING_TESTS
-    test_mq
-    test_mq_integration
-    test_mq_monitor
-    test_mq_persistence
-    test_mq_recovery
-    test_mq_wal
-    test_mq_wal_write
-    test_mq_concurrent
-    test_raft_wal
-    test_raft_rpc
-    test_raft_consensus
-    test_raft_failover
-    test_raft_snapshot
-    test_raft_membership
-    test_wal_uring
-)
-set(CSILK_MESSAGING_TEST_DIRS
-    mq;mq;mq;mq;mq;mq;mq;mq;mq;messaging
-    messaging;messaging;messaging;messaging;messaging
-)
+set(CSILK_MESSAGING_TESTS)
+set(CSILK_MESSAGING_TEST_DIRS)
+if(CSILK_ENABLE_MQ)
+  set(CSILK_MESSAGING_TESTS
+      test_mq
+      test_mq_integration
+      test_mq_monitor
+      test_mq_persistence
+      test_mq_recovery
+      test_mq_wal
+      test_mq_wal_write
+      test_mq_concurrent
+      test_raft_wal
+      test_raft_rpc
+      test_raft_consensus
+      test_raft_failover
+      test_raft_snapshot
+      test_raft_membership
+      test_wal_uring
+  )
+  set(CSILK_MESSAGING_TEST_DIRS
+      mq;mq;mq;mq;mq;mq;mq;mq;mq;messaging;messaging;messaging;messaging;messaging;messaging
+  )
+endif()
 
 # -- Extra / integration tests --
 set(CSILK_EXTRA_TESTS
     test_extra
     test_integration
-    test_integration_ext
     test_admin_integration
     test_session_integration
     test_session_store_lifecycle
@@ -441,16 +449,13 @@ set(CSILK_EXTRA_TESTS
     test_sse_integration
     test_ws_integration
 )
-set(CSILK_EXTRA_TEST_DIRS
-    integration;integration;integration;integration;integration;integration;integration;integration;integration;integration
-)
+if(CSILK_ENABLE_WORKFLOW)
+  list(APPEND CSILK_EXTRA_TESTS test_integration_ext)
+endif()
 
 # Collect all test names for run_tests DEPENDS
 set(CSILK_ALL_TEST_NAMES
     ${CSILK_CORE_TESTS}
-    test_wasm_real
-    test_ratelimit_distributed
-    test_http3_skeleton
     ${CSILK_APP_TESTS}
     ${CSILK_WORKFLOW_TESTS}
     ${CSILK_MIDDLEWARE_TESTS}
@@ -464,15 +469,11 @@ set(CSILK_ALL_TEST_NAMES
 )
 
 # Register tests using per-module source directories
-foreach(_name _dir IN ZIP_LISTS CSILK_CORE_TESTS CSILK_CORE_TEST_DIRS)
-    if(_name STREQUAL "test_bounded_buf")
-        add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/core/${_name}.c")
-    else()
-        add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
-    endif()
+foreach(_name IN LISTS CSILK_CORE_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/core/${_name}.c")
 endforeach()
 
-# Standalone core tests registered outside the ZIP_LISTS loop
+# Standalone core tests registered outside the list loop
 add_library(csilk_test_plugin SHARED tests/core/test_plugin_mod.c)
 set_target_properties(csilk_test_plugin PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/plugins"
@@ -492,58 +493,28 @@ target_compile_definitions(test_plugin PRIVATE
     CSILK_TEST_PLUGIN_PATH="$<TARGET_FILE:csilk_test_plugin>"
     CSILK_TEST_BAD_ABI_PLUGIN_PATH="$<TARGET_FILE:csilk_test_plugin_bad_abi>"
 )
-if(TARGET csilk_plugin_ai)
-  add_dependencies(test_plugin csilk_plugin_ai)
-  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_AI="$<TARGET_FILE:csilk_plugin_ai>")
-endif()
-if(TARGET csilk_plugin_mq)
-  add_dependencies(test_plugin csilk_plugin_mq)
-  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_MQ="$<TARGET_FILE:csilk_plugin_mq>")
-endif()
-if(TARGET csilk_plugin_db)
-  add_dependencies(test_plugin csilk_plugin_db)
-  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_DB="$<TARGET_FILE:csilk_plugin_db>")
-endif()
-if(TARGET csilk_plugin_vector)
-  add_dependencies(test_plugin csilk_plugin_vector)
-  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_VECTOR="$<TARGET_FILE:csilk_plugin_vector>")
-endif()
-if(TARGET csilk_plugin_workflow)
-  add_dependencies(test_plugin csilk_plugin_workflow)
-  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_WORKFLOW="$<TARGET_FILE:csilk_plugin_workflow>")
-endif()
-if(TARGET csilk_plugin_protocol)
-  add_dependencies(test_plugin csilk_plugin_protocol)
-  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_PROTOCOL="$<TARGET_FILE:csilk_plugin_protocol>")
-endif()
-if(TARGET csilk_plugin_wasm)
-  add_dependencies(test_plugin csilk_plugin_wasm)
-  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_WASM="$<TARGET_FILE:csilk_plugin_wasm>")
-endif()
-if(TARGET csilk_plugin_bypass)
-  add_dependencies(test_plugin csilk_plugin_bypass)
-  target_compile_definitions(test_plugin PRIVATE CSILK_REAL_PLUGIN_BYPASS="$<TARGET_FILE:csilk_plugin_bypass>")
-endif()
 list(APPEND CSILK_ALL_TEST_NAMES test_plugin)
 
-add_csilk_test(test_wasm_real "${CMAKE_CURRENT_SOURCE_DIR}/tests/core/test_wasm_real.c")
-add_csilk_test(test_ratelimit_distributed "${CMAKE_CURRENT_SOURCE_DIR}/tests/middleware/test_ratelimit_distributed.c")
-add_csilk_test(test_http3_skeleton "${CMAKE_CURRENT_SOURCE_DIR}/tests/protocols/test_http3_skeleton.c")
+if(TARGET CURL::libcurl)
+  add_csilk_test(test_openapi "${CMAKE_CURRENT_SOURCE_DIR}/tests/protocols/test_openapi.c")
+  target_link_libraries(test_openapi CURL::libcurl)
+  list(APPEND CSILK_ALL_TEST_NAMES test_openapi)
+endif()
 
-foreach(_name _dir IN ZIP_LISTS CSILK_APP_TESTS CSILK_APP_TEST_DIRS)
-    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
+foreach(_name IN LISTS CSILK_APP_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/app/${_name}.c")
 endforeach()
 
-foreach(_name _dir IN ZIP_LISTS CSILK_WORKFLOW_TESTS CSILK_WORKFLOW_TEST_DIRS)
-    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
+foreach(_name IN LISTS CSILK_WORKFLOW_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/workflow/${_name}.c")
 endforeach()
 
-foreach(_name _dir IN ZIP_LISTS CSILK_MIDDLEWARE_TESTS CSILK_MIDDLEWARE_TEST_DIRS)
-    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
+foreach(_name IN LISTS CSILK_MIDDLEWARE_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/middleware/${_name}.c")
 endforeach()
 
-foreach(_name _dir IN ZIP_LISTS CSILK_PROTOCOL_TESTS CSILK_PROTOCOL_TEST_DIRS)
-    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
+foreach(_name IN LISTS CSILK_PROTOCOL_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/protocols/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_SECURITY_TESTS CSILK_SECURITY_TEST_DIRS)
@@ -558,15 +529,15 @@ foreach(_name _dir IN ZIP_LISTS CSILK_AI_TESTS CSILK_AI_TEST_DIRS)
     add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
-foreach(_name _dir IN ZIP_LISTS CSILK_REFLECTION_TESTS CSILK_REFLECTION_TEST_DIRS)
-    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
+foreach(_name IN LISTS CSILK_REFLECTION_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/reflection/${_name}.c")
 endforeach()
 
 foreach(_name _dir IN ZIP_LISTS CSILK_MESSAGING_TESTS CSILK_MESSAGING_TEST_DIRS)
     add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
-foreach(_name _dir IN ZIP_LISTS CSILK_EXTRA_TESTS CSILK_EXTRA_TEST_DIRS)
-    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
+foreach(_name IN LISTS CSILK_EXTRA_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/integration/${_name}.c")
 endforeach()
 

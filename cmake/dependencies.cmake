@@ -301,7 +301,12 @@ else()
 endif()
 
 # ── HTTP Client & SSL (CURL, OpenSSL, Threads) ───────────────────────────
-find_package(CURL REQUIRED)
+set(CSILK_NEED_CURL OFF)
+if(CSILK_ENABLE_AI OR CSILK_ENABLE_VECTOR OR CSILK_ENABLE_MCP)
+  set(CSILK_NEED_CURL ON)
+  find_package(CURL REQUIRED)
+  message(STATUS "Found libcurl (required by AI/Vector/MCP)")
+endif()
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 find_package(OpenSSL 1.1.1 REQUIRED)
@@ -310,15 +315,17 @@ message(STATUS "Found OpenSSL: ${OPENSSL_VERSION}")
 # ── Compression & Storage (ZLIB, SQLite3) ────────────────────────────────
 find_package(ZLIB 1.2 REQUIRED)
 message(STATUS "Found zlib: ${ZLIB_VERSION_STRING}")
-find_package(SQLite3 3.20 REQUIRED)
-message(STATUS "Found sqlite3: ${SQLite3_VERSION}")
-if(TARGET SQLite::SQLite3 AND NOT TARGET SQLite3::SQLite3)
-  add_library(SQLite3::SQLite3 INTERFACE IMPORTED)
-  target_link_libraries(SQLite3::SQLite3 INTERFACE SQLite::SQLite3)
-endif()
-if(TARGET SQLite3::SQLite3 AND NOT TARGET SQLite::SQLite3)
-  add_library(SQLite::SQLite3 INTERFACE IMPORTED)
-  target_link_libraries(SQLite::SQLite3 INTERFACE SQLite3::SQLite3)
+if(CSILK_ENABLE_DB)
+  find_package(SQLite3 3.20 REQUIRED)
+  message(STATUS "Found sqlite3: ${SQLite3_VERSION}")
+  if(TARGET SQLite::SQLite3 AND NOT TARGET SQLite3::SQLite3)
+    add_library(SQLite3::SQLite3 INTERFACE IMPORTED)
+    target_link_libraries(SQLite3::SQLite3 INTERFACE SQLite::SQLite3)
+  endif()
+  if(TARGET SQLite3::SQLite3 AND NOT TARGET SQLite::SQLite3)
+    add_library(SQLite::SQLite3 INTERFACE IMPORTED)
+    target_link_libraries(SQLite::SQLite3 INTERFACE SQLite3::SQLite3)
+  endif()
 endif()
 
 # ── YAML Parser (libyaml) ─────────────────────────────────────────────────
@@ -358,7 +365,9 @@ include_directories(include)
 include_directories(src)
 include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
 include_directories(${yyjson_SOURCE_DIR})
-include_directories(${CURL_INCLUDE_DIRS})
+if(CSILK_NEED_CURL)
+  include_directories(${CURL_INCLUDE_DIRS})
+endif()
 
 configure_file(
   include/csilk/version.h.in
@@ -372,6 +381,7 @@ configure_file(
 )
 
 # ── Optional Database Client Drivers ──────────────────────────────────────
+if(CSILK_ENABLE_DB)
 # Find MySQL
 find_library(MYSQL_LIB NAMES mysqlclient libmysqlclient)
 if(MYSQL_LIB)
@@ -459,3 +469,4 @@ if(HIREDIS_LIB)
 else()
   message(STATUS "hiredis library not found — redis driver will not build")
 endif()
+endif() # CSILK_ENABLE_DB

@@ -10,22 +10,31 @@ set(CSILK_INSTALL_TARGETS
     csilk_core
     csilk_runtime
     csilk_json
-    csilk_wasm
-    csilk_bypass
     csilk_http
     csilk_tls
     csilk_http2
     csilk_protocols
     csilk_middleware
     csilk_reflection
-    csilk_permission
     csilk_app
+)
+foreach(_opt_mod
+    csilk_h3
+    csilk_mcp
+    csilk_grpc
+    csilk_wasm
+    csilk_bypass
+    csilk_permission
     csilk_db
     csilk_vector
     csilk_ai
     csilk_mq
     csilk_workflow
 )
+  if(TARGET ${_opt_mod})
+    list(APPEND CSILK_INSTALL_TARGETS ${_opt_mod})
+  endif()
+endforeach()
 if(CSILK_USE_URING)
     list(APPEND CSILK_INSTALL_TARGETS uring)
 endif()
@@ -55,22 +64,31 @@ if(CSILK_BUILD_SHARED)
         csilk_core_shared
         csilk_runtime_shared
         csilk_json_shared
-        csilk_wasm_shared
-        csilk_bypass_shared
         csilk_http_shared
         csilk_tls_shared
         csilk_http2_shared
         csilk_protocols_shared
         csilk_middleware_shared
         csilk_reflection_shared
-        csilk_permission_shared
         csilk_app_shared
+    )
+    foreach(_opt_mod_shared
+        csilk_h3_shared
+        csilk_mcp_shared
+        csilk_grpc_shared
+        csilk_wasm_shared
+        csilk_bypass_shared
+        csilk_permission_shared
         csilk_db_shared
         csilk_vector_shared
         csilk_ai_shared
         csilk_mq_shared
         csilk_workflow_shared
     )
+      if(TARGET ${_opt_mod_shared})
+        list(APPEND CSILK_SHARED_INSTALL_TARGETS ${_opt_mod_shared})
+      endif()
+    endforeach()
     install(TARGETS ${CSILK_SHARED_INSTALL_TARGETS}
         EXPORT csilk-targets
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -161,12 +179,18 @@ if(CSILK_USE_URING)
 endif()
 
 # Protocols
-set(CSILK_PROTOCOLS_PC_REQUIRES "csilk-http csilk-http2 csilk-reflection csilk-workflow csilk-mq")
+set(CSILK_PROTOCOLS_PC_REQUIRES "csilk-http csilk-http2 csilk-reflection")
+if(CSILK_ENABLE_MQ)
+  string(APPEND CSILK_PROTOCOLS_PC_REQUIRES " csilk-mq")
+endif()
 set(CSILK_PROTOCOLS_PC_REQUIRES_PRIVATE "")
 set(CSILK_PROTOCOLS_PC_LIBS_PRIVATE "")
 
 # Middleware
 set(CSILK_MIDDLEWARE_PC_REQUIRES "csilk-http csilk-tls")
+if(CSILK_ENABLE_MQ)
+  string(APPEND CSILK_MIDDLEWARE_PC_REQUIRES " csilk-mq")
+endif()
 set(CSILK_MIDDLEWARE_PC_REQUIRES_PRIVATE "zlib")
 set(CSILK_MIDDLEWARE_PC_LIBS_PRIVATE "-lz -lcrypto -lpthread")
 
@@ -176,12 +200,24 @@ set(CSILK_PERMISSION_PC_REQUIRES_PRIVATE "")
 set(CSILK_PERMISSION_PC_LIBS_PRIVATE "")
 
 # Reflection
-set(CSILK_REFLECTION_PC_REQUIRES "csilk-runtime csilk-json")
+set(CSILK_REFLECTION_PC_REQUIRES "csilk-base csilk-json")
 set(CSILK_REFLECTION_PC_REQUIRES_PRIVATE "")
 set(CSILK_REFLECTION_PC_LIBS_PRIVATE "")
 
 # Application
-set(CSILK_APP_PC_REQUIRES "csilk-http csilk-protocols csilk-middleware csilk-reflection csilk-db csilk-ai")
+set(CSILK_APP_PC_REQUIRES "csilk-http csilk-protocols csilk-middleware csilk-reflection")
+if(CSILK_ENABLE_DB)
+  string(APPEND CSILK_APP_PC_REQUIRES " csilk-db")
+endif()
+if(CSILK_ENABLE_AI)
+  string(APPEND CSILK_APP_PC_REQUIRES " csilk-ai")
+endif()
+if(CSILK_ENABLE_MQ)
+  string(APPEND CSILK_APP_PC_REQUIRES " csilk-mq")
+endif()
+if(CSILK_ENABLE_WASM)
+  string(APPEND CSILK_APP_PC_REQUIRES " csilk-wasm")
+endif()
 set(CSILK_APP_PC_REQUIRES_PRIVATE "")
 set(CSILK_APP_PC_LIBS_PRIVATE "")
 
@@ -211,7 +247,7 @@ set(CSILK_HTTP2_PC_REQUIRES_PRIVATE "libnghttp2")
 set(CSILK_HTTP2_PC_LIBS_PRIVATE "-lnghttp2")
 
 # HTTP
-set(CSILK_HTTP_PC_REQUIRES "csilk-core csilk-tls csilk-http2 csilk-mq")
+set(CSILK_HTTP_PC_REQUIRES "csilk-core csilk-tls csilk-http2")
 set(CSILK_HTTP_PC_REQUIRES_PRIVATE "zlib")
 set(CSILK_HTTP_PC_LIBS_PRIVATE "-lz -lssl -lcrypto")
 if(LLHTTP_LIB)
@@ -247,13 +283,36 @@ set(CSILK_AI_PC_LIBS_PRIVATE "-lcurl")
 set(CSILK_WORKFLOW_PC_REQUIRES_PRIVATE "yaml-0.1")
 set(CSILK_WORKFLOW_PC_LIBS_PRIVATE "-lyaml")
 
-# Umbrella static closure. Requires lists pull the modular CSilk archives;
+# Umbrella static closure. Requires lists pull the enabled CSilk archives;
 # Libs.private supplies implementation dependencies for --static consumers.
-set(CSILK_PC_REQUIRES "csilk-http csilk-permission csilk-db csilk-workflow csilk-wasm")
+set(CSILK_PC_REQUIRES "csilk-app csilk-http")
+set(CSILK_PC_LIBS_PRIVATE "-lyyjson -lssl -lcrypto -lz -lnghttp2 -lyaml")
+if(CSILK_NEED_CURL)
+  string(APPEND CSILK_PC_LIBS_PRIVATE " -lcurl")
+endif()
+if(CSILK_ENABLE_DB)
+  string(APPEND CSILK_PC_REQUIRES " csilk-db")
+  string(APPEND CSILK_PC_LIBS_PRIVATE " -lsqlite3")
+endif()
+if(CSILK_ENABLE_PERM)
+  string(APPEND CSILK_PC_REQUIRES " csilk-permission")
+endif()
+if(CSILK_ENABLE_WORKFLOW)
+  string(APPEND CSILK_PC_REQUIRES " csilk-workflow")
+endif()
+if(CSILK_ENABLE_WASM)
+  string(APPEND CSILK_PC_REQUIRES " csilk-wasm")
+endif()
+if(CSILK_ENABLE_VECTOR)
+  string(APPEND CSILK_PC_REQUIRES " csilk-vector")
+endif()
+if(CSILK_ENABLE_BYPASS)
+  string(APPEND CSILK_PC_REQUIRES " csilk-bypass")
+endif()
 if(CSILK_USE_URING)
-  set(CSILK_PC_LIBS_PRIVATE "-lyyjson -lssl -lcrypto -lz -lnghttp2 -lcurl -lsqlite3 -lyaml -luring -lpthread -lm")
+  string(APPEND CSILK_PC_LIBS_PRIVATE " -luring -lpthread -lm")
 else()
-  set(CSILK_PC_LIBS_PRIVATE "-lyyjson -lssl -lcrypto -lz -lnghttp2 -lcurl -lsqlite3 -lyaml -luv -lpthread -lm")
+  string(APPEND CSILK_PC_LIBS_PRIVATE " -luv -lpthread -lm")
 endif()
 if(LLHTTP_LIB)
   string(APPEND CSILK_PC_LIBS_PRIVATE " -lllhttp")
@@ -267,23 +326,39 @@ set(CSILK_PC_FILES
     csilk-json
     csilk-crypto
     csilk-runtime
-    csilk-wasm
-    csilk-bypass
     csilk-tls
-    csilk-mq
     csilk-http2
     csilk-http
     csilk-protocols
     csilk-middleware
     csilk-reflection
-    csilk-permission
     csilk-app
-    csilk-db
-    csilk-vector
-    csilk-ai
-    csilk-workflow
     csilk
 )
+if(CSILK_ENABLE_WASM)
+  list(APPEND CSILK_PC_FILES csilk-wasm)
+endif()
+if(CSILK_ENABLE_BYPASS)
+  list(APPEND CSILK_PC_FILES csilk-bypass)
+endif()
+if(CSILK_ENABLE_MQ)
+  list(APPEND CSILK_PC_FILES csilk-mq)
+endif()
+if(CSILK_ENABLE_PERM)
+  list(APPEND CSILK_PC_FILES csilk-permission)
+endif()
+if(CSILK_ENABLE_DB)
+  list(APPEND CSILK_PC_FILES csilk-db)
+endif()
+if(CSILK_ENABLE_VECTOR)
+  list(APPEND CSILK_PC_FILES csilk-vector)
+endif()
+if(CSILK_ENABLE_AI)
+  list(APPEND CSILK_PC_FILES csilk-ai)
+endif()
+if(CSILK_ENABLE_WORKFLOW)
+  list(APPEND CSILK_PC_FILES csilk-workflow)
+endif()
 
 set(CSILK_GENERATED_PC_FILES "")
 foreach(pc_mod ${CSILK_PC_FILES})

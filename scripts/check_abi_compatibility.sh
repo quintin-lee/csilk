@@ -81,5 +81,5 @@ if command -v abidiff >/dev/null 2>&1 && command -v abidw >/dev/null 2>&1; then
     echo "  ✔ libabigail ABI signature successfully extracted."
 fi
 
-echo "✅ ABI compatibility gate PASSED: $LIB_PATH complies with SOVERSION 1 stability policy."
+echo "✅ ABI compatibility gate PASSED: $LIB_PATH complies with SOVERSION 2 stability policy."
 exit 0

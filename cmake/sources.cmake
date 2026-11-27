@@ -9,7 +9,6 @@ set(CSILK_BASE_SOURCES
     src/core/primitives/bounded_buf.c
     src/core/primitives/kv_store.c
     src/core/primitives/header_map.c
-    src/core/primitives/query.c
     src/core/primitives/url.c
     src/core/primitives/ssrf.c
 )
@@ -46,6 +45,7 @@ set(CSILK_RUNTIME_SOURCES
     src/core/ctx/ctx_defer.c
     src/core/ctx/ctx_json.c
     src/core/primitives/recovery.c
+    src/core/primitives/query.c
     src/core/primitives/response.c
     src/core/primitives/router.c
     src/core/primitives/router_simd.c
@@ -110,11 +110,10 @@ set(CSILK_WASM_SOURCES
     src/core/plugin/wasm_wasi.c
 )
 
-# ── Bypass Module (AF_XDP & DPDK kernel bypass drivers) ──────────────────
+# ── Bypass Module (AF_XDP kernel bypass drivers) ─────────────────────────
 set(CSILK_BYPASS_SOURCES
     src/core/io/af_xdp.c
     src/core/io/af_xdp_zerocopy.c
-    src/core/io/dpdk_pmd.c
     src/core/io/io_perf_probe.c
     src/core/io/udp.c
 )
@@ -135,12 +134,16 @@ set(CSILK_TLS_SOURCES
     src/core/http/tls.c
 )
 
-# ── HTTP/2 & HTTP/3 Module (nghttp2 & QUIC protocol adapters) ────────────
+# ── HTTP/2 Module (nghttp2 protocol adapter) ──────────────────────────────
 set(CSILK_HTTP2_SOURCES
     src/core/http/h2_callbacks.c
     src/core/http/h2_session.c
     src/core/http/h2_response.c
     src/core/http/h2.c
+)
+
+# ── HTTP/3 Module (ngtcp2 & nghttp3 QUIC adapter, optional) ───────────────
+set(CSILK_HTTP3_SOURCES
     src/protocols/h3.c
     src/protocols/h3_session.c
     src/protocols/http3.c
@@ -165,17 +168,26 @@ set(CSILK_DB_SOURCES
     src/drivers/db/migration/migration_lock.c
 )
 
-# ── Protocol Module (WebSocket, OpenAPI, Swagger and MCP) ────────────────
+# ── Web Protocol Module (WebSocket, OpenAPI, Swagger — Web Core) ─────────
 set(CSILK_PROTOCOLS_SOURCES
     src/protocols/websocket.c
     src/protocols/ws_room.c
     src/protocols/openapi_gen.c
     src/protocols/swagger_serve.c
+)
+
+# ── MCP Module (Model Context Protocol, optional) ────────────────────────
+set(CSILK_MCP_SOURCES
     src/protocols/mcp/mcp_jsonrpc.c
     src/protocols/mcp/mcp_server.c
     src/protocols/mcp/mcp_client.c
     src/protocols/mcp/mcp_stdio_pool.c
+)
+
+# ── gRPC Module (gRPC wire codec & gateway, optional) ────────────────────
+set(CSILK_GRPC_SOURCES
     src/protocols/grpc.c
+    src/middleware/grpc_gateway.c
 )
 
 # ── Permission Module ─────────────────────────────────────────────────────
@@ -190,7 +202,6 @@ set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/circuit_breaker.c
     src/middleware/cors.c
     src/middleware/csrf.c
-    src/middleware/grpc_gateway.c
     src/middleware/gzip.c
     src/middleware/jwt.c
     src/middleware/logger.c
@@ -203,12 +214,10 @@ set(CSILK_MIDDLEWARE_SOURCES
     src/middleware/security_headers.c
     src/middleware/session.c
     src/middleware/session_store.c
-    src/middleware/sliding_ratelimit.c
     src/middleware/sse.c
     src/middleware/static.c
     src/middleware/validate.c
     src/middleware/waf.c
-    src/middleware/xdp_waf.c
 )
 
 # ── Reflection Module ────────────────────────────────────────────────────
@@ -234,7 +243,6 @@ set(CSILK_AI_SOURCES
     src/drivers/ai/openai.c
     src/drivers/ai/ollama.c
     src/drivers/ai/anthropic.c
-    src/drivers/ai/llama.c
     src/drivers/ai/tool_registry.c
 )
 
@@ -269,7 +277,6 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_tools.c
     src/workflow/wf_scheduler.c
     src/workflow/wf_ctx.c
-    src/workflow/wf_wal.c
     src/workflow/wf_node.c
     src/workflow/wf_run.c
     src/workflow/wf_resume.c
@@ -282,7 +289,7 @@ set(CSILK_WORKFLOW_SOURCES
     src/workflow/wf_cluster_sm.c
 )
 
-# ── Combined Full Source List (Monolithic fallback & shared library) ──────
+# ── Combined Source List (Built conditionally from enabled modules) ──────
 set(CSILK_SOURCES
     ${CSILK_BASE_SOURCES}
     ${CSILK_CRYPTO_SOURCES}
@@ -292,15 +299,40 @@ set(CSILK_SOURCES
     ${CSILK_HTTP_SOURCES}
     ${CSILK_HTTP2_SOURCES}
     ${CSILK_PROTOCOLS_SOURCES}
-    ${CSILK_PERMISSION_SOURCES}
     ${CSILK_MIDDLEWARE_SOURCES}
     ${CSILK_REFLECTION_SOURCES}
     ${CSILK_APP_SOURCES}
-    ${CSILK_DB_SOURCES}
-    ${CSILK_VECTOR_SOURCES}
-    ${CSILK_AI_SOURCES}
-    ${CSILK_MQ_SOURCES}
-    ${CSILK_WORKFLOW_SOURCES}
-    ${CSILK_WASM_SOURCES}
-    ${CSILK_BYPASS_SOURCES}
 )
+if(CSILK_ENABLE_HTTP3)
+  list(APPEND CSILK_SOURCES ${CSILK_HTTP3_SOURCES})
+endif()
+if(CSILK_ENABLE_MCP)
+  list(APPEND CSILK_SOURCES ${CSILK_MCP_SOURCES})
+endif()
+if(CSILK_ENABLE_GRPC)
+  list(APPEND CSILK_SOURCES ${CSILK_GRPC_SOURCES})
+endif()
+if(CSILK_ENABLE_PERM)
+  list(APPEND CSILK_SOURCES ${CSILK_PERMISSION_SOURCES})
+endif()
+if(CSILK_ENABLE_DB)
+  list(APPEND CSILK_SOURCES ${CSILK_DB_SOURCES})
+endif()
+if(CSILK_ENABLE_VECTOR)
+  list(APPEND CSILK_SOURCES ${CSILK_VECTOR_SOURCES})
+endif()
+if(CSILK_ENABLE_AI)
+  list(APPEND CSILK_SOURCES ${CSILK_AI_SOURCES})
+endif()
+if(CSILK_ENABLE_MQ)
+  list(APPEND CSILK_SOURCES ${CSILK_MQ_SOURCES})
+endif()
+if(CSILK_ENABLE_WORKFLOW)
+  list(APPEND CSILK_SOURCES ${CSILK_WORKFLOW_SOURCES})
+endif()
+if(CSILK_ENABLE_WASM)
+  list(APPEND CSILK_SOURCES ${CSILK_WASM_SOURCES})
+endif()
+if(CSILK_ENABLE_BYPASS)
+  list(APPEND CSILK_SOURCES ${CSILK_BYPASS_SOURCES})
+endif()
