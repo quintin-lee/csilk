@@ -87,11 +87,42 @@ tcp_connect_loopback(int port)
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = htons((uint16_t)port);
-    if (connect(fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+    int rc;
+    do {
+        rc = connect(fd, (struct sockaddr*)&addr, sizeof(addr));
+    } while (rc != 0 && errno == EINTR);
+    if (rc != 0) {
+        int saved_errno = errno;
         close(fd);
+        errno = saved_errno;
         return -1;
     }
     return fd;
+}
+
+static int
+tcp_connect_loopback_retry(int port, int max_attempts)
+{
+    int last_errno = 0;
+    for (int attempt = 0; attempt < max_attempts; attempt++) {
+        int fd = tcp_connect_loopback(port);
+        if (fd >= 0) {
+            return fd;
+        }
+        last_errno = errno;
+        if (last_errno != ECONNREFUSED && last_errno != EAGAIN && last_errno != EINTR &&
+            last_errno != EADDRNOTAVAIL) {
+            break;
+        }
+        csilk_io_sleep(10);
+    }
+    fprintf(stderr,
+            "tcp_connect_loopback_retry(port=%d) failed after %d attempt(s): %s (errno=%d)\n",
+            port,
+            max_attempts,
+            strerror(last_errno),
+            last_errno);
+    return -1;
 }
 
 static int
@@ -100,7 +131,13 @@ send_all(int fd, const char* data, size_t len)
     size_t sent = 0;
     while (sent < len) {
         ssize_t n = send(fd, data + sent, len - sent, 0);
-        if (n <= 0) {
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return -1;
+        }
+        if (n == 0) {
             return -1;
         }
         sent += (size_t)n;
@@ -418,7 +455,7 @@ tcp_client_thread_fn(void* arg)
 {
     int port = *(int*)arg;
     csilk_io_sleep(10);
-    int fd = tcp_connect_loopback(port);
+    int fd = tcp_connect_loopback_retry(port, 20);
     assert(fd >= 0);
     assert(send_all(fd, "hello-io", 8) == 0);
     char    reply[64] = {0};
@@ -582,7 +619,7 @@ test_http_server_equivalence(void)
     assert(probe >= 0);
 
     /* 1. GET JSON (keep-alive 4x reuse) */
-    int fd = tcp_connect_loopback(port);
+    int fd = tcp_connect_loopback_retry(port, 20);
     assert(fd >= 0);
     const char* req_get =
         "GET /eq/json HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n";
@@ -610,7 +647,7 @@ test_http_server_equivalence(void)
     close(fd);
 
     /* 3. Streaming chunked response */
-    fd = tcp_connect_loopback(port);
+    fd = tcp_connect_loopback_retry(port, 20);
     assert(fd >= 0);
     const char* req_stream =
         "GET /eq/stream HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
@@ -623,7 +660,7 @@ test_http_server_equivalence(void)
     close(fd);
 
     /* 4. Cross-worker csilk_dispatch() */
-    fd = tcp_connect_loopback(port);
+    fd = tcp_connect_loopback_retry(port, 20);
     assert(fd >= 0);
     const char* req_disp =
         "GET /eq/dispatch HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
@@ -637,7 +674,7 @@ test_http_server_equivalence(void)
     close(fd);
 
     /* 5. 404 Not Found */
-    fd = tcp_connect_loopback(port);
+    fd = tcp_connect_loopback_retry(port, 20);
     assert(fd >= 0);
     const char* req_404 =
         "GET /eq/missing HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
