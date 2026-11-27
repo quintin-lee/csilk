@@ -78,6 +78,7 @@ if(CSILK_USE_URING)
         src/core/uring/uring_write.c
         src/core/uring/uring_close.c
         src/core/uring/uring_timer.c
+        src/core/uring/uring_udp.c
         src/core/uring/uring_run.c
     )
 endif()
@@ -115,7 +116,6 @@ set(CSILK_BYPASS_SOURCES
     src/core/io/af_xdp.c
     src/core/io/af_xdp_zerocopy.c
     src/core/io/io_perf_probe.c
-    src/core/io/udp.c
 )
 
 # ── HTTP/1 Module ─────────────────────────────────────────────────────────

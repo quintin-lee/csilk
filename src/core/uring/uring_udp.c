@@ -1,5 +1,5 @@
 /**
- * @file udp.c
+ * @file uring_udp.c
  * @brief UDP datagram handle implementation.
  *
  * Provides `csilk_io_udp_*` primitives for QUIC/HTTP3 transports.
@@ -26,7 +26,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <liburing.h>
-#include "../uring/uring_internal.h"
+#include "uring_internal.h"
 
 /* ====================================================================
  * Internal timer callback: level-triggered recvfrom poll (legacy / fallback)
