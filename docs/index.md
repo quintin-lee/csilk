@@ -66,7 +66,6 @@ docs/
 │   ├── user-manual/          # 用户开发与运维手册
 │   └── meta/                 # 演进路线图与规范
 │
-├── superpowers/              # 🛠️ Internal Project Specs & Plans
 ├── assets/                   # Static Documentation Assets (Mermaid, CSS)
 └── index.md                  # 🌐 Root Documentation Portal & Language Switcher
 ```

@@ -12,13 +12,13 @@ v1.2.0 聚焦于**协议完整性**（HTTP/3、gRPC）、**会话抽象**（可�
 |---|---|
 | 1.1 ngtcp2 QUIC 传输层 | ✅ `src/protocols/http3.c` |
 | 1.2 nghttp3 会话层 (QPACK) | ✅ `src/protocols/h3_session.c` |
-| 1.3 TLS 1.3 + QUIC | ⏳ 需要 OpenSSL ≥ 3.2 |
-| 1.4 共享 router/middleware | ✅ 通过 csilk_app_t 自动实现 |
-| 1.5 测试 + fuzz + CI | ✅ `tests/protocols/test_h3.c` |
+| 1.3 TLS 1.3 + QUIC (`ngtcp2_crypto_ossl`) | ✅ `src/protocols/http3.c`（OpenSSL ≥ 3.2） |
+| 1.4 共享 router/middleware | ✅ 通过 `csilk_server_t` / `csilk_app_t` 自动复用 |
+| 1.5 测试 + E2E + fuzz + CI | ✅ `tests/protocols/test_h3.c`、`test_h3_worker.c`、`test_h3_e2e.c` |
 
 **关键决策：**
-- 优先使用系统 ngtcp2 0.3.1 / nghttp3 1.18.0
-- `csilk_quic_transport_t` vtable 定义在 `server.h`
+- 优先使用系统 ngtcp2 v1.25.0 / nghttp3 v1.18.0
+- `csilk_h3_state_t` 收口在 `src/core/internal/srv_internal.h`（不暴露至公开头文件）
 - `CSILK_ENABLE_HTTP3=ON` CMake 选项（默认 OFF）
 
 ### 阶段 2：会话存储 — ✅ 完成
@@ -53,10 +53,10 @@ v1.2.0 聚焦于**协议完整性**（HTTP/3、gRPC）、**会话抽象**（可�
 
 | 任务 | 状态 |
 |---|---|
-| 4.1 DPDK 决策 | ✅ 保留 stub（`docs/en/meta/DPDK-DECISION.md`） |
-| 4.2 连接池内存优化 | ✅ 方案文档（`docs/en/meta/CONNECTION-POOL-OPTIMIZATION.md`） |
-| 4.3 热更新（三组件原子） | ✅ 方案文档（`docs/en/meta/HOT-UPDATE-PLAN.md`） |
-| 4.4 安全审计 | ✅ `docs/en/meta/SECURITY-AUDIT-v1.2.md` |
+| 4.1 清理模拟 Stub | ✅ 已移除 DPDK/XDP/WASM 模拟 stub，统一执行 fail-closed (`ENOTSUP`) |
+| 4.2 连接池内存优化 | ✅ 已落地（Keep-Alive 延迟 arena 分配与按需回收） |
+| 4.3 热更新（三组件原子） | ✅ 已落地（`csilk_hot_update`，位于 `src/core/server/server_rcu.c`） |
+| 4.4 安全审计 | ✅ 状态同步至 [SECURITY_ANALYSIS.md](../../../SECURITY_ANALYSIS.md) |
 
 ### 阶段 6：战略功能收敛与自底向上架构硬化 (v1.2.0-GA) — ✅ 完成
 
@@ -68,8 +68,8 @@ v1.2.0 聚焦于**协议完整性**（HTTP/3、gRPC）、**会话抽象**（可�
 | 6.4 全局消除线程不安全 `strtok` 并实现 SSRF 防护过滤引擎 (`csilk_security_*`) | ✅ `src/core/primitives/ssrf.c`、`include/csilk/core/security.h`、`src/drivers/ai/llama.c` |
 | 6.5 三组件原子热更新统一执行器 (`csilk_hot_update`) | ✅ `src/core/server/server_rcu.c`、`include/csilk/core/server/hot_reload.h` |
 | 6.6 空闲 Keep-Alive 连接 Arena 延迟分配与按需回收 | ✅ `src/core/server/connection_io.c`、`src/core/http/http1_pipeline.c` |
-| 6.7 全量 ABI SOVERSION 1 兼容性验证（964 纯净导出，100% `csilk_*`） | ✅ `scripts/check_abi_compatibility.sh` |
-| 6.8 全量测试回归套件（279 单测 100% 绿色） | ✅ `ctest` |
+| 6.7 全量 ABI SOVERSION 2 兼容性验证（876 纯净导出，100% `csilk_*`） | ✅ `scripts/check_abi_compatibility.sh` |
+| 6.8 全量测试回归套件 | ✅ `ctest`（Core-Only & Full） |
 
 ### 阶段 7：Windows — ⚠️ 不在范围内
 
@@ -77,7 +77,7 @@ v1.2.0 聚焦于**协议完整性**（HTTP/3、gRPC）、**会话抽象**（可�
 
 ## 遗留项（v1.3 候选）
 
-- [ ] 1.3 TLS 1.3 + QUIC（需要 OpenSSL ≥ 3.2）
+- [x] 1.3 TLS 1.3 + QUIC（`ngtcp2_crypto_ossl`，OpenSSL ≥ 3.2）— 已在 v1.2.0 落地
 - [ ] 4.2 SSL 上下文共享 (TLS 1.3 Session Ticket 复用)
 - [x] 4.2 P0：延迟 arena 分配与按需回收 (已在 v1.2.0-GA 落地)
 - [x] 4.3 P0：三组件原子热更新实现 (`csilk_hot_update` 已在 v1.2.0-GA 落地)
@@ -86,26 +86,23 @@ v1.2.0 聚焦于**协议完整性**（HTTP/3、gRPC）、**会话抽象**（可�
 
 ## 测试覆盖
 
-- **总测试数**：279+（单元测试 100% 通过）
-- **v1.2.0 新增**：test_h3, test_session_store, test_grpc, test_otlp_ai, test_wf_grid, test_wasm_fuel, test_wf_grid_integration, test_app_wasm, test_ai_ctx_trace, test_ssrf, test_hot_update_atomic, test_lazy_arena
-- **Fuzz 目标**：9 个 harness
+- **总测试数**：Core-Only 160 / Full 263+（`ctest` 100% 通过）
+- **v1.2.0 新增**：test_h3, test_h3_e2e, test_io_equivalence, test_session_store, test_grpc, test_otlp_ai, test_wf_grid, test_wasm_fuel, test_wf_grid_integration, test_app_wasm, test_ai_ctx_trace, test_ssrf, test_hot_update_atomic, test_lazy_arena
+- **Fuzz 目标**：11 个 harness（Core 6 个 + Full 5 个）
 
 ## 文件清单
 
 ```
-src/protocols/http3.c              # QUIC 传输层 (ngtcp2 0.3.1)
-src/protocols/h3_session.c         # HTTP/3 会话层 (nghttp3 + QPACK)
-src/protocols/grpc.c              # gRPC 帧、trailer、流式
-src/middleware/session_store.c    # 会话存储 (local/Redis/MQ)
-include/csilk/protocols/h3.h      # HTTP/3 公共 API
-include/csilk/protocols/grpc.h    # gRPC 公共 API
-include/csilk/core/session_store.h # 会话存储 vtable
-tests/protocols/test_h3.c        # HTTP/3 测试
-tests/protocols/test_grpc.c      # gRPC 测试
+src/protocols/http3.c                 # QUIC 传输层 (ngtcp2 v1.25.0)
+src/protocols/h3_session.c            # HTTP/3 会话层 (nghttp3 v1.18.0 + QPACK)
+src/protocols/grpc.c                  # gRPC 帧、trailer、流式
+src/middleware/session_store.c        # 会话存储 (local/Redis/MQ)
+include/csilk/protocols/h3.h          # HTTP/3 公共 API
+include/csilk/protocols/grpc.h        # gRPC 公共 API
+include/csilk/core/session_store.h    # 会话存储 vtable
+tests/protocols/test_h3.c             # HTTP/3 单元与流测试
+tests/protocols/test_h3_e2e.c         # HTTP/3 UDP/QUIC 端到端集成测试
+tests/protocols/test_grpc.c           # gRPC 测试
 tests/middleware/test_session_store.c # 会话存储测试
-docs/en/meta/DPDK-DECISION.md    # DPDK 评估
-docs/en/meta/CONNECTION-POOL-OPTIMIZATION.md
-docs/en/meta/HOT-UPDATE-PLAN.md
-docs/en/meta/SECURITY-AUDIT-v1.2.md
-docs/en/meta/WINDOWS-ASSESSMENT.md
+tests/core/test_io_equivalence.c      # libuv 与 io_uring 等价性测试
 ```

@@ -62,3 +62,5 @@ flowchart LR
   * [x] Phase C & D: Migrated 30+ direct property accesses, moved internal structs to `src/core/internal/`, and strictly whitelisted `libcsilk.map`.
   * [x] WASM Sandbox: Binary LEB128 section validation, Fuel budget fuse to protect the event loop, and Host read/write extension APIs.
   * [x] Deep Test Coverage Sprint: Expanded defensive H3 frames, CSRF double-submit interception, and Session expiry UAF fixes.
+
+> Subsequent evolution: see [v1.2.0 Roadmap](ROADMAP-v1.2.md) (where the ABI baseline lock was advanced to SOVERSION 2).

@@ -12,13 +12,13 @@ v1.2.0 focuses on **protocol completeness** (HTTP/3, gRPC), **session abstractio
 |---|---|
 | 1.1 ngtcp2 QUIC transport | ✅ `src/protocols/http3.c` |
 | 1.2 nghttp3 session (QPACK) | ✅ `src/protocols/h3_session.c` |
-| 1.3 TLS 1.3 + QUIC | ⏳ Requires OpenSSL ≥ 3.2 |
-| 1.4 Shared router/middleware | ✅ Automatic via csilk_app_t |
-| 1.5 Tests + fuzz + CI | ✅ `tests/protocols/test_h3.c` |
+| 1.3 TLS 1.3 + QUIC (`ngtcp2_crypto_ossl`) | ✅ `src/protocols/http3.c` (OpenSSL ≥ 3.2) |
+| 1.4 Shared router/middleware | ✅ Automatic via `csilk_server_t` / `csilk_app_t` |
+| 1.5 Tests + E2E + fuzz + CI | ✅ `tests/protocols/test_h3.c`, `test_h3_worker.c`, `test_h3_e2e.c` |
 
 **Key decisions:**
-- System ngtcp2 0.3.1 / nghttp3 1.18.0 preferred over FetchContent
-- `csilk_quic_transport_t` vtable in `server.h` (not in h3.h)
+- System ngtcp2 v1.25.0 / nghttp3 v1.18.0 preferred over FetchContent
+- `csilk_h3_state_t` in `src/core/internal/srv_internal.h` (keeps internal state out of `server.h`)
 - `CSILK_ENABLE_HTTP3=ON` CMake option (default OFF)
 
 ### Phase 2: Session Store — ✅ Complete
@@ -53,10 +53,10 @@ v1.2.0 focuses on **protocol completeness** (HTTP/3, gRPC), **session abstractio
 
 | Task | Status |
 |---|---|
-| 4.1 DPDK decision | ✅ Keep stub (`docs/en/meta/DPDK-DECISION.md`) |
-| 4.2 Connection pool optimization | ✅ Plan documented (`docs/en/meta/CONNECTION-POOL-OPTIMIZATION.md`) |
-| 4.3 Hot update (3-component atomic) | ✅ Plan documented (`docs/en/meta/HOT-UPDATE-PLAN.md`) |
-| 4.4 Security audit | ✅ `docs/en/meta/SECURITY-AUDIT-v1.2.md` |
+| 4.1 Simulated stub retirement | ✅ Experimental DPDK/XDP/WASM stubs removed; fail-closed `ENOTSUP` enforced |
+| 4.2 Connection pool optimization | ✅ Implemented via lazy arena allocation & idle recycling |
+| 4.3 Hot update (3-component atomic) | ✅ Implemented (`csilk_hot_update` in `src/core/server/server_rcu.c`) |
+| 4.4 Security audit | ✅ Synced in [SECURITY_ANALYSIS.md](../../../SECURITY_ANALYSIS.md) |
 
 ### Phase 6: Strategic Convergence & Bottom-Up Hardening (v1.2.0-GA) — ✅ Complete
 
@@ -68,14 +68,14 @@ v1.2.0 focuses on **protocol completeness** (HTTP/3, gRPC), **session abstractio
 | 6.4 Eliminate Non-Threadsafe `strtok` & Implement SSRF Protection Engine (`csilk_security_*`) | ✅ `src/core/primitives/ssrf.c`, `include/csilk/core/security.h`, `src/drivers/ai/llama.c` |
 | 6.5 Triple-Component Atomic Hot Update Engine (`csilk_hot_update`) | ✅ `src/core/server/server_rcu.c`, `include/csilk/core/server/hot_reload.h` |
 | 6.6 Keep-Alive Idle Connection Lazy Arena Allocation & On-Demand Recycling | ✅ `src/core/server/connection_io.c`, `src/core/http/http1_pipeline.c` |
-| 6.7 Full ABI SOVERSION 1 Compatibility Gate (964 pure exports, 100% `csilk_*`) | ✅ `scripts/check_abi_compatibility.sh` |
-| 6.8 Full Test Regression Suite (279 unit tests 100% green) | ✅ `ctest` |
+| 6.7 Full ABI SOVERSION 2 Compatibility Gate (876 pure exports, 100% `csilk_*`) | ✅ `scripts/check_abi_compatibility.sh` |
+| 6.8 Full Test Regression Suite | ✅ `ctest` (Core-Only & Full) |
 
 ### Phase 7: Windows — ⚠️ Out of Scope
 
 | Task | Status |
 |---|---|
-| 7.1 Windows dependency matrix | ✅ Assessed (`docs/en/meta/WINDOWS-ASSESSMENT.md`) |
+| 7.1 Windows dependency matrix | ✅ Assessed (IOCP, NDIS/WFP, `pthread_barrier_t` gaps; out of scope) |
 | 7.2 CMake cross-compile + CI | ❌ Not supported |
 | 7.3 Test adaptation | ❌ Not supported |
 
@@ -83,7 +83,7 @@ v1.2.0 focuses on **protocol completeness** (HTTP/3, gRPC), **session abstractio
 
 ## Remaining Items (v1.3 candidates)
 
-- [ ] 1.3 TLS 1.3 + QUIC (requires OpenSSL ≥ 3.2)
+- [x] 1.3 TLS 1.3 + QUIC (`ngtcp2_crypto_ossl`, OpenSSL ≥ 3.2) — delivered in v1.2.0
 - [ ] 4.2 SSL context sharing (TLS 1.3 Session Ticket reuse)
 - [x] 4.2 P0: Lazy arena allocation and idle recycling (delivered in v1.2.0-GA)
 - [x] 4.3 P0: Three-component atomic hot update implementation (`csilk_hot_update` delivered in v1.2.0-GA)
@@ -92,26 +92,23 @@ v1.2.0 focuses on **protocol completeness** (HTTP/3, gRPC), **session abstractio
 
 ## Test Coverage
 
-- **Total tests**: 279+ (unit test suite 100% passed)
-- **New tests in v1.2.0**: test_h3, test_session_store, test_grpc, test_otlp_ai, test_wf_grid, test_wasm_fuel, test_wf_grid_integration, test_app_wasm, test_ai_ctx_trace, test_ssrf, test_hot_update_atomic, test_lazy_arena
-- **Fuzz targets**: 9 harnesses (including fuzz_h2, fuzz_websocket, fuzz_mcp)
+- **Total tests**: 160 Core-Only / 263+ Full (`ctest` 100% passed)
+- **New tests in v1.2.0**: test_h3, test_h3_e2e, test_io_equivalence, test_session_store, test_grpc, test_otlp_ai, test_wf_grid, test_wasm_fuel, test_wf_grid_integration, test_app_wasm, test_ai_ctx_trace, test_ssrf, test_hot_update_atomic, test_lazy_arena
+- **Fuzz targets**: 11 harnesses (6 Core + 5 Full: `fuzz_raft_rpc`, `fuzz_mcp`, `fuzz_sql_rewrite`, `fuzz_wasm`, `fuzz_h3`)
 
 ## File Inventory
 
 ```
-src/protocols/http3.c              # QUIC transport (ngtcp2 0.3.1)
-src/protocols/h3_session.c         # HTTP/3 session (nghttp3 + QPACK)
-src/protocols/grpc.c              # gRPC frames, trailers, streaming
-src/middleware/session_store.c    # Session store (local/Redis/MQ)
-include/csilk/protocols/h3.h      # HTTP/3 public API
-include/csilk/protocols/grpc.h    # gRPC public API
-include/csilk/core/session_store.h # Session store vtable
-tests/protocols/test_h3.c        # HTTP/3 tests
-tests/protocols/test_grpc.c      # gRPC tests
+src/protocols/http3.c                 # QUIC transport (ngtcp2 v1.25.0)
+src/protocols/h3_session.c            # HTTP/3 session (nghttp3 v1.18.0 + QPACK)
+src/protocols/grpc.c                  # gRPC frames, trailers, streaming
+src/middleware/session_store.c        # Session store (local/Redis/MQ)
+include/csilk/protocols/h3.h          # HTTP/3 public API
+include/csilk/protocols/grpc.h        # gRPC public API
+include/csilk/core/session_store.h    # Session store vtable
+tests/protocols/test_h3.c             # HTTP/3 unit/stream tests
+tests/protocols/test_h3_e2e.c         # HTTP/3 UDP/QUIC E2E tests
+tests/protocols/test_grpc.c           # gRPC tests
 tests/middleware/test_session_store.c # Session store tests
-docs/en/meta/DPDK-DECISION.md    # DPDK assessment
-docs/en/meta/CONNECTION-POOL-OPTIMIZATION.md
-docs/en/meta/HOT-UPDATE-PLAN.md
-docs/en/meta/SECURITY-AUDIT-v1.2.md
-docs/en/meta/WINDOWS-ASSESSMENT.md
+tests/core/test_io_equivalence.c      # libuv vs io_uring equivalence tests
 ```
