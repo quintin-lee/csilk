@@ -34,7 +34,7 @@
 #include "csilk/csilk.h"
 #include "csilk/drivers/db.h"
 #include "core/ctx/ctx_internal.h"
-#include "drivers/db/redis_internal.h"
+#include "modules/db/redis_internal.h"
 
 /**
  * @brief Parse a semicolon-delimited DSN string into connection parameters.

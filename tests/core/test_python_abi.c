@@ -15,7 +15,7 @@
 #include "csilk/drivers/db.h"
 #include "csilk/drivers/vector.h"
 #include "csilk/messaging/mq.h"
-#include "../../src/workflow/workflow_internal.h"
+#include "modules/workflow/workflow_internal.h"
 
 typedef struct {
     const char* name;

@@ -3,7 +3,7 @@
  * @brief Unified administration and monitoring controller implementation.
  */
 
-#include "csilk/app/admin.h"
+#include "csilk/observability/admin.h"
 #include "csilk/app/app.h"
 
 #include <stdatomic.h>
@@ -16,8 +16,8 @@
 #include "csilk/core/internal.h"
 #include "csilk/core/ctx/async.h"
 #include "csilk/core/sync.h"
-#include "csilk/util/flamegraph.h"
-#include "../core/internal/obs_registry.h"
+#include "csilk/observability/flamegraph.h"
+#include "core/internal/obs_registry.h"
 
 /* --- Async flame-graph session state --- */
 

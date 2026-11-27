@@ -19,7 +19,7 @@
 #include "csilk/core/json/json.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/csilk.h"
-#include "drivers/curl_common.h"
+#include "modules/common/curl_common.h"
 
 /** @brief Per-instance state for the Ollama driver. */
 typedef struct {

@@ -12,7 +12,7 @@
 #include <string.h>
 #include <stdint.h>
 
-#include "csilk/core/plugin/wasm_plugin.h"
+#include "csilk/wasm/plugin.h"
 #include "wasm_internal.h"
 #include "wasm_export.h"
 

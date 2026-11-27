@@ -20,8 +20,8 @@
 #include "mq_internal.h"
 #include "csilk/core/sync.h"
 #include "csilk/messaging/mq.h"
-#include "../core/internal/obs_registry.h"
-#include "../core/internal/srv_internal.h"
+#include "core/internal/obs_registry.h"
+#include "core/internal/srv_internal.h"
 
 static _Atomic(csilk_ws_room_deliver_fn) g_ws_room_deliver_cb = nullptr;
 

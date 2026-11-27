@@ -11,7 +11,7 @@
 #include "csilk/core/sync.h"
 #include "csilk/core/sys_io.h"
 #include "csilk/messaging/mq.h"
-#include "../messaging/mq_internal.h"
+#include "modules/mq/mq/mq_internal.h"
 
 #include <ctype.h>
 #include <errno.h>

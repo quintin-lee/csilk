@@ -38,7 +38,7 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
-#include "../../core/internal/obs_registry.h"
+#include "core/internal/obs_registry.h"
 
 #include <stdatomic.h>
 #include <stdio.h>

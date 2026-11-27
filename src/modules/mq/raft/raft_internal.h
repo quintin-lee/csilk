@@ -13,7 +13,7 @@
 #include "csilk/core/sync.h"
 #include "csilk/messaging/raft.h"
 #include "csilk/messaging/wal_uring.h"
-#include "wal_common.h"
+#include "modules/common/wal_common.h"
 
 #define CSILK_RAFT_MAGIC 0x52414654       /* "RAFT" RPC Magic Header */
 #define CSILK_RAFT_META_MAGIC 0x524D4554  /* "RMET" Metadata Magic */

@@ -111,7 +111,7 @@ Use these rules whenever performing work in this repository. They ensure correct
 
 - **No fake drivers or stub toggles**: simulated `dpdk_pmd`, fake eBPF `xdp_waf`, simulated `llama.c`, dead `quic_vtable`, dead `csilk_h3_listener_*`, `af_xdp` simulation rings (`sim_fr_*`/`sim_cr_*`), `wasm` simulated execution/fuel stubs, fake WASI stdout stubs, and `CSILK_ENABLE_EXPERIMENTAL_STUBS` have been removed. Every public driver/middleware entrypoint must represent real functionality (`session_store` local backend uses a real TTL in-memory hash table) or explicit capability absence.
 - **Fail closed on absent runtimes**: optional native integrations (e.g., `HAS_WAMR` in `wasm_vm.c`/`wasm_plugin.c`/`wasm_wasi.c`, `CSILK_HAS_NGTCP2`/`nghttp3` in HTTP/3 transport, Linux `AF_XDP` in `af_xdp.c`, optional DB drivers) must set `errno = ENOTSUP` (or OS socket errno) and return `-1` / `nullptr` when unconfigured or unavailable.
-- **No parallel duplicate subsystems**: place shared WAL file I/O helpers in `src/messaging/wal_common.h`/`.c` (reused by `workflow_wal.c`), keep both fixed and sliding rate-limiters in `src/middleware/ratelimit.c`, unify `session_store.c` local/MQ in-memory tables, unify `include/csilk/csilk.h` (with `CSILK_HAS_*` guards and `include/csilk.h` forwarding), and keep dynamic WAF rules/filtering (`csilk_waf_filter_*`) unified in `src/middleware/waf.c`.
+- **No parallel duplicate subsystems**: place shared WAL file I/O helpers in `src/modules/common/wal_common.h`/`.c` (reused by `workflow_wal.c`), keep both fixed and sliding rate-limiters in `src/middleware/ratelimit.c`, unify `session_store.c` local/MQ in-memory tables, unify `include/csilk/csilk.h` (with `CSILK_HAS_*` guards and `include/csilk.h` forwarding), and keep dynamic WAF rules/filtering (`csilk_waf_filter_*`) unified in `src/middleware/waf.c`.
 
 ### Per-Server Isolation, Security & Hot-Path Constraints
 
@@ -239,27 +239,30 @@ umbrella      ──→ { Web Core + all enabled CSILK_ENABLE_* modules }
 | `src/core/config/` | YAML config, logger, tiered secret provider (`secret.c`), lifecycle hooks, hot reload |
 | `src/core/ctx/` | Request context, async lifecycle, generation tracking |
 | `src/core/json/` | JSON engine sources (wraps yyjson) |
-| `src/core/cache/` | *(Optional `CSILK_ENABLE_DB`)* MVCC cache for DB-abstraction layer |
-| `src/core/plugin/` | Dynamic `.so` plugin loader (`loader.c`) + optional WASM VM & WASI sandbox (`CSILK_ENABLE_WASM`) |
-| `src/core/io/` | Optional kernel-bypass AF_XDP & `io_uring` UDP extensions, IO perf probes (`CSILK_ENABLE_BYPASS`) |
+| `src/core/plugin/` | Dynamic `.so` plugin loader (`loader.c`) |
 | `src/core/server/` | Multi-worker server lifecycle, RCU router swap, driver injection, shutdown, worker pool |
-| `src/core/internal/` | Internal-only headers (`header_map`, `query`, `lfqueue`, `srv_internal`, `srv_impl`) not exposed in include/ |
-| `src/crypto/` | base64, sha1, bcrypt, blowfish sboxes, cipher/crypto dispatch |
-| `src/drivers/db/` | *(Optional)* SQLite, MySQL, PostgreSQL, Redis, MongoDB drivers, prepared statements, savepoint scope, migrations |
-| `src/drivers/ai/` | *(Optional)* OpenAI, Ollama, Anthropic LLM drivers, tool registry, AI tracing container |
-| `src/drivers/cipher/` | OpenSSL-backed AES-256-GCM, RSA-OAEP, RSA-PSS |
-| `src/drivers/vector/` | *(Optional)* HNSW SIMD vector index (AVX2 cosine/L2/dot) & Qdrant/Milvus drivers |
-| `src/middleware/` | auth, cors, csrf, jwt, ratelimit (fixed + sliding window), session, sse, metrics, waf (`csilk_waf_filter_*`), circuit-breaker, gzip; optional `otlp_*` (`CSILK_ENABLE_OBSERVABILITY`) and `grpc_gateway` (`CSILK_ENABLE_GRPC`) |
-| `src/protocols/` | WebSocket (`websocket.c`, `ws_room.c`), HTTP/2 (`nghttp2`), Swagger/OpenAPI; optional HTTP/3 (`http3.c`, `h3.c`) and MCP (`mcp_*.c`) |
-| `src/messaging/` | *(Optional)* MQ core, pubsub, shared WAL helpers (`wal_common.h`/`.c`), raft RPC, consensus, snapshot |
-| `src/workflow/` | *(Optional)* DAG scheduler, DSL parser, ReAct loop, Agent Skills, WAL (reusing `messaging/wal_common`), trace |
-| `src/app/` | High-level app API, groups, routes; optional `admin.c` dashboard (`CSILK_ENABLE_OBSERVABILITY`) |
+| `src/core/internal/` | Internal-only headers (`header_map`, `query`, `lfqueue`, `srv_internal`, `srv_impl`, `obs_registry`) not exposed in include/ |
+| `src/crypto/` | base64, sha1, bcrypt, blowfish sboxes, cipher/crypto dispatch, OpenSSL cipher backend (`cipher_openssl.c`) |
+| `src/middleware/` | Web Core middleware: auth, cors, csrf, jwt, ratelimit (fixed + sliding window), session, sse, metrics, waf (`csilk_waf_filter_*`), circuit-breaker, gzip |
+| `src/protocols/` | Web Core protocol extensions: WebSocket (`websocket.c`, `ws_room.c`), Swagger/OpenAPI |
+| `src/app/` | Web Core high-level app API, groups, routes |
 | `src/reflection/` | Reflection marshal/unmarshal/free (struct binding for JSON) |
-| `src/util/` | *(Optional)* CPU flame graph (`CSILK_ENABLE_OBSERVABILITY`), RFC 4180 CSV parser & serializer (`csv.c`, `CSILK_ENABLE_CSV`) |
-
-| `include/csilk/` | Public headers mirroring src/ layout (opaque handles only) |
+| `src/modules/common/` | *(Optional)* Shared helper headers/WAL I/O (`curl_common.h`, `wal_common.h`/`.c`, `wal_uring.c`) |
+| `src/modules/db/` | *(Optional `CSILK_ENABLE_DB`)* SQLite, MySQL, PostgreSQL, Redis, MongoDB drivers, prepared statements, savepoint scope, migrations |
+| `src/modules/ai/` | *(Optional `CSILK_ENABLE_AI`)* OpenAI, Ollama, Anthropic LLM drivers, tool registry, AI tracing container |
+| `src/modules/vector/` | *(Optional `CSILK_ENABLE_VECTOR`)* HNSW SIMD vector index (AVX2 cosine/L2/dot) & Qdrant/Milvus drivers |
+| `src/modules/permission/` | *(Optional `CSILK_ENABLE_PERM`)* Pluggable RBAC/ReBAC permission manager & simple in-memory driver |
+| `src/modules/mq/` | *(Optional `CSILK_ENABLE_MQ`)* MQ core/pubsub/WAL (`mq/`) and Raft consensus/RPC/snapshot/WAL (`raft/`) |
+| `src/modules/workflow/` | *(Optional `CSILK_ENABLE_WORKFLOW`)* DAG scheduler, DSL parser, ReAct loop, Agent Skills, WAL, trace |
+| `src/modules/mcp/` | *(Optional `CSILK_ENABLE_MCP`)* Model Context Protocol JSON-RPC, server, client, stdio pool |
+| `src/modules/grpc/` | *(Optional `CSILK_ENABLE_GRPC`)* gRPC wire codec & HTTP/JSON transcoding gateway |
+| `src/modules/http3/` | *(Optional `CSILK_ENABLE_HTTP3`)* HTTP/3 QUIC transport & session (`ngtcp2`/`nghttp3`) |
+| `src/modules/wasm/` | *(Optional `CSILK_ENABLE_WASM`)* WASM VM & WASI sandbox plugin engine (`WAMR`) |
+| `src/modules/observability/` | *(Optional `CSILK_ENABLE_OBSERVABILITY`)* OTLP exporter/trace, CPU flame graph (`flamegraph.c`), Admin/APM dashboard (`admin.c`) |
+| `src/modules/csv/` | *(Optional `CSILK_ENABLE_CSV`)* RFC 4180 CSV parser & serializer (`csv.c`) |
+| `include/csilk/` | Public headers mirroring src/ layout (opaque handles only; compatibility forwarding headers retained at legacy paths) |
 | `fuzz/` | libFuzzer harnesses: fuzz_test, fuzz_url, fuzz_yaml, fuzz_headers, fuzz_h2, fuzz_websocket, fuzz_raft_rpc, fuzz_mcp, fuzz_sql_rewrite + corpus + dict |
-| `tests/` | Unit, integration, stress, and property-based tests per module |
+| `tests/` | Unit, integration, stress, and property-based tests (Web Core under `core/`, `app/`, `middleware/`, `protocols/`, `crypto/`, `security/`, `reflection/`; optional modules under `modules/`) |
 | `python/` | CFFI/ctypes bindings + setup.py + Python unit tests |
 | `examples/` | Example apps: basic, ai, database, websocket, middleware, advanced |
 | `cmake/` | CMake modules: targets, sources, tests, options, dependencies, tooling, install, examples |
@@ -458,8 +461,8 @@ csilk_get(app, "/api/echo", echo_handler);
 | `src/core/server/server_shutdown.c` | Ordered teardown path |
 | `src/middleware/jwt.c` | JWT HS256 middleware + validation policies |
 | `src/middleware/waf.c` | Dynamic WAF filter (`csilk_waf_filter_*`) + pattern/IP rules |
-| `src/drivers/db/` | Database abstraction + SQLite/MySQL/PQ/Redis/Mongo drivers |
-| `src/drivers/vector/hnsw.c` | HNSW skip-graph index with AVX2 SIMD distance kernels |
+| `src/modules/db/` | Database abstraction + SQLite/MySQL/PQ/Redis/Mongo drivers |
+| `src/modules/vector/vector_hnsw.c` | HNSW skip-graph index with AVX2 SIMD distance kernels |
 | `src/reflection/reflect.c` | Reflection marshal/unmarshal for struct↔JSON binding |
 | `cmake/libcsilk.map` | Linker version script enforcing pure `csilk_*` symbol exports |
 | `cmake/abi_baseline_symbols.txt` | Full-build exported symbol baseline (`SOVERSION 2`) |

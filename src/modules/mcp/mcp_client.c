@@ -21,7 +21,7 @@
 #include "csilk/drivers/ai.h"
 #include "csilk/drivers/ai/tool_registry.h"
 #include "csilk/protocols/mcp.h"
-#include "drivers/curl_common.h"
+#include "modules/common/curl_common.h"
 #include "mcp_internal.h"
 
 /* --- Transport helpers (stdio subprocess & HTTP POST/SSE) --- */

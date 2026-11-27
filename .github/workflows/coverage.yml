@@ -111,8 +111,8 @@ jobs:
       run: |
         mkdir -p build/coverage
         gcovr -r . build/ --filter src/ --gcov-ignore-parse-errors=negative_hits.warn \
-          --exclude 'src/util/flamegraph.c' --exclude 'src/drivers/db/redis_storage.c' \
-          --exclude 'src/workflow/workflow_debug.c' \
+          --exclude 'src/modules/observability/flamegraph.c' --exclude 'src/modules/db/redis_storage.c' \
+          --exclude 'src/modules/workflow/workflow_debug.c' \
           --html-details build/coverage/index.html --xml build/coverage/coverage.xml --print-summary
 
     - name: Check coverage threshold (72%)
@@ -129,8 +129,8 @@ jobs:
       # --fail-under-threshold pair is a no-op under gcovr 8.x).
       run: |
         gcovr -r . build/ --filter src/ --gcov-ignore-parse-errors=negative_hits.warn \
-          --exclude 'src/util/flamegraph.c' --exclude 'src/drivers/db/redis_storage.c' \
-          --exclude 'src/workflow/workflow_debug.c' \
+          --exclude 'src/modules/observability/flamegraph.c' --exclude 'src/modules/db/redis_storage.c' \
+          --exclude 'src/modules/workflow/workflow_debug.c' \
           --fail-under-line 72
       if: always()
 

@@ -19,7 +19,6 @@
 #include "csilk/protocols/websocket.h"
 #include "csilk/app/app.h"
 #include "mcp_internal.h"
-#include "workflow/workflow_internal.h"
 #include "csilk/core/ctx/context.h"
 #include "core/internal/srv_internal.h"
 

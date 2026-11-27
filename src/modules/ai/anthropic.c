@@ -24,7 +24,7 @@
 #include "csilk/core/json/json.h"
 #include "csilk/csilk.h"
 #include "csilk/drivers/ai.h"
-#include "drivers/curl_common.h"
+#include "modules/common/curl_common.h"
 
 #define ANTHROPIC_DEFAULT_BASE_URL "https://api.anthropic.com/v1"
 #define ANTHROPIC_API_VERSION "2023-06-01"

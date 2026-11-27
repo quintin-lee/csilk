@@ -106,9 +106,9 @@ if(USE_COVERAGE)
                 --exclude "tests/"
                 --exclude "examples/"
                 --exclude "build_release/"
-                --exclude "src/util/flamegraph.c"
-                --exclude "src/drivers/db/redis_storage.c"
-                --exclude "src/workflow/workflow_debug.c"
+                --exclude "src/modules/observability/flamegraph.c"
+                --exclude "src/modules/db/redis_storage.c"
+                --exclude "src/modules/workflow/workflow_debug.c"
                 --html-details ${CMAKE_BINARY_DIR}/coverage/index.html
                 --xml ${CMAKE_BINARY_DIR}/coverage/coverage.xml
                 --print-summary

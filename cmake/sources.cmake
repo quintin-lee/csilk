@@ -22,7 +22,7 @@ set(CSILK_CRYPTO_SOURCES
     src/crypto/crypto.c
     src/crypto/bcrypt.c
     src/crypto/totp.c
-    src/drivers/cipher/openssl.c
+    src/crypto/cipher_openssl.c
 )
 
 # Compatibility source list.  csilk_core is an interface compatibility target.
@@ -61,7 +61,7 @@ set(CSILK_RUNTIME_SOURCES
 )
 
 if(CSILK_ENABLE_CSV)
-    list(APPEND CSILK_RUNTIME_SOURCES src/util/csv.c)
+    list(APPEND CSILK_RUNTIME_SOURCES src/modules/csv/csv.c)
 endif()
 
 if(CSILK_USE_URING)
@@ -94,9 +94,9 @@ set(CSILK_JSON_SOURCES
 
 # ── WASM Module (WASM VM & WASI sandbox plugin engine) ───────────────────
 set(CSILK_WASM_SOURCES
-    src/core/plugin/wasm_plugin.c
-    src/core/plugin/wasm_vm.c
-    src/core/plugin/wasm_wasi.c
+    src/modules/wasm/wasm_plugin.c
+    src/modules/wasm/wasm_vm.c
+    src/modules/wasm/wasm_wasi.c
 )
 
 # ── HTTP/1 Module ─────────────────────────────────────────────────────────
@@ -123,28 +123,28 @@ set(CSILK_HTTP2_SOURCES
 
 # ── HTTP/3 Module (ngtcp2 & nghttp3 QUIC adapter, optional) ───────────────
 set(CSILK_HTTP3_SOURCES
-    src/protocols/h3.c
-    src/protocols/h3_session.c
-    src/protocols/http3.c
+    src/modules/http3/h3.c
+    src/modules/http3/h3_session.c
+    src/modules/http3/http3.c
 )
 
 # ── Vector Module (HNSW + vector DB drivers) ───────────────────────────
 set(CSILK_VECTOR_SOURCES
-    src/drivers/vector/vector.c
-    src/drivers/vector/vector_hnsw.c
-    src/drivers/vector/vector_simd.c
-    src/drivers/vector/milvus.c
-    src/drivers/vector/qdrant.c
+    src/modules/vector/vector.c
+    src/modules/vector/vector_hnsw.c
+    src/modules/vector/vector_simd.c
+    src/modules/vector/milvus.c
+    src/modules/vector/qdrant.c
 )
 
 # ── Database Module ───────────────────────────────────────────────────────
 set(CSILK_DB_SOURCES
-    src/drivers/db/db.c
-    src/drivers/db/sqlite.c
-    src/drivers/db/tx_scope.c
-    src/drivers/db/migration/migration_checksum.c
-    src/drivers/db/migration/migration_engine.c
-    src/drivers/db/migration/migration_lock.c
+    src/modules/db/db.c
+    src/modules/db/sqlite.c
+    src/modules/db/tx_scope.c
+    src/modules/db/migration/migration_checksum.c
+    src/modules/db/migration/migration_engine.c
+    src/modules/db/migration/migration_lock.c
 )
 
 # ── Web Protocol Module (WebSocket, OpenAPI, Swagger — Web Core) ─────────
@@ -157,22 +157,22 @@ set(CSILK_PROTOCOLS_SOURCES
 
 # ── MCP Module (Model Context Protocol, optional) ────────────────────────
 set(CSILK_MCP_SOURCES
-    src/protocols/mcp/mcp_jsonrpc.c
-    src/protocols/mcp/mcp_server.c
-    src/protocols/mcp/mcp_client.c
-    src/protocols/mcp/mcp_stdio_pool.c
+    src/modules/mcp/mcp_jsonrpc.c
+    src/modules/mcp/mcp_server.c
+    src/modules/mcp/mcp_client.c
+    src/modules/mcp/mcp_stdio_pool.c
 )
 
 # ── gRPC Module (gRPC wire codec & gateway, optional) ────────────────────
 set(CSILK_GRPC_SOURCES
-    src/protocols/grpc.c
-    src/middleware/grpc_gateway.c
+    src/modules/grpc/grpc.c
+    src/modules/grpc/grpc_gateway.c
 )
 
 # ── Permission Module ─────────────────────────────────────────────────────
 set(CSILK_PERMISSION_SOURCES
-    src/drivers/perm/perm.c
-    src/drivers/perm/simple.c
+    src/modules/permission/perm.c
+    src/modules/permission/simple.c
 )
 
 # ── Middleware Module ─────────────────────────────────────────────────────
@@ -214,62 +214,62 @@ set(CSILK_APP_SOURCES
 
 # ── Observability & Admin Module (optional) ──────────────────────────────
 set(CSILK_OBSERVABILITY_SOURCES
-    src/middleware/otlp_exporter.c
-    src/middleware/otlp_trace.c
-    src/util/flamegraph.c
-    src/app/admin.c
+    src/modules/observability/otlp_exporter.c
+    src/modules/observability/otlp_trace.c
+    src/modules/observability/flamegraph.c
+    src/modules/observability/admin.c
 )
 
 # ── AI Module (LLM client drivers) ───────────────────────────────────────
 set(CSILK_AI_SOURCES
-    src/drivers/ai/ai.c
-    src/drivers/ai/ai_trace.c
-    src/drivers/ai/openai.c
-    src/drivers/ai/ollama.c
-    src/drivers/ai/anthropic.c
-    src/drivers/ai/tool_registry.c
+    src/modules/ai/ai.c
+    src/modules/ai/ai_trace.c
+    src/modules/ai/openai.c
+    src/modules/ai/ollama.c
+    src/modules/ai/anthropic.c
+    src/modules/ai/tool_registry.c
 )
 
 # ── MQ Module (Message queue & Raft consensus) ───────────────────────────
 set(CSILK_MQ_SOURCES
-    src/messaging/mq_context.c
-    src/messaging/mq_core.c
-    src/messaging/mq_dispatch.c
-    src/messaging/mq_offload.c
-    src/messaging/mq_pubsub.c
-    src/messaging/mq_wal.c
-    src/messaging/wal_common.c
-    src/messaging/wal_uring.c
-    src/messaging/raft_wal.c
-    src/messaging/raft_consensus.c
-    src/messaging/raft_rpc.c
-    src/messaging/raft_snapshot.c
-    src/messaging/raft_membership.c
+    src/modules/mq/mq/mq_context.c
+    src/modules/mq/mq/mq_core.c
+    src/modules/mq/mq/mq_dispatch.c
+    src/modules/mq/mq/mq_offload.c
+    src/modules/mq/mq/mq_pubsub.c
+    src/modules/mq/mq/mq_wal.c
+    src/modules/common/wal_common.c
+    src/modules/common/wal_uring.c
+    src/modules/mq/raft/raft_wal.c
+    src/modules/mq/raft/raft_consensus.c
+    src/modules/mq/raft/raft_rpc.c
+    src/modules/mq/raft/raft_snapshot.c
+    src/modules/mq/raft/raft_membership.c
 )
 
 # ── Workflow & MCP Module (Agent scheduler, DSL, MCP protocols) ──────────
 set(CSILK_WORKFLOW_SOURCES
-    src/workflow/wf_graph.c
-    src/workflow/wf_distributed.c
-    src/workflow/wf_grid.c
-    src/workflow/wf_monitor.c
-    src/workflow/wf_ai_utils.c
-    src/workflow/wf_ai_nodes.c
-    src/workflow/wf_ai_agents.c
-    src/workflow/wf_ai_react_loop.c
-    src/workflow/skill.c
-    src/workflow/wf_tools.c
-    src/workflow/wf_ctx.c
-    src/workflow/wf_node.c
-    src/workflow/wf_run.c
-    src/workflow/wf_resume.c
-    src/workflow/wf_trace.c
-    src/workflow/workflow_loader.c
-    src/workflow/workflow_wal.c
-    src/workflow/workflow_dsl.c
-    src/workflow/workflow_manager.c
-    src/workflow/workflow_debug.c
-    src/workflow/wf_cluster_sm.c
+    src/modules/workflow/wf_graph.c
+    src/modules/workflow/wf_distributed.c
+    src/modules/workflow/wf_grid.c
+    src/modules/workflow/wf_monitor.c
+    src/modules/workflow/wf_ai_utils.c
+    src/modules/workflow/wf_ai_nodes.c
+    src/modules/workflow/wf_ai_agents.c
+    src/modules/workflow/wf_ai_react_loop.c
+    src/modules/workflow/skill.c
+    src/modules/workflow/wf_tools.c
+    src/modules/workflow/wf_ctx.c
+    src/modules/workflow/wf_node.c
+    src/modules/workflow/wf_run.c
+    src/modules/workflow/wf_resume.c
+    src/modules/workflow/wf_trace.c
+    src/modules/workflow/workflow_loader.c
+    src/modules/workflow/workflow_wal.c
+    src/modules/workflow/workflow_dsl.c
+    src/modules/workflow/workflow_manager.c
+    src/modules/workflow/workflow_debug.c
+    src/modules/workflow/wf_cluster_sm.c
 )
 
 # ── Combined Source List (Built conditionally from enabled modules) ──────

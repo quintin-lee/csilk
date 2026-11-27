@@ -21,7 +21,7 @@
 
 #include "csilk/drivers/ai.h"
 #ifdef CSILK_HAS_OBSERVABILITY
-#include "csilk/middleware/otlp_trace.h"
+#include "csilk/observability/otlp_trace.h"
 #endif
 
 #include <ctype.h>
@@ -36,8 +36,8 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
-#include "../../core/internal/obs_registry.h"
-#include "../../core/internal/srv_impl.h"
+#include "core/internal/obs_registry.h"
+#include "core/internal/srv_impl.h"
 
 /* --- Global AI Metrics --- */
 static atomic_uint_fast64_t ai_requests_total = 0;

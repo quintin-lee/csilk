@@ -16,7 +16,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/drivers/perm.h"
+#include "csilk/permission/perm.h"
 
 #include <stdatomic.h>
 #include <stdio.h>

@@ -11,7 +11,7 @@
 #ifndef CSILK_MCP_H
 #define CSILK_MCP_H
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/csilk.h"
 
 #ifdef __cplusplus

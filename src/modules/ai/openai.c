@@ -18,7 +18,7 @@
 
 #include "csilk/drivers/ai.h"
 #include "csilk/csilk.h"
-#include "drivers/curl_common.h"
+#include "modules/common/curl_common.h"
 
 #include <stdio.h>
 #include <stdlib.h>

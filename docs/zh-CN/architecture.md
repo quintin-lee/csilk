@@ -1091,92 +1091,50 @@ csilk/
 │   │   ├── uuid.c                 # UUID v4 生成
 │   │   ├── crypto.c               # 杂项加密实用函数
 │   │   ├── bcrypt.c               # bcrypt 密码哈希
+│   │   ├── cipher_openssl.c       # OpenSSL 密码后端（AES-GCM/RSA）
 │   │   └── blowfish_sboxes.h      # Eksblowfish S 盒常量
-│   ├── app/                       # 高级应用层
+│   ├── app/                       # Web Core 高级应用层
 │   │   ├── app.c                  # App 门面
 │   │   ├── app_routes.c           # 路由注册辅助
 │   │   ├── group.c                # 路由组
-│   │   ├── admin.c                # Admin 仪表板
 │   │   └── app_internal.h         # 内部应用类型
-│   ├── workflow/                  # AI 工作流引擎
-│   │   ├── wf_scheduler.c         # 执行引擎、DAG 调度、WAL 恢复
-│   │   ├── wf_graph.c             # DAG 图结构
-│   │   ├── wf_monitor.c           # 实时监控事件
-│   │   ├── wf_trace.c             # 执行跟踪记录
-│   │   ├── wf_resume.c            # 工作流恢复
-│   │   ├── wf_tools.c             # 工具调用
-│   │   ├── wf_ai_nodes.c          # AI 聊天节点
-│   │   ├── wf_ai_agents.c         # Agent 引擎
-│   │   ├── wf_ai_utils.c          # AI 辅助
-│   │   ├── workflow_loader.c      # JSON/YAML 解析器加载器
-│   │   ├── workflow_wal.c         # WAL 持久化引擎
-│   │   ├── workflow_manager.c     # 工作流生命周期管理
-│   │   ├── workflow_dsl.c         # DSL 定义
-│   │   ├── workflow_internal.h    # 内部结构 & 存根
-│   │   └── ...                    # 分布式与集群支持（wf_distributed.c、wf_cluster_sm.c）
-│   ├── middleware/                # 22 个内置中间件模块
+│   ├── middleware/                # Web Core 内置 HTTP 中间件
 │   │   ├── auth.c, jwt.c          # 令牌 & JWT（HS256）认证
 │   │   ├── cors.c, csrf.c         # CORS、CSRF
-│   │   ├── ratelimit.c            # 固定窗口限流
-│   │   ├── sliding_ratelimit.c    # 滑动窗口限流器
+│   │   ├── ratelimit.c            # 固定 & 滑动窗口限流
 │   │   ├── circuit_breaker.c      # 熔断器
 │   │   ├── gzip.c                 # Gzip 压缩
 │   │   ├── logger.c, metrics.c    # 请求日志、Prometheus 指标
-│   │   ├── waf.c, xdp_waf.c       # WAF、eBPF XDP 动态 WAF
+│   │   ├── waf.c                  # WAF & 动态过滤规则
 │   │   ├── static.c               # 静态文件服务
 │   │   ├── session.c              # 会话管理
 │   │   ├── sse.c                  # 服务器发送事件
 │   │   ├── multipart.c            # 多部分文件上传
-│   │   ├── grpc_gateway.c         # HTTP/JSON <-> gRPC 转码
-│   │   ├── otlp_exporter.c        # OTLP 导出器（Jaeger/Zipkin）
-│   │   ├── otlp_trace.c           # W3C 跟踪上下文
 │   │   ├── request_id.c           # X-Request-Id 追踪
 │   │   └── validate.c             # 参数验证
-│   ├── protocols/                 # 协议扩展
+│   ├── protocols/                 # Web Core 协议扩展
 │   │   ├── websocket.c            # RFC 6455 WebSocket
 │   │   ├── ws_room.c              # WebSocket 房间
-│   │   ├── h3.c                   # HTTP/3（QUIC）
-│   │   ├── swagger.c              # Swagger UI
-│   │   ├── openapi_gen.c          # OpenAPI 生成
-│   │   └── mcp/                   # 模型上下文协议
-│   │       ├── mcp_server.c
-│   │       ├── mcp_client.c
-│   │       └── mcp_jsonrpc.c
-│   ├── drivers/                   # 驱动实现
-│   │   ├── ai/                    # AI 引擎 + OpenAI/Ollama 后端
-│   │   │   ├── ai.c
-│   │   │   ├── openai.c
-│   │   │   └── ollama.c
-│   │   ├── cipher/                # 密码驱动（OpenSSL）
-│   │   │   └── openssl.c
-│   │   ├── perm/                  # 权限驱动（管理器 + simple 后端）
-│   │   │   ├── perm.c
-│   │   │   └── simple.c
-│   │   ├── db/                    # 数据库抽象 + 后端
-│   │   │   ├── db.c               # 池生命周期、查询/执行分发
-│   │   │   ├── db_internal.h      # csilk_db_pool_s 私有结构
-│   │   │   ├── sqlite.c
-│   │   │   ├── mysql.c
-│   │   │   ├── postgres.c
-│   │   │   ├── redis.c
-│   │   │   └── mongodb.c
-│   │   └── vector/                # 向量数据库驱动
-│   │       ├── vector.c
-│   │       ├── qdrant.c
-│   │       └── milvus.c
-│   ├── messaging/                 # 消息队列 + Raft 共识
-│   │   ├── mq_core.c              # MQ 核心
-│   │   ├── mq_pubsub.c            # 发布/订阅
-│   │   ├── mq_wal.c               # MQ WAL 持久化
-│   │   ├── raft_consensus.c       # Raft 共识
-│   │   ├── raft_wal.c             # Raft WAL
-│   │   └── ...
+│   │   ├── swagger_serve.c        # Swagger UI
+│   │   └── openapi_gen.c          # OpenAPI 生成
 │   ├── reflection/                # 运行时类型反射
 │   │   ├── reflect.c
 │   │   ├── reflect_marshal.c
 │   │   └── reflect_unmarshal.c
-│   └── util/                      # 实用模块
-│       └── flamegraph.c           # CPU 火焰图采样
+│   └── modules/                   # 可选领域模块（CSILK_ENABLE_*）
+│       ├── common/                # 共享辅助（curl_common.h、wal_common.*、wal_uring.c）
+│       ├── ai/                    # AI 引擎 + OpenAI/Ollama/Anthropic 后端
+│       ├── db/                    # 数据库抽象 + SQLite/MySQL/PQ/Redis/Mongo
+│       ├── vector/                # 向量数据库驱动 & HNSW SIMD 索引
+│       ├── permission/            # RBAC/ReBAC 权限管理器 + simple 后端
+│       ├── mq/                    # 消息队列（mq/）+ Raft 共识（raft/）
+│       ├── workflow/              # AI 工作流 DAG 引擎、DSL、ReAct 循环、Skills
+│       ├── mcp/                   # 模型上下文协议（server/client/stdio pool）
+│       ├── grpc/                  # gRPC 线协议编解码 & HTTP/JSON 网关
+│       ├── http3/                 # HTTP/3（基于 ngtcp2/nghttp3 的 QUIC 传输）
+│       ├── wasm/                  # WAMR WASM 插件虚拟机 & WASI 沙箱
+│       ├── observability/         # OTLP 导出器/追踪、flamegraph.c、admin.c
+│       └── csv/                   # RFC 4180 CSV 解析与序列化
 ├── tests/                         # 单元/集成/模糊测试
 ├── examples/                      # 示例应用程序
 ├── docs/                          # 架构、研究、分析文档

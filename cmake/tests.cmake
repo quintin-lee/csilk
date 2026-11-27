@@ -158,9 +158,6 @@ set(CSILK_CORE_TESTS
     test_lazy_arena
     test_io_poll
 )
-if(CSILK_ENABLE_CSV)
-  list(APPEND CSILK_CORE_TESTS test_csv)
-endif()
 if(CSILK_USE_URING)
   list(APPEND CSILK_CORE_TESTS
       test_uring_recv_bench
@@ -174,15 +171,6 @@ if(CSILK_USE_URING)
 endif()
 if(CSILK_ENABLE_MQ AND CSILK_ENABLE_AI)
   list(APPEND CSILK_CORE_TESTS test_ctx_lifecycle_async)
-endif()
-if(CSILK_ENABLE_WASM)
-  list(APPEND CSILK_CORE_TESTS
-      test_wasm_plugin
-      test_wasm_vm
-      test_wasm_fuel
-      test_wasm_wasi
-      test_wasm_real
-  )
 endif()
 
 # -- Application tests --
@@ -198,12 +186,6 @@ set(CSILK_APP_TESTS
     test_hooks_rcu
     test_jsonrpc_frames
 )
-if(CSILK_ENABLE_OBSERVABILITY)
-  list(APPEND CSILK_APP_TESTS test_admin)
-endif()
-if(CSILK_ENABLE_WASM AND CSILK_ENABLE_WORKFLOW)
-  list(APPEND CSILK_APP_TESTS test_app_wasm)
-endif()
 
 # -- Workflow tests --
 set(CSILK_WORKFLOW_TESTS)
@@ -282,20 +264,6 @@ set(CSILK_MIDDLEWARE_TESTS
     test_waf
     test_waf_filter
 )
-if(CSILK_ENABLE_OBSERVABILITY)
-  list(APPEND CSILK_MIDDLEWARE_TESTS
-      test_otlp_exporter
-      test_otlp_trace_span
-      test_apm_dashboard_route
-      test_trace_circuit_breaker
-  )
-endif()
-if(CSILK_ENABLE_GRPC)
-  list(APPEND CSILK_MIDDLEWARE_TESTS test_grpc_gateway)
-endif()
-if(CSILK_ENABLE_AI AND CSILK_ENABLE_OBSERVABILITY)
-  list(APPEND CSILK_MIDDLEWARE_TESTS test_otlp_ai)
-endif()
 
 # -- Protocol tests --
 if(NOT TARGET CURL::libcurl)
@@ -310,22 +278,6 @@ set(CSILK_PROTOCOL_TESTS
     test_h2_dispatch_lifecycle
     test_h2_header_bench
 )
-if(CSILK_ENABLE_HTTP3)
-  list(APPEND CSILK_PROTOCOL_TESTS test_h3 test_h3_worker test_h3_e2e test_http3_skeleton)
-endif()
-if(CSILK_ENABLE_MCP)
-  list(APPEND CSILK_PROTOCOL_TESTS
-      test_mcp_jsonrpc
-      test_mcp_server_client
-      test_mcp_server_core
-      test_mcp_stdio
-      test_mcp_stdio_pool
-      test_mcp_sse_ext
-  )
-endif()
-if(CSILK_ENABLE_GRPC)
-  list(APPEND CSILK_PROTOCOL_TESTS test_grpc)
-endif()
 
 # -- Security tests --
 set(CSILK_SECURITY_TESTS
@@ -343,18 +295,9 @@ set(CSILK_SECURITY_TESTS
 set(CSILK_SECURITY_TEST_DIRS
     security;security;security;security;security;security;crypto;crypto;security
 )
-if(CSILK_ENABLE_OBSERVABILITY)
-  list(APPEND CSILK_SECURITY_TESTS test_admin_auth)
-  list(APPEND CSILK_SECURITY_TEST_DIRS security)
-endif()
-if(CSILK_ENABLE_PERM)
-  list(PREPEND CSILK_SECURITY_TESTS test_perm test_perm_ext)
-  list(PREPEND CSILK_SECURITY_TEST_DIRS security security)
-endif()
 
-# -- Data / driver tests --
+# -- Data / DB module tests --
 set(CSILK_DATA_TESTS)
-set(CSILK_DATA_TEST_DIRS)
 if(CSILK_ENABLE_DB)
   set(CSILK_DATA_TESTS
       test_db_sqlite
@@ -373,14 +316,10 @@ if(CSILK_ENABLE_DB)
       test_db
       test_mongodb
   )
-  set(CSILK_DATA_TEST_DIRS
-      drivers;drivers;drivers/db;drivers/db;drivers/db;drivers;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db;drivers/db
-  )
 endif()
 
-# -- AI & Vector driver tests --
+# -- AI & Vector module tests --
 set(CSILK_AI_TESTS)
-set(CSILK_AI_TEST_DIRS)
 if(CSILK_ENABLE_AI)
   list(APPEND CSILK_AI_TESTS
       test_ai
@@ -391,25 +330,23 @@ if(CSILK_ENABLE_AI)
       test_ai_anthropic
       test_ai_trace
   )
-  list(APPEND CSILK_AI_TEST_DIRS drivers drivers drivers drivers drivers drivers drivers)
   if(CSILK_ENABLE_OBSERVABILITY)
     list(APPEND CSILK_AI_TESTS test_ai_ctx_trace)
-    list(APPEND CSILK_AI_TEST_DIRS drivers)
   endif()
   if(CSILK_ENABLE_WORKFLOW)
     list(APPEND CSILK_AI_TESTS test_ai_skill)
-    list(APPEND CSILK_AI_TEST_DIRS drivers)
   endif()
 endif()
+
+set(CSILK_VECTOR_TESTS)
 if(CSILK_ENABLE_VECTOR)
-  list(APPEND CSILK_AI_TESTS
+  set(CSILK_VECTOR_TESTS
       test_vector_db
       test_vector_simd
       test_vector_hnsw
       test_vector_db_embedded
       test_vector_milvus_qdrant_mock
   )
-  list(APPEND CSILK_AI_TEST_DIRS drivers drivers/vector drivers/vector drivers/vector drivers/vector)
 endif()
 
 # -- Reflection tests --
@@ -417,9 +354,8 @@ set(CSILK_REFLECTION_TESTS
     test_reflect
 )
 
-# -- Messaging tests --
+# -- Messaging (MQ & Raft) module tests --
 set(CSILK_MESSAGING_TESTS)
-set(CSILK_MESSAGING_TEST_DIRS)
 if(CSILK_ENABLE_MQ)
   set(CSILK_MESSAGING_TESTS
       test_mq
@@ -438,9 +374,68 @@ if(CSILK_ENABLE_MQ)
       test_raft_membership
       test_wal_uring
   )
-  set(CSILK_MESSAGING_TEST_DIRS
-      mq;mq;mq;mq;mq;mq;mq;mq;mq;messaging;messaging;messaging;messaging;messaging;messaging
+endif()
+
+# -- Optional module tests (Observability, WASM, gRPC, HTTP/3, MCP, Perm, CSV) --
+set(CSILK_OBSERVABILITY_TESTS)
+if(CSILK_ENABLE_OBSERVABILITY)
+  set(CSILK_OBSERVABILITY_TESTS
+      test_admin
+      test_admin_auth
+      test_otlp_exporter
+      test_otlp_trace_span
+      test_apm_dashboard_route
+      test_trace_circuit_breaker
   )
+  if(CSILK_ENABLE_AI)
+    list(APPEND CSILK_OBSERVABILITY_TESTS test_otlp_ai)
+  endif()
+endif()
+
+set(CSILK_WASM_TESTS)
+if(CSILK_ENABLE_WASM)
+  set(CSILK_WASM_TESTS
+      test_wasm_plugin
+      test_wasm_vm
+      test_wasm_fuel
+      test_wasm_wasi
+      test_wasm_real
+  )
+  if(CSILK_ENABLE_WORKFLOW)
+    list(APPEND CSILK_WASM_TESTS test_app_wasm)
+  endif()
+endif()
+
+set(CSILK_GRPC_TESTS)
+if(CSILK_ENABLE_GRPC)
+  set(CSILK_GRPC_TESTS test_grpc test_grpc_gateway)
+endif()
+
+set(CSILK_HTTP3_TESTS)
+if(CSILK_ENABLE_HTTP3)
+  set(CSILK_HTTP3_TESTS test_h3 test_h3_worker test_h3_e2e test_http3_skeleton)
+endif()
+
+set(CSILK_MCP_TESTS)
+if(CSILK_ENABLE_MCP)
+  set(CSILK_MCP_TESTS
+      test_mcp_jsonrpc
+      test_mcp_server_client
+      test_mcp_server_core
+      test_mcp_stdio
+      test_mcp_stdio_pool
+      test_mcp_sse_ext
+  )
+endif()
+
+set(CSILK_PERMISSION_TESTS)
+if(CSILK_ENABLE_PERM)
+  set(CSILK_PERMISSION_TESTS test_perm test_perm_ext)
+endif()
+
+set(CSILK_CSV_TESTS)
+if(CSILK_ENABLE_CSV)
+  set(CSILK_CSV_TESTS test_csv)
 endif()
 
 # -- Extra / integration tests --
@@ -471,8 +466,16 @@ set(CSILK_ALL_TEST_NAMES
     ${CSILK_SECURITY_TESTS}
     ${CSILK_DATA_TESTS}
     ${CSILK_AI_TESTS}
+    ${CSILK_VECTOR_TESTS}
     ${CSILK_REFLECTION_TESTS}
     ${CSILK_MESSAGING_TESTS}
+    ${CSILK_OBSERVABILITY_TESTS}
+    ${CSILK_WASM_TESTS}
+    ${CSILK_GRPC_TESTS}
+    ${CSILK_HTTP3_TESTS}
+    ${CSILK_MCP_TESTS}
+    ${CSILK_PERMISSION_TESTS}
+    ${CSILK_CSV_TESTS}
     ${CSILK_EXTRA_TESTS}
 )
 
@@ -526,7 +529,7 @@ foreach(_name IN LISTS CSILK_APP_TESTS)
 endforeach()
 
 foreach(_name IN LISTS CSILK_WORKFLOW_TESTS)
-    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/workflow/${_name}.c")
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/workflow/${_name}.c")
 endforeach()
 
 foreach(_name IN LISTS CSILK_MIDDLEWARE_TESTS)
@@ -541,20 +544,52 @@ foreach(_name _dir IN ZIP_LISTS CSILK_SECURITY_TESTS CSILK_SECURITY_TEST_DIRS)
     add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
 endforeach()
 
-foreach(_name _dir IN ZIP_LISTS CSILK_DATA_TESTS CSILK_DATA_TEST_DIRS)
-    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
+foreach(_name IN LISTS CSILK_DATA_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/db/${_name}.c")
 endforeach()
 
-foreach(_name _dir IN ZIP_LISTS CSILK_AI_TESTS CSILK_AI_TEST_DIRS)
-    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
+foreach(_name IN LISTS CSILK_AI_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/ai/${_name}.c")
+endforeach()
+
+foreach(_name IN LISTS CSILK_VECTOR_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/vector/${_name}.c")
 endforeach()
 
 foreach(_name IN LISTS CSILK_REFLECTION_TESTS)
     add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/reflection/${_name}.c")
 endforeach()
 
-foreach(_name _dir IN ZIP_LISTS CSILK_MESSAGING_TESTS CSILK_MESSAGING_TEST_DIRS)
-    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/${_dir}/${_name}.c")
+foreach(_name IN LISTS CSILK_MESSAGING_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/mq/${_name}.c")
+endforeach()
+
+foreach(_name IN LISTS CSILK_OBSERVABILITY_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/observability/${_name}.c")
+endforeach()
+
+foreach(_name IN LISTS CSILK_WASM_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/wasm/${_name}.c")
+endforeach()
+
+foreach(_name IN LISTS CSILK_GRPC_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/grpc/${_name}.c")
+endforeach()
+
+foreach(_name IN LISTS CSILK_HTTP3_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/http3/${_name}.c")
+endforeach()
+
+foreach(_name IN LISTS CSILK_MCP_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/mcp/${_name}.c")
+endforeach()
+
+foreach(_name IN LISTS CSILK_PERMISSION_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/permission/${_name}.c")
+endforeach()
+
+foreach(_name IN LISTS CSILK_CSV_TESTS)
+    add_csilk_test(${_name} "${CMAKE_CURRENT_SOURCE_DIR}/tests/modules/csv/${_name}.c")
 endforeach()
 
 foreach(_name IN LISTS CSILK_EXTRA_TESTS)

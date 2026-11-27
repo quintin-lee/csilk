@@ -4,7 +4,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/app/wf_grid.h"
+#include "csilk/workflow/grid.h"
 #include "csilk/core/sync.h"
 #include "csilk/csilk.h"
 #include "csilk/messaging/mq.h"

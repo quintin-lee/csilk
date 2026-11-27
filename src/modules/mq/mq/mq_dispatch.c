@@ -18,7 +18,7 @@
 
 #include "csilk/core/json/json.h"
 #include "csilk/core/internal.h"
-#include "../core/internal/srv_impl.h"
+#include "core/internal/srv_impl.h"
 #include "mq_internal.h"
 #include "csilk/core/sync.h"
 #include "csilk/messaging/mq.h"

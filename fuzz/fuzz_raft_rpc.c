@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "messaging/raft_internal.h"
+#include "modules/mq/raft/raft_internal.h"
 
 static void
 _fuzz_decode_payload(uint8_t msg_type, const uint8_t* payload, size_t payload_len)

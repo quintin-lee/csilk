@@ -36,7 +36,7 @@ foreach(_forbidden
 endforeach()
 
 string(REGEX MATCH "set\\(CSILK_DB_SOURCES[^)]*\\)" _db_block "${_sources}")
-if(_db_block MATCHES "src/drivers/vector/")
+if(_db_block MATCHES "src/(drivers|modules)/vector/")
   message(FATAL_ERROR "vector sources are still owned by CSILK_DB_SOURCES")
 endif()
 

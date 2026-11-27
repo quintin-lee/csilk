@@ -13,7 +13,7 @@
 #include "csilk/messaging/mq.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/app/workflow.h"
-#include "messaging/mq_internal.h"
+#include "modules/mq/mq/mq_internal.h"
 #include "core/ctx/ctx_internal.h"
 
 static void

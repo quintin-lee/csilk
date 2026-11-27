@@ -9,7 +9,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "csilk/app/workflow_dsl.h"
+#include "csilk/workflow/dsl.h"
 #include "csilk/messaging/raft_wal.h"
 
 #ifdef __cplusplus

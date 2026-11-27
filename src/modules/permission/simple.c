@@ -27,7 +27,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/drivers/perm.h"
+#include "csilk/permission/perm.h"
 #include "csilk/csilk.h"
 
 /** @brief Maximum permission rules per simple driver. */

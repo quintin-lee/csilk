@@ -6,7 +6,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "protocols/mcp/mcp_internal.h"
+#include "modules/mcp/mcp_internal.h"
 
 int
 LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)

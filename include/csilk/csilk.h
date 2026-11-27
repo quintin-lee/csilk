@@ -39,10 +39,10 @@
 #include "csilk/messaging/mq.h"
 #endif
 #ifdef CSILK_HAS_WORKFLOW
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #endif
 #ifdef CSILK_HAS_OBSERVABILITY
-#include "csilk/app/admin.h"
-#include "csilk/util/flamegraph.h"
-#include "csilk/middleware/otlp_trace.h"
+#include "csilk/observability/admin.h"
+#include "csilk/observability/flamegraph.h"
+#include "csilk/observability/otlp_trace.h"
 #endif

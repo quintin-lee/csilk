@@ -10,7 +10,7 @@
 #include "workflow_internal.h"
 #include "csilk/core/sync.h"
 #ifdef CSILK_HAS_WASM
-#include "csilk/core/plugin/wasm.h"
+#include "csilk/wasm/wasm.h"
 #endif
 
 #ifdef CSILK_HAS_WASM

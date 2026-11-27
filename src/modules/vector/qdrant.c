@@ -5,7 +5,7 @@
  */
 
 #include "csilk/drivers/vector.h"
-#include "drivers/curl_common.h"
+#include "modules/common/curl_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

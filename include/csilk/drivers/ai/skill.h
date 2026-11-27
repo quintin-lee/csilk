@@ -27,7 +27,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 
 #ifdef __cplusplus
 extern "C" {

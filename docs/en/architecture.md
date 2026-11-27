@@ -1122,92 +1122,50 @@ csilk/
 │   │   ├── uuid.c                 # UUID v4 generation
 │   │   ├── crypto.c               # misc crypto utility functions
 │   │   ├── bcrypt.c               # bcrypt password hashing
+│   │   ├── cipher_openssl.c       # OpenSSL cipher backend (AES-GCM/RSA)
 │   │   └── blowfish_sboxes.h      # Eksblowfish S-box constants
-│   ├── app/                       # High-level app layer
+│   ├── app/                       # Web Core high-level app layer
 │   │   ├── app.c                  # App facade
 │   │   ├── app_routes.c           # Route registration helpers
 │   │   ├── group.c                # Route groups
-│   │   ├── admin.c                # Admin dashboard
 │   │   └── app_internal.h         # Internal app types
-│   ├── workflow/                  # AI workflow engine
-│   │   ├── wf_scheduler.c         # Execution engine, DAG scheduling, WAL restore
-│   │   ├── wf_graph.c             # DAG graph structures
-│   │   ├── wf_monitor.c           # Real-time monitor events
-│   │   ├── wf_trace.c             # Execution trace recording
-│   │   ├── wf_resume.c            # Workflow resume
-│   │   ├── wf_tools.c             # Tool calling
-│   │   ├── wf_ai_nodes.c          # AI chat nodes
-│   │   ├── wf_ai_agents.c         # Agent engine
-│   │   ├── wf_ai_utils.c          # AI helpers
-│   │   ├── workflow_loader.c      # JSON/YAML parser loaders
-│   │   ├── workflow_wal.c         # WAL persistence engine
-│   │   ├── workflow_manager.c     # Workflow lifecycle management
-│   │   ├── workflow_dsl.c         # DSL definitions
-│   │   ├── workflow_internal.h    # Internal structures & stubs
-│   │   └── ...                    # Distributed & cluster support (wf_distributed.c, wf_cluster_sm.c)
-│   ├── middleware/                # 22 built-in middleware modules
+│   ├── middleware/                # Web Core built-in HTTP middleware
 │   │   ├── auth.c, jwt.c          # Token & JWT (HS256) authentication
 │   │   ├── cors.c, csrf.c         # CORS, CSRF
-│   │   ├── ratelimit.c            # Fixed window rate limiting
-│   │   ├── sliding_ratelimit.c    # Sliding window rate limiter
+│   │   ├── ratelimit.c            # Fixed & sliding window rate limiting
 │   │   ├── circuit_breaker.c      # Circuit breaker
 │   │   ├── gzip.c                 # Gzip compression
 │   │   ├── logger.c, metrics.c    # Request logging, Prometheus metrics
-│   │   ├── waf.c, xdp_waf.c       # WAF, eBPF XDP dynamic WAF
+│   │   ├── waf.c                  # WAF & dynamic filter rules
 │   │   ├── static.c               # Static file serving
 │   │   ├── session.c              # Session management
 │   │   ├── sse.c                  # Server-Sent Events
 │   │   ├── multipart.c            # Multipart file upload
-│   │   ├── grpc_gateway.c         # HTTP/JSON <-> gRPC transcoding
-│   │   ├── otlp_exporter.c        # OTLP exporter (Jaeger/Zipkin)
-│   │   ├── otlp_trace.c           # W3C trace context
 │   │   ├── request_id.c           # X-Request-Id tracing
 │   │   └── validate.c             # Parameter validation
-│   ├── protocols/                 # Protocol extensions
+│   ├── protocols/                 # Web Core protocol extensions
 │   │   ├── websocket.c            # RFC 6455 WebSocket
 │   │   ├── ws_room.c              # WebSocket rooms
-│   │   ├── h3.c                   # HTTP/3 (QUIC)
-│   │   ├── swagger.c              # Swagger UI
-│   │   ├── openapi_gen.c          # OpenAPI generation
-│   │   └── mcp/                   # Model Context Protocol
-│   │       ├── mcp_server.c
-│   │       ├── mcp_client.c
-│   │       └── mcp_jsonrpc.c
-│   ├── drivers/                   # Driver implementations
-│   │   ├── ai/                    # AI engine + OpenAI/Ollama backends
-│   │   │   ├── ai.c
-│   │   │   ├── openai.c
-│   │   │   └── ollama.c
-│   │   ├── cipher/                # Cipher driver (OpenSSL)
-│   │   │   └── openssl.c
-│   │   ├── perm/                  # Permission driver (manager + simple backend)
-│   │   │   ├── perm.c
-│   │   │   └── simple.c
-│   │   ├── db/                    # Database abstraction + backends
-│   │   │   ├── db.c               # Pool lifecycle, query/exec dispatch
-│   │   │   ├── db_internal.h      # csilk_db_pool_s private struct
-│   │   │   ├── sqlite.c
-│   │   │   ├── mysql.c
-│   │   │   ├── postgres.c
-│   │   │   ├── redis.c
-│   │   │   └── mongodb.c
-│   │   └── vector/                # Vector DB drivers
-│   │       ├── vector.c
-│   │       ├── qdrant.c
-│   │       └── milvus.c
-│   ├── messaging/                 # Message Queue + Raft consensus
-│   │   ├── mq_core.c              # MQ core
-│   │   ├── mq_pubsub.c            # Pub/sub
-│   │   ├── mq_wal.c               # MQ WAL persistence
-│   │   ├── raft_consensus.c       # Raft consensus
-│   │   ├── raft_wal.c             # Raft WAL
-│   │   └── ...
+│   │   ├── swagger_serve.c        # Swagger UI
+│   │   └── openapi_gen.c          # OpenAPI generation
 │   ├── reflection/                # Runtime type reflection
 │   │   ├── reflect.c
 │   │   ├── reflect_marshal.c
 │   │   └── reflect_unmarshal.c
-│   └── util/                      # Utility modules
-│       └── flamegraph.c           # CPU flame graph sampling
+│   └── modules/                   # Optional domain modules (CSILK_ENABLE_*)
+│       ├── common/                # Shared helpers (curl_common.h, wal_common.*, wal_uring.c)
+│       ├── ai/                    # AI engine + OpenAI/Ollama/Anthropic backends
+│       ├── db/                    # Database abstraction + SQLite/MySQL/PQ/Redis/Mongo
+│       ├── vector/                # Vector DB drivers & HNSW SIMD index
+│       ├── permission/            # RBAC/ReBAC permission manager + simple backend
+│       ├── mq/                    # Message Queue (mq/) + Raft consensus (raft/)
+│       ├── workflow/              # AI workflow DAG engine, DSL, ReAct loop, skills
+│       ├── mcp/                   # Model Context Protocol (server/client/stdio pool)
+│       ├── grpc/                  # gRPC wire codec & HTTP/JSON gateway
+│       ├── http3/                 # HTTP/3 (QUIC via ngtcp2/nghttp3)
+│       ├── wasm/                  # WAMR WASM plugin VM & WASI sandbox
+│       ├── observability/         # OTLP exporter/trace, flamegraph.c, admin.c
+│       └── csv/                   # RFC 4180 CSV parser/serializer
 ├── tests/                         # Unit/integration/fuzz tests
 ├── examples/                      # Example applications
 ├── docs/                          # Architecture, research, analysis docs

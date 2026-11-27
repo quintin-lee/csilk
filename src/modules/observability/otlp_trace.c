@@ -18,7 +18,7 @@
 #include "csilk/core/sync.h"
 #include "csilk/csilk.h"
 #include "csilk/drivers/ai.h"
-#include "csilk/middleware/otlp_trace.h"
+#include "csilk/observability/otlp_trace.h"
 #include "core/internal/srv_internal.h"
 
 #define OTLP_SPAN_BUF_CAP 2048 /* default; overridable via csilk_otlp_tracer_set_buffer_size */

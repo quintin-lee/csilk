@@ -10,7 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/app/workflow_dsl.h"
+#include "csilk/workflow/dsl.h"
 #include "csilk/core/sync.h"
 #include "workflow_internal.h"
 

@@ -17,10 +17,10 @@
  * @copyright MIT License
  */
 
-#include "csilk/app/workflow_wal.h"
+#include "csilk/workflow/wal.h"
 #include "csilk/core/sync.h"
 #include "workflow_internal.h"
-#include "../messaging/wal_common.h"
+#include "modules/common/wal_common.h"
 
 #include <fcntl.h>
 #include <stdio.h>
