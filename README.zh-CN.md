@@ -272,6 +272,8 @@ make
 #   -DCSILK_ENABLE_BYPASS=OFF             可选内核旁路 UDP / AF_XDP 扩展
 #   -DCSILK_ENABLE_PERM=OFF               可选 RBAC 权限驱动
 #   -DCSILK_ENABLE_HTTP3=OFF              可选 HTTP/3 QUIC 传输（需要 ngtcp2/nghttp3）
+#   -DCSILK_ENABLE_OBSERVABILITY=OFF      可选 OTLP 链路追踪与导出、CPU 火焰图与管理后台 UI
+#   -DCSILK_ENABLE_CSV=OFF                可选 RFC 4180 CSV 解析与序列化引擎
 #   -DCSILK_BUILD_SHARED=ON               同时构建动态共享库与静态库（默认 ON）
 #   -DCSILK_USE_URING=ON                  使用 io_uring 后端替代 libuv（仅 Linux，默认 OFF）
 #   -DUSE_ASAN=ON                         启用 AddressSanitizer（默认 OFF）
@@ -286,7 +288,7 @@ ctest --output-on-failure
 
 > **Web Core 与可选模块分层边界**：默认配置（`-DCSILK_BUILD_FULL=OFF`）仅构建轻量 **Web Core**（11 个核心目标：`base`、`json`、`crypto`、`reflection`、`runtime`、`tls`、`http2`、`http`、`protocols`、`middleware`、`app`），对 `sqlite3` 与 `libcurl` 零依赖。通过 `-DCSILK_BUILD_FULL=ON` 或单个 `-DCSILK_ENABLE_*` 可按需启用各领域扩展模块。`csilk_wasm` 在开启 `-DCSILK_ENABLE_WAMR=ON` 时集成真实 WAMR 2.4.4 运行时，`csilk_h3` 在开启 `-DCSILK_ENABLE_HTTP3=ON` 时提供基于 `ngtcp2` + `nghttp3` 的 HTTP/3 QUIC 传输；当底层运行时缺席时均 fail-closed（返回 `ENOTSUP`/`NULL`）。
 
-csilk 由 11 个始终构建的 Web Core 模块与 11 个可选领域模块组成（外加 `csilk::core` 兼容别名与 `csilk::csilk` 伞库），同时提供静态库（`.a`）与动态共享库（`.so`）：
+csilk 由 11 个始终构建的 Web Core 模块与 12 个可选领域模块组成（外加 `csilk::core` 兼容别名与 `csilk::csilk` 伞库），同时提供静态库（`.a`）与动态共享库（`.so`）：
 
 | 模块 Target | 动态库 Target | 静态库归档 | 动态共享库 | 说明 |
 |:---|:---|:---|:---|:---|
@@ -294,18 +296,19 @@ csilk 由 11 个始终构建的 Web Core 模块与 11 个可选领域模块组�
 | `csilk::json` | `csilk::json_shared` | `libcsilk-json.a` | `libcsilk-json.so` | *（核心）* 基于 yyjson 的高性能 JSON 解析与序列化引擎 |
 | `csilk::crypto` | `csilk::crypto_shared` | `libcsilk-crypto.a` | `libcsilk-crypto.so` | *（核心）* 密码学原语（bcrypt、TOTP、SHA-1、Base64、UUID）与 OpenSSL 加密驱动 |
 | `csilk::reflection` | `csilk::reflection_shared` | `libcsilk-reflection.a` | `libcsilk-reflection.so` | *（核心）* C 结构体与 JSON 自动序列化/反序列化反射引擎 |
-| `csilk::runtime` (`csilk::core`) | `csilk::runtime_shared` (`csilk::core_shared`) | `libcsilk-runtime.a` | `libcsilk-runtime.so` | *（核心）* Context、Query、SIMD 字典树路由、多 Worker 服务、RCU 热重载、io_uring、配置、Secret、MVCC 缓存 |
+| `csilk::runtime` (`csilk::core`) | `csilk::runtime_shared` (`csilk::core_shared`) | `libcsilk-runtime.a` | `libcsilk-runtime.so` | *（核心）* Context、Query、SIMD 字典树路由、多 Worker 服务、RCU 热重载、配置、Secret（及可选 `io_uring`/CSV） |
 | `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | *（核心）* OpenSSL TLS 1.3 加密传输引擎 |
 | `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | *（核心）* HTTP/2（`nghttp2`）会话与流池 |
 | `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | *（核心）* HTTP/1.1 解析（`llhttp`）、流水线、SWAR 加速与零拷贝响应写出 |
 | `csilk::protocols` | `csilk::protocols_shared` | `libcsilk-protocols.a` | `libcsilk-protocols.so` | *（核心）* WebSocket 与房间广播、OpenAPI 3.0 与 Swagger UI |
-| `csilk::middleware` | `csilk::middleware_shared` | `libcsilk-middleware.a` | `libcsilk-middleware.so` | *（核心）* 内置中间件（Auth、JWT、CORS、CSRF、WAF 过滤器、限流/滑动窗口限流、熔断、OTLP、Gzip、SSE、Static 等） |
-| `csilk::app` | `csilk::app_shared` | `libcsilk-app.a` | `libcsilk-app.so` | *（核心）* 高层 `csilk_app_t` 应用构建器、路由组与统一管理后台 |
-| `csilk::h3` | `csilk::h3_shared` | `libcsilk-h3.a` | `libcsilk-h3.so` | *（可选 `-DCSILK_ENABLE_HTTP3`）* HTTP/3 QUIC（`ngtcp2`/`nghttp3`）协议引擎与监听器 |
+| `csilk::middleware` | `csilk::middleware_shared` | `libcsilk-middleware.a` | `libcsilk-middleware.so` | *（核心）* 内置中间件（Auth、JWT、CORS、CSRF、WAF 过滤器、限流/滑动窗口限流、熔断、Gzip、SSE、Static 等） |
+| `csilk::app` | `csilk::app_shared` | `libcsilk-app.a` | `libcsilk-app.so` | *（核心）* 高层 `csilk_app_t` 应用构建器与路由组 |
+| `csilk::observability` | `csilk::observability_shared` | `libcsilk-observability.a` | `libcsilk-observability.so` | *（可选 `-DCSILK_ENABLE_OBSERVABILITY`）* OpenTelemetry W3C 追踪与 OTLP 导出器、CPU 火焰图与 Admin 管理后台 |
+| `csilk::h3` | `csilk::h3_shared` | `libcsilk-h3.a` | `libcsilk-h3.so` | *（可选 `-DCSILK_ENABLE_HTTP3`）* HTTP/3 QUIC（`ngtcp2`/`nghttp3`）协议引擎 |
 | `csilk::mcp` | `csilk::mcp_shared` | `libcsilk-mcp.a` | `libcsilk-mcp.so` | *（可选 `-DCSILK_ENABLE_MCP`）* Model Context Protocol（JSON-RPC / stdio 池 / SSE / WS） |
 | `csilk::grpc` | `csilk::grpc_shared` | `libcsilk-grpc.a` | `libcsilk-grpc.so` | *（可选 `-DCSILK_ENABLE_GRPC`）* gRPC 帧编解码与 HTTP/JSON 转码网关 |
 | `csilk::permission` | `csilk::permission_shared` | `libcsilk-permission.a` | `libcsilk-permission.so` | *（可选 `-DCSILK_ENABLE_PERM`）* 可插拔 RBAC 权限控制引擎 |
-| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | *（可选 `-DCSILK_ENABLE_DB`）* 数据库抽象层（SQLite/MySQL/PG/Redis/MongoDB）、预编译语句、保存点与迁移引擎 |
+| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | *（可选 `-DCSILK_ENABLE_DB`）* 数据库抽象层（SQLite/MySQL/PG/Redis/MongoDB）、MVCC 缓存、预编译语句、保存点与迁移引擎 |
 | `csilk::vector` | `csilk::vector_shared` | `libcsilk-vector.a` | `libcsilk-vector.so` | *（可选 `-DCSILK_ENABLE_VECTOR`）* 内嵌式 AVX2 SIMD HNSW 向量索引与 Milvus/Qdrant 驱动 |
 | `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | *（可选 `-DCSILK_ENABLE_AI`）* AI 大模型客户端驱动（OpenAI、Ollama、Anthropic）、工具注册中心与追踪 |
 | `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | *（可选 `-DCSILK_ENABLE_MQ`）* 异步消息队列、PubSub、WAL 持久化与 Raft 共识引擎 |

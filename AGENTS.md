@@ -109,13 +109,14 @@ Use these rules whenever performing work in this repository. They ensure correct
 
 ### Honest Implementation & Fail-Closed Discipline
 
-- **No fake drivers or stub toggles**: simulated `dpdk_pmd`, fake eBPF `xdp_waf`, simulated `llama.c`, dead `quic_vtable`, and `CSILK_ENABLE_EXPERIMENTAL_STUBS` have been removed. Every public driver/middleware entrypoint must represent real functionality or explicit capability absence.
-- **Fail closed on absent runtimes**: optional native integrations (e.g., `HAS_WAMR` in `wasm_vm.c`, `CSILK_HAS_NGTCP2`/`nghttp3` in HTTP/3 listener/transport, optional DB drivers) must set `errno = ENOTSUP` and return `-1` / `nullptr` when unconfigured.
-- **No parallel duplicate subsystems**: place shared WAL file I/O helpers in `src/messaging/wal_common.h`/`.c` (reused by `workflow_wal.c`), keep both fixed and sliding rate-limiters in `src/middleware/ratelimit.c`, and keep dynamic WAF rules/filtering (`csilk_waf_filter_*`) unified in `src/middleware/waf.c`.
+- **No fake drivers or stub toggles**: simulated `dpdk_pmd`, fake eBPF `xdp_waf`, simulated `llama.c`, dead `quic_vtable`, dead `csilk_h3_listener_*`, `af_xdp` simulation rings (`sim_fr_*`/`sim_cr_*`), `wasm` simulated execution/fuel stubs, fake WASI stdout stubs, and `CSILK_ENABLE_EXPERIMENTAL_STUBS` have been removed. Every public driver/middleware entrypoint must represent real functionality (`session_store` local backend uses a real TTL in-memory hash table) or explicit capability absence.
+- **Fail closed on absent runtimes**: optional native integrations (e.g., `HAS_WAMR` in `wasm_vm.c`/`wasm_plugin.c`/`wasm_wasi.c`, `CSILK_HAS_NGTCP2`/`nghttp3` in HTTP/3 transport, Linux `AF_XDP` in `af_xdp.c`, optional DB drivers) must set `errno = ENOTSUP` (or OS socket errno) and return `-1` / `nullptr` when unconfigured or unavailable.
+- **No parallel duplicate subsystems**: place shared WAL file I/O helpers in `src/messaging/wal_common.h`/`.c` (reused by `workflow_wal.c`), keep both fixed and sliding rate-limiters in `src/middleware/ratelimit.c`, unify `session_store.c` local/MQ in-memory tables, unify `include/csilk/csilk.h` (with `CSILK_HAS_*` guards and `include/csilk.h` forwarding), and keep dynamic WAF rules/filtering (`csilk_waf_filter_*`) unified in `src/middleware/waf.c`.
 
 ### Per-Server Isolation, Security & Hot-Path Constraints
 
 - **Per-server isolation over global singletons**: bind mutable runtime state (sessions, WS rooms, OTLP tracer, H3/MQ/MCP state) to `csilk_server_t` or explicit handles so multiple servers in one process stay isolated and reentrant.
+- **Zero bloated static `.bss` tables**: large hash/override tables (`ip_table`/`key_table` in `ratelimit.c`, `s_test_overrides`/`s_secret_cache` in `secret.c`) must be lazily heap-allocated on first use via `csilk_once` and cleaned up on exit (`atexit`), not statically reserved in `.bss`.
 - **Input, path & SSRF validation**: reject `..` path traversal, NUL/control characters, and non-HTTP(S) URI schemes across static file serving, `.so` plugin loading (`loader.c`), and outbound HTTP drivers (`ssrf.c`).
 - **Hot-path allocation discipline**: keep request parsing, header indexing, routing, and response serialization on `c->arena` + zero-copy `csilk_str_view_t`; avoid per-request heap `malloc`/`free` churn on the hot path.
 - **Toolchain & static-analysis compliance**: new code must build cleanly under both GCC 13+ and Clang 19+ and pass `tidy` (`.clang-tidy` enforces `WarningsAsErrors: '*'`). Prefer `enum` constants over C23 `constexpr` when cross-compiler header compatibility requires it.
@@ -196,34 +197,35 @@ Router uses a segment-prefix trie. Swaps are serialized under `server->config_mu
 
 ### Key module dependency graph
 
-Web Core (11 modules, always built with `-DCSILK_BUILD_FULL=OFF`, zero SQLite3/libcurl dependencies) forms the base layer; all 11 optional domain modules (`CSILK_ENABLE_*` / `-DCSILK_BUILD_FULL=ON`) depend cleanly downward without Web Core up-references. Arrows point from dependent → dependency (`A ──→ B` = A links against B):
+Web Core (11 modules, always built with `-DCSILK_BUILD_FULL=OFF`, zero SQLite3/libcurl dependencies) forms the base layer; all 12 optional domain modules (`CSILK_ENABLE_*` / `-DCSILK_BUILD_FULL=ON`) depend cleanly downward without Web Core up-references. Arrows point from dependent → dependency (`A ──→ B` = A links against B):
 ```
 # Web Core (always built)
-app        ──→ { http, protocols, middleware, reflection } (+ optional db, ai, mq, wasm if enabled)
-middleware ──→ { http, runtime, json, tls, zlib, openssl, threads } (+ optional mq if enabled)
-protocols  ──→ { http, http2, runtime, json, reflection } (+ optional mq if enabled)
-http       ──→ { runtime, json, tls, http2, zlib, openssl, llhttp }
-http2      ──→ { runtime, tls, nghttp2 }
-tls        ──→ { runtime, openssl }
-runtime    ──→ { base, crypto, json, reflection, openssl, threads, {libuv|liburing}, yaml, m }
-reflection ──→ { base, json }
-crypto     ──→ { base, openssl, threads }
-json       ──→ yyjson
-base       ──→ { threads, {libuv|liburing}, m }
+app           ──→ { http, protocols, middleware, reflection } (+ optional db, ai, mq, wasm if enabled)
+middleware    ──→ { http, runtime, json, tls, zlib, openssl, threads } (+ optional mq if enabled)
+protocols     ──→ { http, http2, runtime, json, reflection } (+ optional mq if enabled)
+http          ──→ { runtime, json, tls, http2, zlib, openssl, llhttp }
+http2         ──→ { runtime, tls, nghttp2 }
+tls           ──→ { runtime, openssl }
+runtime       ──→ { base, crypto, json, reflection, openssl, threads, {libuv|liburing}, yaml, m }
+reflection    ──→ { base, json }
+crypto        ──→ { base, openssl, threads }
+json          ──→ yyjson
+base          ──→ { threads, {libuv|liburing}, m }
 
 # Optional Domain Modules (CSILK_ENABLE_* = OFF by default, ON via -DCSILK_BUILD_FULL=ON)
-workflow   ──→ { runtime, json, ai, mq, wasm, yaml, m }
-mcp        ──→ { protocols, http, runtime, json, ai, curl }
-grpc       ──→ { middleware, http, runtime, json }
-h3         ──→ { runtime, http, tls, ngtcp2, nghttp3, openssl }
-db         ──→ { runtime, json, sqlite3, optional mysql/pq/hiredis/mongoc }
-ai         ──→ { runtime, json, curl }
-vector     ──→ { runtime, json, curl, m }
-permission ──→ { runtime, json }
-mq         ──→ runtime
-wasm       ──→ { runtime, optional vmlib }
-bypass     ──→ runtime
-umbrella   ──→ { Web Core + all enabled CSILK_ENABLE_* modules }
+observability ──→ { app, middleware, http, runtime, json, threads } (+ optional grpc, db, ai, mq)
+workflow      ──→ { runtime, json, ai, mq, wasm, yaml, m }
+mcp           ──→ { protocols, http, runtime, json, ai, curl }
+grpc          ──→ { middleware, http, runtime, json }
+h3            ──→ { runtime, http, tls, ngtcp2, nghttp3, openssl }
+db            ──→ { runtime, json, sqlite3, optional mysql/pq/hiredis/mongoc }
+ai            ──→ { runtime, json, curl }
+vector        ──→ { runtime, json, curl, m }
+permission    ──→ { runtime, json }
+mq            ──→ runtime
+wasm          ──→ { runtime, optional vmlib }
+bypass        ──→ runtime
+umbrella      ──→ { Web Core + all enabled CSILK_ENABLE_* modules }
 ```
 
 ## Key Directories
@@ -231,13 +233,13 @@ umbrella   ──→ { Web Core + all enabled CSILK_ENABLE_* modules }
 | Path | Purpose |
 |---|---|
 | `src/core/` | HTTP server scaffolding, arena, config, ctx, router, logger, sync, IO abstractions |
-| `src/core/uring/` | io_uring event loop, connection, server, thread pool |
+| `src/core/uring/` | Optional `io_uring` event loop, connection, server, thread pool, buffer/sqpoll (`CSILK_USE_URING`) |
 | `src/core/http/` | HTTP/1.1 server, connection, TLS, router, app, swagger |
 | `src/core/primitives/` | Arena, bounded buffer, KV store, URL/query decoding, router, response |
 | `src/core/config/` | YAML config, logger, tiered secret provider (`secret.c`), lifecycle hooks, hot reload |
 | `src/core/ctx/` | Request context, async lifecycle, generation tracking |
 | `src/core/json/` | JSON engine sources (wraps yyjson) |
-| `src/core/cache/` | MVCC cache for DB-abstraction layer |
+| `src/core/cache/` | *(Optional `CSILK_ENABLE_DB`)* MVCC cache for DB-abstraction layer |
 | `src/core/plugin/` | Dynamic `.so` plugin loader (`loader.c`) + optional WASM VM & WASI sandbox (`CSILK_ENABLE_WASM`) |
 | `src/core/io/` | Optional kernel-bypass AF_XDP & `io_uring` UDP extensions, IO perf probes (`CSILK_ENABLE_BYPASS`) |
 | `src/core/server/` | Multi-worker server lifecycle, RCU router swap, driver injection, shutdown, worker pool |
@@ -247,13 +249,13 @@ umbrella   ──→ { Web Core + all enabled CSILK_ENABLE_* modules }
 | `src/drivers/ai/` | *(Optional)* OpenAI, Ollama, Anthropic LLM drivers, tool registry, AI tracing container |
 | `src/drivers/cipher/` | OpenSSL-backed AES-256-GCM, RSA-OAEP, RSA-PSS |
 | `src/drivers/vector/` | *(Optional)* HNSW SIMD vector index (AVX2 cosine/L2/dot) & Qdrant/Milvus drivers |
-| `src/middleware/` | auth, cors, csrf, jwt, ratelimit (fixed + sliding window), session, sse, metrics, otlp, waf (`csilk_waf_filter_*`), circuit-breaker, gzip, optional grpc-gateway |
+| `src/middleware/` | auth, cors, csrf, jwt, ratelimit (fixed + sliding window), session, sse, metrics, waf (`csilk_waf_filter_*`), circuit-breaker, gzip; optional `otlp_*` (`CSILK_ENABLE_OBSERVABILITY`) and `grpc_gateway` (`CSILK_ENABLE_GRPC`) |
 | `src/protocols/` | WebSocket (`websocket.c`, `ws_room.c`), HTTP/2 (`nghttp2`), Swagger/OpenAPI; optional HTTP/3 (`http3.c`, `h3.c`) and MCP (`mcp_*.c`) |
 | `src/messaging/` | *(Optional)* MQ core, pubsub, shared WAL helpers (`wal_common.h`/`.c`), raft RPC, consensus, snapshot |
 | `src/workflow/` | *(Optional)* DAG scheduler, DSL parser, ReAct loop, Agent Skills, WAL (reusing `messaging/wal_common`), trace |
-| `src/app/` | High-level app API, groups, routes, admin handlers |
+| `src/app/` | High-level app API, groups, routes; optional `admin.c` dashboard (`CSILK_ENABLE_OBSERVABILITY`) |
 | `src/reflection/` | Reflection marshal/unmarshal/free (struct binding for JSON) |
-| `src/util/` | CPU flame graph (backtrace sampling), RFC 4180 CSV parser & serializer (`csv.c`) |
+| `src/util/` | *(Optional)* CPU flame graph (`CSILK_ENABLE_OBSERVABILITY`), RFC 4180 CSV parser & serializer (`csv.c`, `CSILK_ENABLE_CSV`) |
 
 | `include/csilk/` | Public headers mirroring src/ layout (opaque handles only) |
 | `fuzz/` | libFuzzer harnesses: fuzz_test, fuzz_url, fuzz_yaml, fuzz_headers, fuzz_h2, fuzz_websocket, fuzz_raft_rpc, fuzz_mcp, fuzz_sql_rewrite + corpus + dict |
@@ -272,7 +274,7 @@ umbrella   ──→ { Web Core + all enabled CSILK_ENABLE_* modules }
 # Minimal Core-Only configure (Release, default CSILK_BUILD_FULL=OFF, zero SQLite/CURL)
 cmake -B build_core -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_SHARED=ON
 
-# Full Debug build with clang (enables all 11 optional domain modules + OOM tests)
+# Full Debug build with clang (enables all 12 optional domain modules + OOM tests)
 cmake -B build_full -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang \
   -DCSILK_BUILD_FULL=ON -DCSILK_BUILD_SHARED=ON -DENABLE_OOM_TEST=ON
 

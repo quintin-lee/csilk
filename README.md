@@ -272,6 +272,8 @@ make
 #   -DCSILK_ENABLE_BYPASS=OFF            Optional kernel-bypass UDP / AF_XDP extensions
 #   -DCSILK_ENABLE_PERM=OFF              Optional RBAC permission driver
 #   -DCSILK_ENABLE_HTTP3=OFF             Optional HTTP/3 QUIC transport (requires ngtcp2/nghttp3)
+#   -DCSILK_ENABLE_OBSERVABILITY=OFF     Optional OTLP tracing/exporter, CPU flamegraph & Admin Dashboard
+#   -DCSILK_ENABLE_CSV=OFF               Optional RFC 4180 CSV parser & serializer
 #   -DCSILK_BUILD_SHARED=ON              Build dynamic libraries in addition to static (default ON)
 #   -DCSILK_USE_URING=ON                 Use io_uring backend instead of libuv (Linux-only, default OFF)
 #   -DUSE_ASAN=ON                        Enable AddressSanitizer (default OFF)
@@ -292,7 +294,7 @@ gcovr -r build_cov --filter src/  # 69% line coverage
 
 > **Core vs Optional Module Architecture**: By default (`-DCSILK_BUILD_FULL=OFF`), csilk builds only the **Web Core** (11 targets: `base`, `json`, `crypto`, `reflection`, `runtime`, `tls`, `http2`, `http`, `protocols`, `middleware`, `app`) with zero `sqlite3` or `libcurl` dependencies. Enable all domain subsystems with `-DCSILK_BUILD_FULL=ON` or selectively via `-DCSILK_ENABLE_*`. `csilk_wasm` supports real WebAssembly execution via WAMR 2.4.4 (`-DCSILK_ENABLE_WAMR=ON`), and `csilk_h3` provides real `ngtcp2` + `nghttp3` HTTP/3 QUIC adapters (`-DCSILK_ENABLE_HTTP3=ON`); both fail closed (`ENOTSUP`/`NULL`) when their underlying runtime library is absent.
 
-csilk is decomposed into 11 always-built Web Core modules plus 11 optional domain modules (alongside the `csilk::core` compatibility alias and `csilk::csilk` umbrella), available as static (`.a`) and shared (`.so`) libraries:
+csilk is decomposed into 11 always-built Web Core modules plus 12 optional domain modules (alongside the `csilk::core` compatibility alias and `csilk::csilk` umbrella), available as static (`.a`) and shared (`.so`) libraries:
 
 | Module Target | Shared Target | Static Archive | Dynamic Library | Description |
 |:---|:---|:---|:---|:---|
@@ -300,18 +302,19 @@ csilk is decomposed into 11 always-built Web Core modules plus 11 optional domai
 | `csilk::json` | `csilk::json_shared` | `libcsilk-json.a` | `libcsilk-json.so` | *(Core)* High-performance JSON engine wrapping yyjson |
 | `csilk::crypto` | `csilk::crypto_shared` | `libcsilk-crypto.a` | `libcsilk-crypto.so` | *(Core)* Cryptographic primitives (bcrypt, TOTP, SHA-1, Base64, UUID) and OpenSSL cipher driver |
 | `csilk::reflection` | `csilk::reflection_shared` | `libcsilk-reflection.a` | `libcsilk-reflection.so` | *(Core)* C struct-to-JSON marshal/unmarshal reflection engine |
-| `csilk::runtime` (`csilk::core`) | `csilk::runtime_shared` (`csilk::core_shared`) | `libcsilk-runtime.a` | `libcsilk-runtime.so` | *(Core)* Context, query, SIMD trie router, multi-worker server, RCU hot reload, io_uring, config, secret, MVCC cache |
+| `csilk::runtime` (`csilk::core`) | `csilk::runtime_shared` (`csilk::core_shared`) | `libcsilk-runtime.a` | `libcsilk-runtime.so` | *(Core)* Context, query, SIMD trie router, multi-worker server, RCU hot reload, config, secret (and optional `io_uring`/CSV) |
 | `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | *(Core)* OpenSSL TLS 1.3 encryption engine |
 | `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | *(Core)* HTTP/2 (`nghttp2`) session and stream pool |
 | `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | *(Core)* HTTP/1.1 parser (`llhttp`), pipeline, SWAR fast paths, zero-copy response writer |
 | `csilk::protocols` | `csilk::protocols_shared` | `libcsilk-protocols.a` | `libcsilk-protocols.so` | *(Core)* WebSocket & rooms, OpenAPI 3.0 & Swagger UI |
-| `csilk::middleware` | `csilk::middleware_shared` | `libcsilk-middleware.a` | `libcsilk-middleware.so` | *(Core)* Built-in middlewares (Auth, JWT, CORS, CSRF, WAF filter, RateLimit + Sliding Window, CircuitBreaker, OTLP, Gzip, SSE, Static) |
-| `csilk::app` | `csilk::app_shared` | `libcsilk-app.a` | `libcsilk-app.so` | *(Core)* High-level `csilk_app_t` builder, route groups, and unified Admin Dashboard |
-| `csilk::h3` | `csilk::h3_shared` | `libcsilk-h3.a` | `libcsilk-h3.so` | *(Optional `-DCSILK_ENABLE_HTTP3`)* HTTP/3 QUIC (`ngtcp2`/`nghttp3`) engine & listener |
+| `csilk::middleware` | `csilk::middleware_shared` | `libcsilk-middleware.a` | `libcsilk-middleware.so` | *(Core)* Built-in middlewares (Auth, JWT, CORS, CSRF, WAF filter, RateLimit + Sliding Window, CircuitBreaker, Gzip, SSE, Static) |
+| `csilk::app` | `csilk::app_shared` | `libcsilk-app.a` | `libcsilk-app.so` | *(Core)* High-level `csilk_app_t` builder and route groups |
+| `csilk::observability` | `csilk::observability_shared` | `libcsilk-observability.a` | `libcsilk-observability.so` | *(Optional `-DCSILK_ENABLE_OBSERVABILITY`)* OpenTelemetry W3C tracing & OTLP exporter, CPU flamegraph, Admin Dashboard |
+| `csilk::h3` | `csilk::h3_shared` | `libcsilk-h3.a` | `libcsilk-h3.so` | *(Optional `-DCSILK_ENABLE_HTTP3`)* HTTP/3 QUIC (`ngtcp2`/`nghttp3`) transport engine |
 | `csilk::mcp` | `csilk::mcp_shared` | `libcsilk-mcp.a` | `libcsilk-mcp.so` | *(Optional `-DCSILK_ENABLE_MCP`)* Model Context Protocol (JSON-RPC, stdio pool, SSE/WS adapters) |
 | `csilk::grpc` | `csilk::grpc_shared` | `libcsilk-grpc.a` | `libcsilk-grpc.so` | *(Optional `-DCSILK_ENABLE_GRPC`)* gRPC framing & HTTP/JSON transcoding gateway |
 | `csilk::permission` | `csilk::permission_shared` | `libcsilk-permission.a` | `libcsilk-permission.so` | *(Optional `-DCSILK_ENABLE_PERM`)* Pluggable RBAC permission engine |
-| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | *(Optional `-DCSILK_ENABLE_DB`)* Database abstraction, SQLite/MySQL/PG/Redis/MongoDB, prepared statements, savepoints, migrations |
+| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | *(Optional `-DCSILK_ENABLE_DB`)* Database abstraction, SQLite/MySQL/PG/Redis/MongoDB, MVCC cache, prepared statements, savepoints, migrations |
 | `csilk::vector` | `csilk::vector_shared` | `libcsilk-vector.a` | `libcsilk-vector.so` | *(Optional `-DCSILK_ENABLE_VECTOR`)* Embedded AVX2 SIMD HNSW vector index and Milvus/Qdrant drivers |
 | `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | *(Optional `-DCSILK_ENABLE_AI`)* LLM client drivers (OpenAI, Ollama, Anthropic), tool registry, AI tracing |
 | `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | *(Optional `-DCSILK_ENABLE_MQ`)* Internal event bus, PubSub, WAL persistence, Raft consensus |
