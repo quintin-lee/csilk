@@ -54,30 +54,6 @@ class AI:
     def __del__(self):
         self.free()
 
-    @classmethod
-    def llama(cls, model_path: str = None, n_threads: int = 0, n_ctx: int = 0):
-        """Create an embedded llama.cpp AI provider instance.
-
-        Args:
-            model_path: Path to the GGUF model file (or None for simulated mode).
-            n_threads: Number of CPU inference threads (0 = default).
-            n_ctx: Context window size in tokens (0 = default).
-        """
-        inst = cls.__new__(cls)
-        inst._lib = get_bindings()
-        c_path = model_path.encode('utf-8') if model_path else None
-        inst._ai = inst._lib.csilk_ai_new_llama(c_path, n_threads, n_ctx)
-        if not inst._ai:
-            raise RuntimeError(f"Failed to create embedded llama AI instance for '{model_path}'")
-        inst._stream_callbacks = []
-        return inst
-
-    @staticmethod
-    def llama_is_available() -> bool:
-        """Return True if native libllama was loaded and is active."""
-        lib = get_bindings()
-        return bool(lib.csilk_ai_llama_is_available())
-
     @staticmethod
     def get_stats() -> dict:
         """Return global AI engine statistics.

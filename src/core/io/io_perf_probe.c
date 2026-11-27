@@ -27,10 +27,6 @@
 #include "csilk/app/app.h"
 #include "csilk/core/sys_io.h"
 
-#ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
-#define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
-#endif
-
 /**
  * @brief Check if the kernel supports AF_XDP (XSK) sockets.
  *

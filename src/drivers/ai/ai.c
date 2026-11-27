@@ -58,8 +58,6 @@ static size_t                   g_driver_count = 0;
 extern void csilk_ai_openai_init_driver(void);
 extern void csilk_ai_ollama_init_driver(void);
 extern void csilk_ai_anthropic_init_driver(void);
-extern void csilk_ai_llama_init_driver(void);
-extern void _csilk_llama_set_params(void* state_ptr, int n_threads, int n_ctx);
 
 /* Weak fallback when csilk_http (websocket) is not linked */
 #if defined(__GNUC__) || defined(__clang__)
@@ -343,11 +341,10 @@ ai_ensure_default_drivers(void)
         return;
     }
     in_init = 1;
-    CSILK_LOG_D("Lazy-initializing default AI drivers (OpenAI, Ollama, Anthropic, Llama)...");
+    CSILK_LOG_D("Lazy-initializing default AI drivers (OpenAI, Ollama, Anthropic)...");
     csilk_ai_openai_init_driver();
     csilk_ai_ollama_init_driver();
     csilk_ai_anthropic_init_driver();
-    csilk_ai_llama_init_driver();
     in_init = 0;
     initialized = 1;
 }
@@ -437,19 +434,6 @@ csilk_ai_new(const char* driver_name, const char* api_key, const char* base_url)
     CSILK_LOG_I("AI instance successfully created using driver '%s' (base_url: %s)",
                 driver_name,
                 base_url ? base_url : "default");
-    return ai;
-}
-
-csilk_ai_t*
-csilk_ai_new_llama(const char* model_path, int n_threads, int n_ctx)
-{
-    csilk_ai_t* ai = csilk_ai_new("llama", NULL, model_path);
-    if (!ai) {
-        return NULL;
-    }
-    if (n_threads > 0 || n_ctx > 0) {
-        _csilk_llama_set_params(ai->driver_state, n_threads, n_ctx);
-    }
     return ai;
 }
 

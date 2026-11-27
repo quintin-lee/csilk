@@ -23,7 +23,7 @@ test_wasm_vm_parsing_and_exec(void)
     config.fuel_limit = 500000;
 
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load_file(dummy_wasm, &config);
-#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+#ifndef HAS_WAMR
     assert(plugin == nullptr);
     assert(errno == ENOTSUP);
     remove(dummy_wasm);

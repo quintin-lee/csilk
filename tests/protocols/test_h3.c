@@ -171,15 +171,6 @@ test_h3_alt_svc_and_listener_edge_cases(void)
     uint8_t  pkt[16] = {0xC0, 1, 2, 3, 4, 5, 6, 7, 8};
     assert(csilk_h3_listener_process_packet(nullptr, pkt, 16, &conn_id) == -1);
 
-#if CSILK_ENABLE_EXPERIMENTAL_STUBS
-    csilk_h3_listener_t* l = csilk_h3_listener_bind(9443);
-    assert(l != nullptr);
-    assert(csilk_h3_listener_process_packet(l, nullptr, 16, &conn_id) == -1);
-    assert(csilk_h3_listener_process_packet(l, pkt, 5, &conn_id) == -1); /* too short */
-    assert(csilk_h3_listener_process_packet(l, pkt, 16, nullptr) == -1);
-    csilk_h3_listener_close(l);
-#endif
-
     printf("test_h3_alt_svc_and_listener_edge_cases: PASS\n");
 }
 
@@ -230,28 +221,12 @@ test_h3_alt_svc_header()
 static void
 test_h3_listener()
 {
-    printf("Testing HTTP/3 UDP Socket Listener & Connection ID extraction...\n");
+    printf("Testing HTTP/3 UDP Socket Listener (fail-closed)...\n");
 
     csilk_h3_listener_t* listener = csilk_h3_listener_bind(4433);
-#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
     assert(listener == NULL);
     assert(errno == ENOTSUP);
     printf("test_h3_listener (fail-closed): PASS\n");
-    return;
-#else
-    assert(listener != NULL);
-
-    /* Construct mock QUIC packet header with 64-bit Connection ID: 0x1122334455667788 */
-    uint8_t  pkt[12] = {0xC0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x00, 0x00, 0x00};
-    uint64_t conn_id = 0;
-
-    int res = csilk_h3_listener_process_packet(listener, pkt, sizeof(pkt), &conn_id);
-    assert(res == 0);
-    assert(conn_id == 0x1122334455667788ULL);
-
-    csilk_h3_listener_close(listener);
-    printf("test_h3_listener: PASS\n");
-#endif
 }
 
 static void

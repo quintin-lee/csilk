@@ -32,14 +32,7 @@ static const uint8_t minimal_wasm[] = {
     0x02, 0x01, 0x00, 0x05, 0x03, 0x01, 0x00, 0x01, 0x07, 0x0e, 0x01, 0x0a, 0x6f, 0x6e, 0x5f,
     0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x00, 0x00, 0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b};
 
-/*
- * These tests only run when the WASM load path is active:
- * - CSILK_ENABLE_EXPERIMENTAL_STUBS=ON (stub path), or
- * - HAS_WAMR defined (WAMR real execution path)
- * When neither is active (stubs OFF + no WAMR), the load is fail-closed by
- * design and the tests are skipped.
- */
-#if CSILK_ENABLE_EXPERIMENTAL_STUBS || defined(HAS_WAMR)
+#ifdef HAS_WAMR
 #define WASM_LOAD_ACTIVE 1
 #else
 #define WASM_LOAD_ACTIVE 0

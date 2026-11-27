@@ -19,7 +19,7 @@ main(void)
 
     static const uint8_t dummy_wasm[] = {0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00};
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load(dummy_wasm, sizeof(dummy_wasm));
-#if CSILK_ENABLE_EXPERIMENTAL_STUBS || defined(HAS_WAMR)
+#ifdef HAS_WAMR
     assert(plugin != NULL);
     int rc = csilk_app_use_wasm(app, plugin, "on_request");
     assert(rc == 0);

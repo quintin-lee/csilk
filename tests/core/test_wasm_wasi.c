@@ -23,7 +23,7 @@ test_wasm_wasi_and_host_functions(void)
     fclose(f);
 
     csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load_file(dummy_wasm, nullptr);
-#if !CSILK_ENABLE_EXPERIMENTAL_STUBS
+#ifndef HAS_WAMR
     assert(plugin == nullptr);
     assert(errno == ENOTSUP);
     remove(dummy_wasm);

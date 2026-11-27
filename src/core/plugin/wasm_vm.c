@@ -22,10 +22,6 @@
 #include "wasm_export.h"
 #endif
 
-#ifndef CSILK_ENABLE_EXPERIMENTAL_STUBS
-#define CSILK_ENABLE_EXPERIMENTAL_STUBS 1
-#endif
-
 /**
  * @brief Resolve a slice of plugin linear memory.
  * @param[in] mem    Plugin memory descriptor.
@@ -62,8 +58,8 @@ csilk_wasm_get_memory_slice(csilk_wasm_memory_t* mem, uint32_t offset, uint32_t 
 csilk_wasm_plugin_t*
 csilk_wasm_plugin_load_file(const char* filepath, const csilk_wasm_config_t* config)
 {
-#if !CSILK_ENABLE_EXPERIMENTAL_STUBS && !defined(HAS_WAMR)
-    /* No WAMR and no stubs: fail-closed. */
+#ifndef HAS_WAMR
+    /* WAMR runtime not enabled: fail-closed. */
     (void)filepath;
     (void)config;
     errno = ENOTSUP;
