@@ -1,6 +1,6 @@
 # csilk Security Vulnerability Analysis Report
 
-**Date**: 2026-08-25
+**Date**: 2026-08-25 (Re-verified: 2026-11-27 for v1.2.0)
 **Scope**: Full source code audit across cryptographic, memory safety, input validation, and concurrency subsystems
 **Method**: Static analysis of 40+ source files across 6 vulnerability categories
 **Severity Distribution**: 1 Critical, 7 High, 9 Medium, 5 Low, 11 Informational
@@ -13,28 +13,28 @@
 |:--------:|:-----:|---|
 | **CRITICAL** | 1 | ~~JWT signature OOB read~~ ✅ **Fixed** |
 | **HIGH** | 7 | ~~Zero-salt bcrypt~~ ✅ **Fixed**, ~~predictable CSRF tokens~~ ✅ **Fixed**, ~~weak nonce fallback~~ ✅ **Fixed**, ~~Redis injection~~ ✅ **Fixed**, ~~SQL injection (prepared stmts added)~~ ✅ **Mitigated**, ~~WebSocket key truncation~~ ✅ **Fixed**, ~~static path traversal~~ ✅ **Fixed** |
-| **MEDIUM** | 9 | ~~Rate-limit saturation~~ ✅ **Fixed**, session fixation, ~~CORS credential leak~~ ✅ **Fixed**, ~~gzip expansion / bounds~~ ✅ **Fixed**, ~~hot-reload temp file TOCTOU~~ ✅ **Fixed** |
-| **LOW** | 5 | Timing comparison fragility, unencrypted key material |
-| **INFO** | 11 | Architectural observations (~~I1 DB pool timeout~~ ✅ **Fixed**) |
+| **MEDIUM** | 9 | ~~Rate-limit saturation~~ ✅ **Fixed**, session binding (open), ~~session value lifetime APIs~~ ✅ **Mitigated**, ~~CORS credential leak~~ ✅ **Fixed**, ~~gzip expansion / bounds~~ ✅ **Fixed**, ~~URL invalid `%XX` escaping~~ ✅ **Fixed**, config validation (⚠️ partial), reflection mass assignment (open), ~~hot-reload temp file TOCTOU~~ ✅ **Fixed** |
+| **LOW** | 5 | `constant_time_compare` vs `CRYPTO_memcmp`, key buffer cleansing, ~~JWT unknown alg label~~ ✅ **Fixed**, HMAC NULL acceptance, ~~nonce fallback~~ ✅ **Fixed** |
+| **INFO** | 11 | ~~I1 DB pool timeout~~, ~~I2 streaming body limit~~, ~~I3 CRLF sanitization~~, ~~I7 `volatile` removal~~, ~~I10 RCU swap order~~, ~~I11 `g_dist_mutex`~~ ✅ **Fixed**; ~~I6/I9~~ 📝 **Verified Safe / By Design**; ~~I8 admin auth~~ ⚠️ **Partial**; I4/I5 open |
 
 > **Update 2026-11-16**: Several findings have been fixed in the current codebase:
 > C1 (JWT OOB), H1 (bcrypt zero salt), H2 (CSRF PRNG), H4 (Redis format-string), M1 (ratelimit saturation).
 >
 > **Update 2026-11-21**: Additional findings verified fixed in v1.1.1:
 > H3 (nonce entropy failure now calls `abort()`), H5 (native prepared statements `csilk_stmt_prepare`/`csilk_stmt_bind_*` and `csilk_sql_rewrite_placeholders` added), H6 (WebSocket `WS_MAX_KEY_LEN` tightened to 128 with compile-time non-truncating buffer), H7 (static file `contains_path_traversal` fixed + `realpath()` canonical prefix check + `S_ISREG`), M4 (CORS wildcard origin rejected with `allow_credentials` in both single-origin and multi-origin list modes), M5 (gzip compression skips non-shrinking output and bounds `UINT_MAX`), M9 (hot-reload writes directly via `mkstemp` + `fdopen` + `fchmod(0700)` without close/reopen TOCTOU), and I1 (`csilk_db_pool_acquire_timeout` added).
+>
+> **Update 2026-11-27 (v1.2.0 re-verification)**: Synchronized remaining statuses with `master`:
+> M3 mitigated via `csilk_session_set_ex()` / `csilk_session_set_len()`, M6 fixed via `%25` normalization in `url.c`, M7 partially mitigated via `csilk_config_validate()`, L3 fixed (`"unknown algorithm"`), L5 deduplicated with H3 (`abort()`), I2 fixed in `http1_parse.c:on_body()`, I3 fixed in `header_map.c` / `response.c` (CWE-113), I6/I9/I10 verified safe or fixed in `lfqueue.h` / `server_shutdown.c` / `server_rcu.c`, I7 obsolete (no remaining `volatile` indices), I8 partially mitigated via mandatory auth in `csilk_admin_serve_secure()`, and I11 fixed with `g_dist_mutex`.
 
 ---
 
 ## CRITICAL — Must Fix Immediately
 
 ### C1. JWT HS256 Signature Verification — Out-of-Bounds Read  ✅ **FIXED**
-**File**: `src/middleware/jwt.c:347-363` (line numbers updated post-fix)
+**File**: `src/middleware/jwt.c:342-358` (line numbers updated post-fix)
 **Impact**: Authentication bypass or stack memory disclosure
 
-> **Status**: Fixed. The current code uses `CRYPTO_memcmp` with a fixed-length comparison
-> (`expected_len`), computing `len_mismatch` before the comparison to prevent
-> timing side-channels. The `explicit_bzero(sig_actual, ...)` call ensures the
-> HMAC buffer is wiped. See `jwt.c:342-379`.
+> **Status**: Fixed. `jwt.c:352-358` now bounds signature length with `strnlen(sig_ptr, 45)`, copies up to 44 bytes into a zero-initialized `uint8_t sig_actual_b64[45]`, evaluates `(sig_len == 43) & (constant_time_compare(sig_actual_b64, (const uint8_t*)sig_expected_b64, 44) == 0)` without short-circuit branching, and wipes `sig_actual` via `explicit_bzero()`. See L1 regarding replacing `constant_time_compare()` with `CRYPTO_memcmp()`.
 
 ```c
 char sig_expected_b64[45];                    // 45-byte stack buffer
@@ -229,17 +229,17 @@ Session cookies are valid from any IP/User-Agent. A stolen session cookie provid
 
 **Fix**: Add optional client binding via config flag `CSILK_SESSION_BIND_CLIENT`.
 
-### M3. Session Value Lifetime Not Managed
-**File**: `src/middleware/session.c:363-367`
+### M3. Session Value Lifetime Not Managed  ✅ **MITIGATED**
+**File**: `src/middleware/session.c:677-715`
 **Impact**: Use-after-free via dangling pointers
 
+> **Status**: Mitigated. `csilk_session_set_ex()` (custom cleanup destructor) and `csilk_session_set_len()` (bounded value copy + destructor) are now available for safe lifetime management; `csilk_session_set()` remains a zero-length raw-pointer convenience wrapper.
+
 ```c
-csilk_session_set(c, key, value_ptr);  // stores raw void*
+csilk_session_set(c, key, value_ptr);  // stores raw void* (no destructor)
 ```
 
-Callers may free memory while the session is still active.
-
-**Fix**: Require cleanup callback or deep-copy values.
+**Recommendation**: Prefer `csilk_session_set_ex()` or `csilk_session_set_len()` for heap/owned values.
 
 ### M4. CORS Wildcard Origin with Credentials  ✅ **FIXED**
 **File**: `src/middleware/cors.c:68-95`
@@ -261,24 +261,28 @@ When `AllowCredentials` is enabled, wildcard `*` origin violates RFC 6454 and al
 
 **Fix**: Enforce compression ratio limit (e.g., max 10:1 expansion).
 
-### M6. URL Decode — Invalid Sequences Passed Through
-**File**: `src/core/primitives/url.c`
+### M6. URL Decode — Invalid Sequences Passed Through  ✅ **FIXED**
+**File**: `src/core/primitives/url.c:44-90`
 **Impact**: Encoding evasion of WAF rules
+
+> **Status**: Fixed. `csilk_url_decode()` now normalizes invalid `%` sequences by escaping `'%'` as `"%25"` (CWE-116 / RFC 3986 §2.1) so downstream WAF checks operate on canonicalized output.
 
 Invalid `%XX` sequences are passed through unchanged instead of being rejected or replaced.
 
 **Fix**: Reject or normalize invalid percent-encoding.
 
-### M7. Config Validation Gaps
-**File**: `src/core/config/config.c`
+### M7. Config Validation Gaps  ⚠️ **PARTIALLY MITIGATED**
+**File**: `src/core/config/config.c:120-325, 512-620`
 **Impact**: Misconfiguration leading to security issues
 
-- `atoi()`/`atoll()` used without range checks on port values
-- Negative timeouts accepted
+> **Status**: Partially mitigated. `csilk_config_validate()` (`config.c:512-620`) validates `port`/`http3_port` in `[1, 65535]`, non-negative `idle_timeout_ms` and `max_connections`, positive body/header/backlog/worker bounds, and TLS certificate paths. Remaining gaps in the YAML parser: `atoi()`/`atoll()` without `strtol` overflow checks, missing `base_url` validation, and unbounded YAML nesting depth.
+
+- `atoi()`/`atoll()` used without range checks on port values during parse (`validated post-parse`)
+- Remaining timeouts (`read_timeout_ms`, `write_timeout_ms`, `request_timeout_ms`) not checked in `csilk_config_validate()`
 - `base_url` not validated for protocol or path traversal
 - YAML depth unbounded
 
-**Fix**: Add validation layer with explicit ranges.
+**Fix**: Switch YAML integer parsing to bounded `strtol()`/`strtoll()` and validate `base_url`, remaining timeouts, and nesting depth.
 
 ### M8. Mass Assignment via Reflection
 **File**: `src/reflection/reflect_marshal.c`
@@ -309,45 +313,47 @@ Between `mkstemp()` and `unlink()`, another process could create a file with the
 ## LOW — Documentation/Minor Fixes
 
 ### L1. `constant_time_compare` Implementation Fragile
-**File**: `src/middleware/jwt.c:52-60`
+**File**: `src/middleware/jwt.c:62-69, 358`
 ```c
 volatile uint8_t diff = 0;  // compiler may still optimize
 ```
-Use OpenSSL's `CRYPTO_memcmp()` consistently.
+Use OpenSSL's `CRYPTO_memcmp()` consistently (replacing `constant_time_compare()`).
 
 ### L2. RSA Private Keys Not Zeroed
 **File**: `src/drivers/cipher/openssl.c`
-Private key material not explicitly zeroed before free.
+Symmetric decryption cleanses plaintext (`OPENSSL_cleanse()` at line 182), while PEM/key material buffers are not consistently wiped before `free()`.
 
-### L3. JWT Algorithm Default Case
-**File**: `src/middleware/jwt.c:21-30`
-Unknown algorithm enum returns `HS256` string, silently degrading.
+### L3. JWT Algorithm Default Case  ✅ **FIXED**
+**File**: `src/middleware/jwt.c:27-39`
+
+> **Status**: Fixed. `jwt_alg_str()` now returns `"unknown algorithm"` in the `default:` case instead of degrading to `"HS256"`.
 
 ### L4. HMAC Accepts NULL Key/Data
-**File**: `src/crypto/crypto.c`
+**File**: `src/crypto/crypto.c:88-98`
 NULL key → empty string; NULL data → empty string. No validation.
 
-### L5. Nonce Predictable After Reboot
-**File**: `src/crypto/crypto.c:290-300`
-Deterministic counter-based nonce if CSPRNG unavailable.
+### L5. Nonce Predictable After Reboot  ✅ **FIXED** (covered by H3)
+**File**: `src/crypto/crypto.c:289-297`
+
+> **Status**: Fixed alongside H3. `csilk_crypto_generate_nonce()` calls `abort()` when CSPRNG sources fail; the deterministic counter fallback has been removed.
 
 ---
 
 ## INFORMATIONAL — Architectural Observations
 
-| ID | Observation | Impact |
+| ID | Observation | Impact / Current Status (v1.2.0) |
 |---|---|---|
 | I1 | ~~No connection pool timeout~~ ✅ **Fixed** (`csilk_db_pool_acquire_timeout` added); DB drivers remain synchronous C clients | Long queries should be offloaded if needed |
-| I2 | No request body size enforcement during streaming (only checked after parse) | Slow-loris DoS possible |
-| I3 | No CRLF validation on HTTP headers | Potential response splitting |
-| I4 | WAF pattern matching is case-insensitive but doesn't handle percent-encoding | Encoding evasion possible |
-| I5 | AI driver `base_url` has no allowlist/blocklist | SSRF to internal services |
-| I6 | Lock-free queue uses `memory_order_relaxed` for some operations | Potential ordering issues on ARM |
-| I7 | `volatile` used for mutex-protected indices in thread pool | Misleading; mutex already provides synchronization |
-| I8 | No rate limiting on admin endpoints | Admin panel accessible without throttling |
-| I9 | Server shutdown doesn't synchronize active_clients iteration | TOCTOU on client list during drain |
-| I10 | RCU epoch advancement happens before publication | Race window for stale router access |
-| I11 | Global distributed workflow registry unprotected | Concurrent registration race |
+| I2 | ~~No request body size enforcement during streaming~~ ✅ **Fixed** (`http1_parse.c:on_body()` enforces `max_body_size` incrementally and returns `HPE_USER`) | Slow-loris / oversized body capped mid-stream |
+| I3 | ~~No CRLF validation on HTTP headers~~ ✅ **Fixed** (`header_map.c:506-528` & `response.c:135` strip CR/LF, CWE-113) | Response splitting prevented |
+| I4 | WAF pattern matching (`waf.c`) is case-insensitive with scan budgets (`256 KB` body / `64 KB` value) and inspects `url.c`-canonicalized `%25`/decoded input, but does not perform extra multi-round unescaping | Double-encoding evasion remains policy/caller scope |
+| I5 | `ssrf.c` provides `csilk_security_url_is_ssrf_safe()`, not yet wired into AI driver `base_url` validation | SSRF risk if AI endpoints come from untrusted config |
+| I6 | 📝 **Verified Safe**: `lfqueue.h` `relaxed` store on producer `next` precedes `acq_rel` head exchange and `release` `prev->next` link, paired with `acquire` loads on consumer (Vyukov MPSC) | Ordering is sound on ARM/x86 |
+| I7 | ~~`volatile` used for mutex-protected indices in thread pool~~ ✅ **Fixed / Obsolete** | No `volatile` index fields remain in `src/core/` |
+| I8 | ⚠️ **Partially Mitigated**: `csilk_admin_serve()` fails closed and `csilk_admin_serve_secure()` (`admin.c:478-501`) requires non-NULL `auth_middleware` | Auth enforced; rate limiting remains caller opt-in |
+| I9 | 📝 **By Design**: `close_active_clients()` (`server_shutdown.c:40-92`) traverses `wp->active_clients` strictly on the owning worker event loop | Thread-confined; no cross-thread lock needed |
+| I10 | ~~RCU epoch advancement happens before publication~~ ✅ **Fixed / Verified Safe** (`server_rcu.c:467-470` swaps `server->router` before advancing `global_epoch`, paired with `seq_cst` reader acquire fence) | No stale router race window |
+| I11 | ~~Global distributed workflow registry unprotected~~ ✅ **Fixed** (`wf_distributed.c:18-186` guarded by `g_dist_mutex`) | Thread-safe registration/lookup |
 
 ---
 
@@ -355,26 +361,27 @@ Deterministic counter-based nonce if CSPRNG unavailable.
 
 | Priority | Issues | Effort | Timeline |
 |---|---|---|---|
-| **P0** | ~~C1 (JWT OOB)~~ ✅ Fixed | — | — |
+| **P0** | ~~C1 (JWT OOB)~~ ✅ Fixed | — | Completed |
 | **P1** | ~~H1, H2, H3, H4, H6, H7~~ ✅ Fixed, ~~H5~~ ✅ Mitigated (prepared statements + doc warning) | — | Completed |
-| **P2** | ~~M1, M4, M5, M9, I1~~ ✅ Fixed | — | Completed |
-| **P3** | M2, M3, M6-M8 (session binding/lifetime, URL decode policy, config/reflection allowlists) | 8h | Q4 roadmap |
-| **P4** | L1-L5, I2-I11 (Hardening, docs) | 16h | Ongoing |
+| **P2** | ~~M1, M4, M5, M6, M9, I1, I2, I3, I7, I10, I11~~ ✅ Fixed, ~~M3~~ ✅ Mitigated | — | Completed |
+| **P3** | M2, M7 (YAML `strtol`/depth/remaining timeouts), M8 (session binding, config parsing, reflection allowlists) | 6h | Next release |
+| **P4** | L1, L2, L4, I4, I5, I8 (Hardening, docs) | 12h | Ongoing |
 
 ---
 
 ## Verification Commands
 
 ```bash
-# Run ASAN to detect memory safety issues
-ASAN_OPTIONS="detect_leaks=1:abort_on_error=1" \
-ctest --test-dir build -E test_integration --timeout 30
+# Run ASAN to detect memory safety issues (Full build)
+ASAN_OPTIONS="detect_leaks=1:symbolize=1:abort_on_error=1" \
+LSAN_OPTIONS="suppressions=$PWD/cmake/.lsan-suppressions" \
+ctest --test-dir build_full --timeout 180 --output-on-failure
 
 # Run TSAN to detect race conditions
-TSAN_OPTIONS="halt_on_error=1" \
-ctest --test-dir build -E test_integration --timeout 30
+TSAN_OPTIONS="halt_on_error=1:suppressions=$PWD/cmake/.tsan-suppressions" \
+ctest --test-dir build_tsan -E test_integration --timeout 180 --output-on-failure
 
-# Fuzz test coverage
-./fuzz_test -max_total_time=120 fuzz/corpus/fuzz_test
-./fuzz_url -max_total_time=60 fuzz/corpus/fuzz_url
+# Fuzz test coverage (configure with -DCMAKE_C_COMPILER=clang -DCSILK_BUILD_FULL=ON -DUSE_ASAN=ON -DUSE_FUZZER=ON)
+./build_fuzz/fuzz_test -max_total_time=120 -dict=fuzz/fuzz.dict fuzz/corpus/fuzz_test
+./build_fuzz/fuzz_url -max_total_time=60 -dict=fuzz/fuzz.dict fuzz/corpus/fuzz_url
 ```
