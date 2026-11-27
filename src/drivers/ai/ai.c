@@ -36,6 +36,7 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
+#include "../../core/internal/obs_registry.h"
 #include "../../core/internal/srv_impl.h"
 
 /* --- Global AI Metrics --- */
@@ -319,6 +320,68 @@ csilk_ai_unregister_monitor(void* c)
     csilk_mutex_unlock(&g_ai_monitor_mutex);
 }
 
+static void
+ai_metrics_collect(csilk_ctx_t* c, csilk_metrics_emit_fn emit, void* writer)
+{
+    (void)c;
+    csilk_ai_stats_t ai = {0};
+    csilk_ai_get_stats(&ai);
+    if (ai.requests_total > 0) {
+        emit(writer, "csilk_ai_requests_total %llu\n", (unsigned long long)ai.requests_total);
+        emit(writer, "csilk_ai_tokens_total %llu\n", (unsigned long long)ai.tokens_total);
+        emit(writer, "csilk_ai_errors_total %llu\n", (unsigned long long)ai.errors_total);
+    }
+}
+
+static csilk_json_t*
+ai_admin_stats(csilk_ctx_t* c)
+{
+    (void)c;
+    csilk_ai_stats_t ai_stats = {0};
+    csilk_ai_get_stats(&ai_stats);
+    csilk_json_t* ai = csilk_json_object();
+    if (!ai) {
+        return NULL;
+    }
+    csilk_json_add_number(ai, "requests", (double)ai_stats.requests_total);
+    csilk_json_add_number(ai, "tokens", (double)ai_stats.tokens_total);
+    csilk_json_add_number(ai, "errors", (double)ai_stats.errors_total);
+    csilk_json_add_number(ai,
+                          "avg_duration",
+                          ai_stats.requests_total > 0 ? (double)ai_stats.duration_us_total /
+                                                            ai_stats.requests_total / 1000.0
+                                                      : 0);
+    return ai;
+}
+
+static void
+ai_admin_monitor_open(csilk_ctx_t* c)
+{
+    csilk_ai_register_monitor(c);
+}
+
+static void
+ai_admin_monitor_close(csilk_ctx_t* c)
+{
+    csilk_ai_unregister_monitor(c);
+}
+
+static void
+ai_register_observability(void)
+{
+    _csilk_metrics_register_collector("ai", ai_metrics_collect);
+    _csilk_admin_register_stats("ai", ai_admin_stats);
+    _csilk_admin_register_monitor("ai", ai_admin_monitor_open, ai_admin_monitor_close);
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((constructor)) static void
+_csilk_ai_obs_ctor(void)
+{
+    ai_register_observability();
+}
+#endif
+
 /** @brief Global registry of AI driver implementations.
  *  Populated once during the first csilk_ai_new() call via lazy init of
  *  the built-in drivers (OpenAI, Ollama). Not thread-safe for concurrent
@@ -343,6 +406,7 @@ ai_ensure_default_drivers(void)
         return;
     }
     in_init = 1;
+    ai_register_observability();
     CSILK_LOG_D("Lazy-initializing default AI drivers (OpenAI, Ollama, Anthropic)...");
     csilk_ai_openai_init_driver();
     csilk_ai_ollama_init_driver();

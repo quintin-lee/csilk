@@ -22,9 +22,43 @@
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 #include "csilk/util/flamegraph.h"
+#ifdef CSILK_HAS_DB
+#include "csilk/drivers/db.h"
+#endif
+#ifdef CSILK_HAS_AI
+#include "csilk/drivers/ai.h"
+#endif
 
 static int tests_run = 0;
 static int tests_passed = 0;
+
+#ifdef CSILK_HAS_AI
+static void*
+admin_mock_ai_init(const char* api_key, const char* base_url)
+{
+    (void)api_key;
+    (void)base_url;
+    return (void*)0x1;
+}
+
+static int
+admin_mock_ai_chat(void* state, const csilk_ai_chat_request_t* req, csilk_ai_chat_response_t* res)
+{
+    (void)state;
+    (void)req;
+    res->content = strdup("ok");
+    res->prompt_tokens = 2;
+    res->completion_tokens = 3;
+    res->total_tokens = 5;
+    return 0;
+}
+
+static void
+admin_mock_ai_free(void* state)
+{
+    (void)state;
+}
+#endif
 
 #define PASS() (tests_run++, tests_passed++)
 #define FAIL(msg)                                                                                  \
@@ -152,8 +186,17 @@ test_admin_serve_secure_and_stats_endpoint(void)
         size_t        body_len = 0;
         const char*   body = csilk_get_response_body(c, &body_len);
         csilk_json_t* js = body ? csilk_json_parse_len(body, body_len) : nullptr;
-        if (js && csilk_json_get(js, "total_requests") && csilk_json_get(js, "mq") &&
-            csilk_json_get(js, "ai")) {
+        csilk_json_t* mq_js = js ? csilk_json_get(js, "mq") : nullptr;
+        csilk_json_t* ai_js = js ? csilk_json_get(js, "ai") : nullptr;
+        csilk_json_t* db_js = js ? csilk_json_get(js, "db") : nullptr;
+        if (js && csilk_json_get(js, "total_requests") && mq_js &&
+            csilk_json_get(mq_js, "published") && csilk_json_get(mq_js, "delivered") &&
+            csilk_json_get(mq_js, "depth") && ai_js && csilk_json_get(ai_js, "requests") &&
+            csilk_json_get(ai_js, "tokens") && csilk_json_get(ai_js, "errors") &&
+            csilk_json_get(ai_js, "avg_duration") && db_js && csilk_json_get(db_js, "queries") &&
+            csilk_json_get(db_js, "execs") && csilk_json_get(db_js, "errors") &&
+            csilk_json_get(db_js, "avg_duration") && csilk_json_get(js, "sys") &&
+            csilk_json_get(js, "security") && csilk_json_get(js, "process")) {
             PASS();
         } else {
             FAIL("admin /stats response missing expected JSON fields");
@@ -164,6 +207,74 @@ test_admin_serve_secure_and_stats_endpoint(void)
     } else {
         FAIL("admin /stats route did not execute or return 200");
     }
+    free_ctx(c);
+    csilk_app_free(app);
+}
+
+static void
+test_admin_stats_reflects_optional_subsystems(void)
+{
+#ifdef CSILK_HAS_DB
+    csilk_db_init();
+    csilk_db_pool_t* pool = csilk_db_pool_new("sqlite", ":memory:");
+    assert(pool != nullptr);
+    assert(csilk_db_exec(pool, "CREATE TABLE admin_t (id INTEGER);") == 0);
+    csilk_db_pool_free(pool);
+#endif
+
+#ifdef CSILK_HAS_AI
+    static const csilk_ai_driver_t mock_driver = {
+        .name = "admin_mock",
+        .init = admin_mock_ai_init,
+        .chat = admin_mock_ai_chat,
+        .embeddings = nullptr,
+        .free = admin_mock_ai_free,
+    };
+    csilk_ai_register_driver(&mock_driver);
+    csilk_ai_t* ai = csilk_ai_new("admin_mock", "k", nullptr);
+    assert(ai != nullptr);
+    csilk_ai_chat_request_t  req = {.model = "m", .user = "hi"};
+    csilk_ai_chat_response_t res = {0};
+    assert(csilk_ai_chat(ai, &req, &res) == 0);
+    csilk_ai_chat_response_free(&res);
+    csilk_ai_free(ai);
+#endif
+
+    csilk_app_t* app = csilk_app_new(nullptr);
+    csilk_admin_serve_secure(app, "/admin", dummy_admin_auth_mw);
+
+    csilk_ctx_t* c = make_ctx();
+    csilk_test_ctx_set_request(c, "GET", "/admin/stats");
+    int matched = csilk_router_match_ctx(csilk_app_router(app), c);
+    assert(matched == 1);
+    csilk_next(c);
+    assert(csilk_get_status(c) == 200);
+
+    size_t        body_len = 0;
+    const char*   body = csilk_get_response_body(c, &body_len);
+    csilk_json_t* js = body ? csilk_json_parse_len(body, body_len) : nullptr;
+    assert(js != nullptr);
+
+    int ok = 1;
+#ifdef CSILK_HAS_DB
+    csilk_json_t* db_js = csilk_json_get(js, "db");
+    if (!db_js || csilk_json_get_number(db_js, "execs") < 1.0) {
+        ok = 0;
+    }
+#endif
+#ifdef CSILK_HAS_AI
+    csilk_json_t* ai_js = csilk_json_get(js, "ai");
+    if (!ai_js || csilk_json_get_number(ai_js, "requests") < 1.0) {
+        ok = 0;
+    }
+#endif
+    if (ok) {
+        PASS();
+    } else {
+        FAIL("admin /stats did not reflect active DB/AI telemetry");
+    }
+
+    csilk_json_free(js);
     free_ctx(c);
     csilk_app_free(app);
 }
@@ -391,6 +502,7 @@ main(void)
     test_admin_ctx_storage_overflow();
     test_admin_serve_requires_auth();
     test_admin_serve_secure_and_stats_endpoint();
+    test_admin_stats_reflects_optional_subsystems();
     test_admin_profile_async_response();
     test_admin_profile_disconnect_before_complete_no_uaf();
     test_admin_flamegraph_server_stop_cancels_sampler();

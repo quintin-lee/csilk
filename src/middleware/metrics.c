@@ -28,12 +28,7 @@
 #include <string.h>
 
 #include "csilk/core/internal.h"
-#ifdef CSILK_HAS_DB
-#include "csilk/drivers/db.h"
-#endif
-#ifdef CSILK_HAS_AI
-#include "csilk/drivers/ai.h"
-#endif
+#include "../core/internal/obs_registry.h"
 
 /** @brief Maximum number of metrics entries tracked. */
 enum { CSILK_METRICS_MAX_ENTRIES = 1024 };
@@ -349,43 +344,72 @@ csilk_metrics_middleware(csilk_ctx_t* c, const char* arg)
 
 /* --- Prometheus Exposition Handler --- */
 
-/**
- * @brief Dynamic string builder for Prometheus text format.
- *
- * Automatically reallocates the buffer as needed.
- */
+typedef struct {
+    char*  buf;
+    size_t size;
+    size_t offset;
+} metrics_writer_t;
+
 static void
-append_metric(char** buf, size_t* size, size_t* offset, const char* fmt, ...)
+metrics_writer_vemit(metrics_writer_t* w, const char* fmt, va_list args)
 {
-    char    dummy[1];
-    va_list args;
-    va_start(args, fmt);
-    int n = vsnprintf(dummy, sizeof(dummy), fmt, args); // NOLINT
-    va_end(args);
+    va_list args_copy;
+    va_copy(args_copy, args);
+    char dummy[1];
+    int  n = vsnprintf(dummy, sizeof(dummy), fmt, args_copy); // NOLINT
+    va_end(args_copy);
 
     if (n < 0) {
         return;
     }
 
     /* Ensure sufficient space (+1 for null terminator) */
-    if (*offset + n + 1 > *size) {
-        size_t new_size = (*size == 0) ? 4096 : *size * 2;
-        while (*offset + n + 1 > new_size) {
+    if (w->offset + (size_t)n + 1 > w->size) {
+        size_t new_size = (w->size == 0) ? 4096 : w->size * 2;
+        while (w->offset + (size_t)n + 1 > new_size) {
             new_size *= 2;
         }
-        char* new_buf = realloc(*buf, new_size);
+        char* new_buf = realloc(w->buf, new_size);
         if (!new_buf) {
             CSILK_LOG_E("Metrics: failed to expand metric buffer to %zu bytes", new_size);
             return;
         }
-        *buf = new_buf;
-        *size = new_size;
+        w->buf = new_buf;
+        w->size = new_size;
     }
 
+    vsnprintf(w->buf + w->offset, w->size - w->offset, fmt, args); // NOLINT
+    w->offset += (size_t)n;
+}
+
+static void CSILK_OBS_PRINTF_LIKE(2, 3) metrics_writer_emit(void* writer, const char* fmt, ...)
+{
+    metrics_writer_t* w = (metrics_writer_t*)writer;
+    if (!w || !fmt) {
+        return;
+    }
+    va_list args;
     va_start(args, fmt);
-    vsnprintf(*buf + *offset, *size - *offset, fmt, args);
+    metrics_writer_vemit(w, fmt, args);
     va_end(args);
-    *offset += n;
+}
+
+/**
+ * @brief Dynamic string builder for Prometheus text format.
+ *
+ * Automatically reallocates the buffer as needed.
+ */
+static void CSILK_OBS_PRINTF_LIKE(4, 5)
+    append_metric(char** buf, size_t* size, size_t* offset, const char* fmt, ...)
+{
+    metrics_writer_t w = {*buf, *size, *offset};
+    va_list          args;
+    va_start(args, fmt);
+    metrics_writer_vemit(&w, fmt, args);
+    va_end(args);
+    *buf = w.buf;
+    *size = w.size;
+    *offset = w.offset;
 }
 
 /**
@@ -563,76 +587,12 @@ csilk_metrics_handler(csilk_ctx_t* c)
     append_metric(&buf, &size, &offset, "csilk_server_active_connections %d\n", active);
     append_metric(&buf, &size, &offset, "csilk_server_pooled_connections %d\n", pooled);
 
-    /* --- Part 6: Sub-system Statistics (Optional) --- */
-
-#ifdef CSILK_HAS_MQ
-    /* MQ Stats */
-    csilk_mq_stats_t mq;
-    csilk_mq_get_stats(csilk_server_get_mq(csilk_ctx_get_server(c)), &mq);
-    if (mq.published_total > 0) {
-        append_metric(&buf,
-                      &size,
-                      &offset,
-                      "csilk_mq_messages_total{action=\"published\"} %llu\n",
-                      (unsigned long long)mq.published_total);
-        append_metric(&buf,
-                      &size,
-                      &offset,
-                      "csilk_mq_messages_total{action=\"delivered\"} %llu\n",
-                      (unsigned long long)mq.delivered_total);
-        append_metric(&buf,
-                      &size,
-                      &offset,
-                      "csilk_mq_queue_depth %llu\n",
-                      (unsigned long long)mq.queue_depth);
-    }
-#endif
-
-#ifdef CSILK_HAS_AI
-    /* AI Stats */
-    csilk_ai_stats_t ai;
-    csilk_ai_get_stats(&ai);
-    if (ai.requests_total > 0) {
-        append_metric(&buf,
-                      &size,
-                      &offset,
-                      "csilk_ai_requests_total %llu\n",
-                      (unsigned long long)ai.requests_total);
-        append_metric(&buf,
-                      &size,
-                      &offset,
-                      "csilk_ai_tokens_total %llu\n",
-                      (unsigned long long)ai.tokens_total);
-        append_metric(&buf,
-                      &size,
-                      &offset,
-                      "csilk_ai_errors_total %llu\n",
-                      (unsigned long long)ai.errors_total);
-    }
-#endif
-
-#ifdef CSILK_HAS_DB
-    /* DB Stats */
-    csilk_db_stats_t db;
-    csilk_db_get_stats(&db);
-    if (db.queries_total + db.execs_total > 0) {
-        append_metric(&buf,
-                      &size,
-                      &offset,
-                      "csilk_db_operations_total{type=\"query\"} %llu\n",
-                      (unsigned long long)db.queries_total);
-        append_metric(&buf,
-                      &size,
-                      &offset,
-                      "csilk_db_operations_total{type=\"exec\"} %llu\n",
-                      (unsigned long long)db.execs_total);
-        append_metric(&buf,
-                      &size,
-                      &offset,
-                      "csilk_db_errors_total %llu\n",
-                      (unsigned long long)db.errors_total);
-    }
-#endif
+    /* --- Part 6: Sub-system Statistics (Optional, via runtime registry) --- */
+    metrics_writer_t collector_writer = {buf, size, offset};
+    _csilk_metrics_collect_all(c, metrics_writer_emit, &collector_writer);
+    buf = collector_writer.buf;
+    size = collector_writer.size;
+    offset = collector_writer.offset;
 
     /* Set response headers and body */
     csilk_set_header(c, "Content-Type", "text/plain; version=0.0.4");

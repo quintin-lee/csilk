@@ -39,6 +39,7 @@ typedef struct bio_st     BIO;
 #include "csilk/core/sync.h"
 #include "../primitives/lfqueue.h"
 #include "core/ctx/ctx_internal.h"
+#include "obs_registry.h"
 
 /** @brief Default idle timeout in milliseconds. */
 enum { CSILK_DEFAULT_IDLE_TIMEOUT = 5000 };

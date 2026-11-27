@@ -16,45 +16,8 @@
 #include "csilk/core/internal.h"
 #include "csilk/core/ctx/async.h"
 #include "csilk/core/sync.h"
-#ifdef CSILK_HAS_DB
-#include "csilk/drivers/db.h"
-#endif
-#ifdef CSILK_HAS_AI
-#include "csilk/drivers/ai.h"
-#endif
 #include "csilk/util/flamegraph.h"
-
-/* Weak fallbacks for optional sub-modules (AI, DB) */
-#if defined(__GNUC__) || defined(__clang__)
-#ifdef CSILK_HAS_AI
-__attribute__((weak)) void
-csilk_ai_get_stats(csilk_ai_stats_t* stats)
-{
-    if (stats) {
-        memset(stats, 0, sizeof(*stats));
-    }
-}
-__attribute__((weak)) void
-csilk_ai_register_monitor(void* c)
-{
-    (void)c;
-}
-__attribute__((weak)) void
-csilk_ai_unregister_monitor(void* c)
-{
-    (void)c;
-}
-#endif
-#ifdef CSILK_HAS_DB
-__attribute__((weak)) void
-csilk_db_get_stats(csilk_db_stats_t* stats)
-{
-    if (stats) {
-        memset(stats, 0, sizeof(*stats));
-    }
-}
-#endif
-#endif
+#include "../core/internal/obs_registry.h"
 
 /* --- Async flame-graph session state --- */
 
@@ -240,10 +203,6 @@ admin_start_flamegraph_async(csilk_ctx_t* c, useconds_t interval_us, uint64_t du
     }
 }
 
-/* Externs from metrics.c */
-extern uint64_t atomic_load_http_requests(void);
-extern uint64_t atomic_load_http_duration(void);
-
 /** @brief Helper to serve the admin UI HTML. */
 static void
 admin_ui_handler(csilk_ctx_t* c)
@@ -286,6 +245,24 @@ admin_ui_handler(csilk_ctx_t* c)
     csilk_string(c, 200, g_embedded_admin_ui_html);
 }
 
+typedef struct {
+    csilk_ctx_t*  ctx;
+    csilk_json_t* root;
+} admin_stats_visit_ctx_t;
+
+static void
+admin_stats_collect_cb(const char* name, csilk_admin_stats_fn fn, void* user_data)
+{
+    admin_stats_visit_ctx_t* vctx = (admin_stats_visit_ctx_t*)user_data;
+    if (!vctx || !vctx->root || !name || !fn) {
+        return;
+    }
+    csilk_json_t* obj = fn(vctx->ctx);
+    if (obj) {
+        csilk_json_add_object(vctx->root, name, obj);
+    }
+}
+
 /** @brief Aggregates system-wide statistics into a JSON response. */
 static void
 admin_stats_handler(csilk_ctx_t* c)
@@ -300,66 +277,33 @@ admin_stats_handler(csilk_ctx_t* c)
     csilk_json_add_number(root, "total_requests", (double)total_req);
     csilk_json_add_number(root, "avg_latency", avg_latency);
 
-    // 2. MQ Stats
-    csilk_mq_stats_t mq_stats = {0};
-#ifdef CSILK_HAS_MQ
-    csilk_mq_get_stats(csilk_server_get_mq(csilk_ctx_get_server(c)), &mq_stats);
-#endif
+    // 2. Registered Sub-system Stats (MQ, AI, DB, etc.)
+    admin_stats_visit_ctx_t visit_ctx = {c, root};
+    _csilk_admin_foreach_stats(admin_stats_collect_cb, &visit_ctx);
 
-    csilk_json_t* mq = csilk_json_object();
-    csilk_json_add_number(mq, "published", (double)mq_stats.published_total);
-    csilk_json_add_number(mq, "delivered", (double)mq_stats.delivered_total);
-    csilk_json_add_number(mq, "depth", (double)mq_stats.queue_depth);
-    csilk_json_add_object(root, "mq", mq);
-
-    // 3. AI Stats
-#ifdef CSILK_HAS_AI
-    csilk_ai_stats_t ai_stats = {0};
-    csilk_ai_get_stats(&ai_stats);
-#else
-    struct {
-        uint64_t requests_total;
-        uint64_t tokens_total;
-        uint64_t errors_total;
-        uint64_t duration_us_total;
-    } ai_stats = {0};
-#endif
-
-    csilk_json_t* ai = csilk_json_object();
-    csilk_json_add_number(ai, "requests", (double)ai_stats.requests_total);
-    csilk_json_add_number(ai, "tokens", (double)ai_stats.tokens_total);
-    csilk_json_add_number(ai, "errors", (double)ai_stats.errors_total);
-    csilk_json_add_number(ai,
-                          "avg_duration",
-                          ai_stats.requests_total > 0 ? (double)ai_stats.duration_us_total /
-                                                            ai_stats.requests_total / 1000.0
-                                                      : 0);
-    csilk_json_add_object(root, "ai", ai);
-
-    // 4. DB Stats
-#ifdef CSILK_HAS_DB
-    csilk_db_stats_t db_stats = {0};
-    csilk_db_get_stats(&db_stats);
-#else
-    struct {
-        uint64_t queries_total;
-        uint64_t execs_total;
-        uint64_t errors_total;
-        uint64_t duration_us_total;
-    } db_stats = {0};
-#endif
-
-    csilk_json_t* db = csilk_json_object();
-    csilk_json_add_number(db, "queries", (double)db_stats.queries_total);
-    csilk_json_add_number(db, "execs", (double)db_stats.execs_total);
-    csilk_json_add_number(db, "errors", (double)db_stats.errors_total);
-    csilk_json_add_number(db,
-                          "avg_duration",
-                          db_stats.queries_total + db_stats.execs_total > 0
-                              ? (double)db_stats.duration_us_total /
-                                    (db_stats.queries_total + db_stats.execs_total) / 1000.0
-                              : 0);
-    csilk_json_add_object(root, "db", db);
+    if (!csilk_json_get(root, "mq")) {
+        csilk_json_t* mq = csilk_json_object();
+        csilk_json_add_number(mq, "published", 0);
+        csilk_json_add_number(mq, "delivered", 0);
+        csilk_json_add_number(mq, "depth", 0);
+        csilk_json_add_object(root, "mq", mq);
+    }
+    if (!csilk_json_get(root, "ai")) {
+        csilk_json_t* ai = csilk_json_object();
+        csilk_json_add_number(ai, "requests", 0);
+        csilk_json_add_number(ai, "tokens", 0);
+        csilk_json_add_number(ai, "errors", 0);
+        csilk_json_add_number(ai, "avg_duration", 0);
+        csilk_json_add_object(root, "ai", ai);
+    }
+    if (!csilk_json_get(root, "db")) {
+        csilk_json_t* db = csilk_json_object();
+        csilk_json_add_number(db, "queries", 0);
+        csilk_json_add_number(db, "execs", 0);
+        csilk_json_add_number(db, "errors", 0);
+        csilk_json_add_number(db, "avg_duration", 0);
+        csilk_json_add_object(root, "db", db);
+    }
 
     // 5. System Stats
     int active_conn = 0, pooled_conn = 0;
@@ -477,25 +421,12 @@ admin_profile_quick_handler(csilk_ctx_t* c)
     admin_start_flamegraph_async(c, 5000, 100);
 }
 
-typedef struct {
-    csilk_mq_t*  mq;
-    csilk_ctx_t* c;
-} admin_monitor_cleanup_t;
-
 static void
 admin_monitor_on_close(void* arg)
 {
-    admin_monitor_cleanup_t* cl = (admin_monitor_cleanup_t*)arg;
-    if (cl) {
-#ifdef CSILK_HAS_MQ
-        if (cl->mq) {
-            csilk_mq_unregister_monitor(cl->mq, cl->c);
-        }
-#endif
-#ifdef CSILK_HAS_AI
-        csilk_ai_unregister_monitor(cl->c);
-#endif
-        free(cl);
+    csilk_ctx_t* c = (csilk_ctx_t*)arg;
+    if (c) {
+        _csilk_admin_notify_monitor_close(c);
     }
 }
 
@@ -505,25 +436,8 @@ admin_ws_handler(csilk_ctx_t* c)
 {
     csilk_ws_handshake(c);
     if (csilk_is_websocket(c)) {
-        csilk_mq_t* mq = NULL;
-#ifdef CSILK_HAS_MQ
-        mq = csilk_server_get_mq(csilk_ctx_get_server(c));
-#endif
-        admin_monitor_cleanup_t* cl = malloc(sizeof(admin_monitor_cleanup_t));
-        if (!cl) {
-            CSILK_LOG_E("Admin Dashboard: failed to allocate WebSocket cleanup context");
-            return;
-        }
-        cl->mq = mq;
-        cl->c = c;
-        csilk_ctx_defer(c, admin_monitor_on_close, cl);
-#ifdef CSILK_HAS_MQ
-        csilk_mq_register_monitor(mq, c);
-#endif
-#ifdef CSILK_HAS_AI
-        // Also monitor AI engine
-        csilk_ai_register_monitor(c);
-#endif
+        csilk_ctx_defer(c, admin_monitor_on_close, c);
+        _csilk_admin_notify_monitor_open(c);
 
         CSILK_LOG_I("Admin Dashboard connected via WebSocket");
     }

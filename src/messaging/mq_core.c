@@ -162,6 +162,76 @@ csilk_mq_unregister_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
     csilk_mutex_unlock(&mq->monitor_mutex);
 }
 
+static void
+mq_metrics_collect(csilk_ctx_t* c, csilk_metrics_emit_fn emit, void* writer)
+{
+    csilk_server_t*  srv = csilk_ctx_get_server(c);
+    csilk_mq_t*      mq_ptr = srv ? atomic_load_explicit(&srv->mq, memory_order_acquire) : NULL;
+    csilk_mq_stats_t mq = {0};
+    csilk_mq_get_stats(mq_ptr, &mq);
+    if (mq.published_total > 0) {
+        emit(writer,
+             "csilk_mq_messages_total{action=\"published\"} %llu\n",
+             (unsigned long long)mq.published_total);
+        emit(writer,
+             "csilk_mq_messages_total{action=\"delivered\"} %llu\n",
+             (unsigned long long)mq.delivered_total);
+        emit(writer, "csilk_mq_queue_depth %llu\n", (unsigned long long)mq.queue_depth);
+    }
+}
+
+static csilk_json_t*
+mq_admin_stats(csilk_ctx_t* c)
+{
+    csilk_server_t*  srv = csilk_ctx_get_server(c);
+    csilk_mq_t*      mq_ptr = srv ? atomic_load_explicit(&srv->mq, memory_order_acquire) : NULL;
+    csilk_mq_stats_t mq_stats = {0};
+    csilk_mq_get_stats(mq_ptr, &mq_stats);
+    csilk_json_t* mq = csilk_json_object();
+    if (!mq) {
+        return NULL;
+    }
+    csilk_json_add_number(mq, "published", (double)mq_stats.published_total);
+    csilk_json_add_number(mq, "delivered", (double)mq_stats.delivered_total);
+    csilk_json_add_number(mq, "depth", (double)mq_stats.queue_depth);
+    return mq;
+}
+
+static void
+mq_admin_monitor_open(csilk_ctx_t* c)
+{
+    csilk_mq_t* mq = csilk_ctx_get_mq(c);
+    if (mq) {
+        csilk_mq_register_monitor(mq, c);
+    }
+}
+
+static void
+mq_admin_monitor_close(csilk_ctx_t* c)
+{
+    csilk_server_t* srv = csilk_ctx_get_server(c);
+    csilk_mq_t*     mq = srv ? atomic_load_explicit(&srv->mq, memory_order_acquire) : NULL;
+    if (mq) {
+        csilk_mq_unregister_monitor(mq, c);
+    }
+}
+
+static void
+mq_register_observability(void)
+{
+    _csilk_metrics_register_collector("mq", mq_metrics_collect);
+    _csilk_admin_register_stats("mq", mq_admin_stats);
+    _csilk_admin_register_monitor("mq", mq_admin_monitor_open, mq_admin_monitor_close);
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((constructor)) static void
+_csilk_mq_obs_ctor(void)
+{
+    mq_register_observability();
+}
+#endif
+
 /**
  * @brief Internal: Create a new MQ instance bound to an I/O event loop.
  *
@@ -176,6 +246,7 @@ csilk_mq_unregister_monitor(csilk_mq_t* mq, csilk_ctx_t* c)
 CSILK_INTERNAL csilk_mq_t*
 _csilk_mq_new(csilk_io_loop_t* loop)
 {
+    mq_register_observability();
     csilk_mq_t* mq = calloc(1, sizeof(csilk_mq_t));
     if (!mq) {
         CSILK_LOG_E("MQ: Failed to allocate memory for message queue");

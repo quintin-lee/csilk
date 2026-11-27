@@ -38,6 +38,7 @@
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
+#include "../../core/internal/obs_registry.h"
 
 #include <stdatomic.h>
 #include <stdio.h>
@@ -141,6 +142,60 @@ csilk_db_get_stats(csilk_db_stats_t* stats)
     stats->errors_total = atomic_load(&db_errors_total);
     stats->duration_us_total = atomic_load(&db_duration_us_total);
 }
+
+static void
+db_metrics_collect(csilk_ctx_t* c, csilk_metrics_emit_fn emit, void* writer)
+{
+    (void)c;
+    csilk_db_stats_t db = {0};
+    csilk_db_get_stats(&db);
+    if (db.queries_total + db.execs_total > 0) {
+        emit(writer,
+             "csilk_db_operations_total{type=\"query\"} %llu\n",
+             (unsigned long long)db.queries_total);
+        emit(writer,
+             "csilk_db_operations_total{type=\"exec\"} %llu\n",
+             (unsigned long long)db.execs_total);
+        emit(writer, "csilk_db_errors_total %llu\n", (unsigned long long)db.errors_total);
+    }
+}
+
+static csilk_json_t*
+db_admin_stats(csilk_ctx_t* c)
+{
+    (void)c;
+    csilk_db_stats_t db_stats = {0};
+    csilk_db_get_stats(&db_stats);
+    csilk_json_t* db = csilk_json_object();
+    if (!db) {
+        return NULL;
+    }
+    csilk_json_add_number(db, "queries", (double)db_stats.queries_total);
+    csilk_json_add_number(db, "execs", (double)db_stats.execs_total);
+    csilk_json_add_number(db, "errors", (double)db_stats.errors_total);
+    csilk_json_add_number(db,
+                          "avg_duration",
+                          db_stats.queries_total + db_stats.execs_total > 0
+                              ? (double)db_stats.duration_us_total /
+                                    (db_stats.queries_total + db_stats.execs_total) / 1000.0
+                              : 0);
+    return db;
+}
+
+static void
+db_register_observability(void)
+{
+    _csilk_metrics_register_collector("db", db_metrics_collect);
+    _csilk_admin_register_stats("db", db_admin_stats);
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((constructor)) static void
+_csilk_db_obs_ctor(void)
+{
+    db_register_observability();
+}
+#endif
 
 /** @brief Get the raw driver-level connection handle.
  * @return The connection pointer, or NULL if pool is NULL.
@@ -2309,6 +2364,7 @@ ensure_registry_init(void)
 void
 csilk_db_init(void)
 {
+    db_register_observability();
     ensure_registry_init();
     csilk_db_sqlite_init();
 #ifdef HAS_MYSQL
