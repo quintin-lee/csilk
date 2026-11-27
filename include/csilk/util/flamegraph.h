@@ -6,7 +6,7 @@
  * Spawns a background thread that captures call stacks every interval
  * and aggregates them. Stacks are captured via backtrace().
  *
- * @version 1.2.0
+ * @version 1.3.0
  * @copyright MIT License
  */
 

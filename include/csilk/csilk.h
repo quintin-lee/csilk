@@ -7,7 +7,7 @@
  * enabled optional domain module headers.  For finer-grained compilation,
  * include individual module headers directly.
  *
- * @version 1.2.0
+ * @version 1.3.0
  * @copyright MIT License
  */
 

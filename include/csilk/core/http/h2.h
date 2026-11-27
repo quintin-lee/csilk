@@ -5,7 +5,7 @@
  *
  * Provides HTTP/2 session management, stream handling, and server push.
  *
- * @version 1.2.0
+ * @version 1.3.0
  * @copyright MIT License
  */
 

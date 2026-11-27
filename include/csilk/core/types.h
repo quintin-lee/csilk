@@ -7,7 +7,7 @@
  * needed by the request context, router, server, middleware,
  * WebSocket, SSE, and utility APIs.
  *
- * @version 1.2.0
+ * @version 1.3.0
  * @copyright MIT License
  */
 

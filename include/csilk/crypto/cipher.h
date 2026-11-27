@@ -8,7 +8,7 @@
  * via csilk_ctx_set_cipher_driver() are available only through the internal
  * _csilk_* dispatch path for in-request usage.
  *
- * @version 1.2.0
+ * @version 1.3.0
  * @copyright MIT License
  */
 

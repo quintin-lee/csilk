@@ -1,6 +1,6 @@
 # RCU Hot-Reload Architecture Deep Dive
 
-> **Version**: 1.2.0 | **Last updated**: 2026-11-22
+> **Version**: 1.3.0 | **Last updated**: 2026-11-28
 
 The csilk RCU (Read-Copy-Update) / EBR (Epoch-Based Reclamation) hot-reload subsystem enables zero-downtime, wait-free routing tree swapping at runtime without disrupting active in-flight HTTP requests.
 

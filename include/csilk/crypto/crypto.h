@@ -6,7 +6,7 @@
  * Provides helpers for generating cryptographically secure random bytes
  * and nonces for symmetric encryption modes like AES-256-GCM.
  *
- * @version 1.2.0
+ * @version 1.3.0
  * @copyright MIT License
  */
 

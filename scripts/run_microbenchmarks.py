@@ -23,7 +23,7 @@ def detect_version() -> str:
     pat = re.search(r'CSILK_VERSION_PATCH\s+(\d+)', opts)
     if maj and min_ and pat:
         return f"{maj.group(1)}.{min_.group(1)}.{pat.group(1)}"
-    return "1.2.0"
+    return "1.3.0"
 
 
 def detect_git_hash() -> str:

@@ -182,7 +182,7 @@ yyjson（以及 `-DCSILK_USE_URING=ON` 时的 liburing，或系统未安装时�
 在 C/C++ 依赖管理中，`csilk` 已提供主流的全球包管理生态支持：
 
 * **vcpkg (CMake)**: `vcpkg install csilk`
-* **Conan 2.0+**: `conan create . --version 1.2.0`
+* **Conan 2.0+**: `conan create . --version 1.3.0`
 * **Homebrew (macOS)**: `brew install quintin-lee/tap/csilk`
 
 ### 安装（Debian/Ubuntu）

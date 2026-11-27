@@ -1,7 +1,7 @@
 class Csilk < Formula
   desc "Lightweight HTTP web framework written in C23 for high-concurrency microservices"
   homepage "https://github.com/quintin-lee/csilk"
-  url "https://github.com/quintin-lee/csilk/archive/refs/tags/v1.2.0.tar.gz"
+  url "https://github.com/quintin-lee/csilk/archive/refs/tags/v1.3.0.tar.gz"
   license "MIT"
   head "https://github.com/quintin-lee/csilk.git", branch: "master"
 

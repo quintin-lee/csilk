@@ -5,7 +5,7 @@ import os
 
 class CsilkConan(ConanFile):
     name = "csilk"
-    version = "1.2.0"
+    version = "1.3.0"
     license = "MIT"
     author = "quintin-lee"
     url = "https://github.com/quintin-lee/csilk"
