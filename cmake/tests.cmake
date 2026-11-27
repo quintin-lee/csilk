@@ -8,7 +8,7 @@ add_library(csilk_test_support STATIC ${CSILK_TEST_SUPPORT_SOURCES})
 add_library(csilk_test_support_shared SHARED ${CSILK_TEST_SUPPORT_SOURCES})
 csilk_target_setup(csilk_test_support PRIVATE STATIC)
 csilk_target_setup(csilk_test_support_shared PRIVATE SHARED)
-target_link_libraries(csilk_test_support PRIVATE csilk_runtime csilk_base)
+target_link_libraries(csilk_test_support PRIVATE csilk)
 target_link_libraries(csilk_test_support_shared PRIVATE csilk_runtime csilk_base csilk_http csilk_middleware csilk_app csilk_shared)
 
 # Helper to add a test executable and register with CTest
@@ -18,17 +18,16 @@ function(add_csilk_test name source)
     target_compile_definitions(${name} PRIVATE CSILK_POOL_STATS)
     target_sources(${name} PRIVATE tests/core/pool_stats.c)
   endif()
-  # csilk::libuv transitively reaches consumers via csilk_runtime, but CMake
-  # releases before 4.x drop transitive INTERFACE libraries referenced only
-  # through a $<LINK_GROUP> genex, leaving uv_* symbols unresolved in test
-  # executables.  Link it explicitly so the closure is complete on every
-  # supported CMake version (3.24+ for RESCAN groups).
+  # Link csilk_test_support before csilk so the RESCAN static archive group
+  # precedes external shared libraries (libuv, OpenSSL, etc.) under --as-needed.
+  # CMake releases before 4.x drop transitive INTERFACE libraries referenced only
+  # through a $<LINK_GROUP> genex, so link the I/O backend explicitly after csilk.
   if(TARGET csilk::libuv)
-    target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m csilk::libuv)
+    target_link_libraries(${name} csilk_test_support csilk pthread m csilk::libuv)
   elseif(TARGET uring)
-    target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m uring)
+    target_link_libraries(${name} csilk_test_support csilk pthread m uring)
   else()
-    target_link_libraries(${name} csilk_runtime csilk csilk_test_support pthread m)
+    target_link_libraries(${name} csilk_test_support csilk pthread m)
   endif()
   target_compile_features(${name} PRIVATE c_std_23)
   target_compile_options(${name} PRIVATE
