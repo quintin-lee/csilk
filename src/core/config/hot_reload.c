@@ -360,8 +360,6 @@ csilk_dev_hot_reload_start(csilk_server_t* server, const char* lib_path, const c
         return -1;
     }
     csilk_mutex_init(&ctx->reload_mutex);
-    ctx->fs_event.data = ctx;
-    ctx->debounce_timer.data = ctx;
 
     if (load_and_swap_router(ctx) != 0) {
         csilk_mutex_destroy(&ctx->reload_mutex);
@@ -376,7 +374,9 @@ csilk_dev_hot_reload_start(csilk_server_t* server, const char* lib_path, const c
     csilk_io_loop_t* loop = server->loop;
     if (loop) {
         csilk_io_timer_init(loop, &ctx->debounce_timer);
+        ctx->debounce_timer.data = ctx;
         csilk_io_fs_event_init(loop, &ctx->fs_event);
+        ctx->fs_event.data = ctx;
         csilk_io_fs_event_start(&ctx->fs_event, on_file_change, ctx->lib_path, 0);
         ctx->is_watching = 1;
     }
