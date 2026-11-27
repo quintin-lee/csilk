@@ -7,7 +7,7 @@
  * needed by the request context, router, server, middleware,
  * WebSocket, SSE, and utility APIs.
  *
- * @version 0.5.2
+ * @version 1.2.0
  * @copyright MIT License
  */
 
@@ -73,9 +73,16 @@ enum { CSILK_ARENA_TIER_LARGE = 2 };  /* 64KB - file uploads/large responses */
 #define CSILK_DEFAULT_ARENA_SIZE 4096
 #endif
 
-/** @brief Max cached arena chunks across all tiers (TLS free list limit). */
+/** @brief Max cached arena chunks across all tiers (TLS free list total limit).
+ *  Overridable via CMake -DCSILK_MAX_TLS_CHUNKS=<N> or by defining before include. */
 #ifndef CSILK_MAX_TLS_CHUNKS
 #define CSILK_MAX_TLS_CHUNKS 16
+#endif
+
+/** @brief Max cached arena chunks per size tier (4KB / 16KB / 64KB).
+ *  Overridable via CMake -DCSILK_MAX_TLS_CHUNKS_PER_TIER=<N> or by defining before include. */
+#ifndef CSILK_MAX_TLS_CHUNKS_PER_TIER
+#define CSILK_MAX_TLS_CHUNKS_PER_TIER 8
 #endif
 
 /* Forward declarations for feature module driver types */
@@ -161,6 +168,14 @@ typedef struct {
  * Every handler receives the per-request context and operates on it
  * (reading request data, setting response data, calling csilk_next to
  * pass control to the next handler in the chain, etc.).
+ *
+ * @warning Handlers execute synchronously on the owning worker's I/O event-loop
+ *          thread inside _csilk_dispatch_request(). Blocking I/O or
+ *          CPU-intensive work inside a handler stalls all connections assigned
+ *          to that worker loop. Offload heavy or blocking tasks to a background
+ *          thread/pool using csilk_async_op_begin() + csilk_async_op_complete()
+ *          (or csilk_ctx_set_async() + csilk_ctx_acquire_async() +
+ *          csilk_dispatch()).
  *
  * @param c  The per-request context.
  */

@@ -91,6 +91,7 @@ set(CSILK_MAX_PARAMS      20  CACHE STRING "Max URL path parameters per request"
 set(CSILK_MAX_STORAGE    64  CACHE STRING "Max context key-value storage entries")
 set(CSILK_DEFAULT_ARENA_SIZE 4096 CACHE STRING "Default arena chunk size in bytes")
 set(CSILK_ARENA_TIER_COUNT 3   CACHE STRING "Number of arena chunk size tiers")
-set(CSILK_MAX_TLS_CHUNKS  8   CACHE STRING "Max cached arena chunks per tier")
+set(CSILK_MAX_TLS_CHUNKS          16  CACHE STRING "Max total cached arena chunks across all tiers")
+set(CSILK_MAX_TLS_CHUNKS_PER_TIER 8   CACHE STRING "Max cached arena chunks per tier")
 set(CSILK_TLS_DISPATCH_CAPACITY 128 CACHE STRING "TLS dispatch queue capacity (per worker)")
 set(CSILK_WF_CLUSTER_MAX_BINDINGS 128 CACHE STRING "Max workflow-to-Raft cluster bindings")

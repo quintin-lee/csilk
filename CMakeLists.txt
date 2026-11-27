@@ -147,14 +147,20 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     list(APPEND CSILK_ALL_TEST_NAMES test_timeout)
 
     # test_multi_worker needs a longer timeout for multi-threaded requests
-    set_tests_properties(test_multi_worker PROPERTIES TIMEOUT 30)
+    if(TEST test_multi_worker)
+      set_tests_properties(test_multi_worker PROPERTIES TIMEOUT 30)
+    endif()
 
     # Concurrent scenario tests involve thread spawning or multiple streams
     if(TEST test_mq_concurrent)
       set_tests_properties(test_mq_concurrent PROPERTIES TIMEOUT 30)
     endif()
-    set_tests_properties(test_ws_concurrent PROPERTIES TIMEOUT 15)
-    set_tests_properties(test_sse_concurrent PROPERTIES TIMEOUT 15)
+    if(TEST test_ws_concurrent)
+      set_tests_properties(test_ws_concurrent PROPERTIES TIMEOUT 15)
+    endif()
+    if(TEST test_sse_concurrent)
+      set_tests_properties(test_sse_concurrent PROPERTIES TIMEOUT 15)
+    endif()
 
     if(ENABLE_OOM_TEST)
         add_executable(test_oom tests/core/test_oom.c)

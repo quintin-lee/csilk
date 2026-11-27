@@ -321,6 +321,59 @@ test_arena_calloc(void)
     printf("csilk_arena_calloc passed!\n");
 }
 
+void
+test_arena_tls_chunk_limits(void)
+{
+    printf("Testing arena TLS chunk cap macros (per-tier=%d, total=%d)...\n",
+           CSILK_MAX_TLS_CHUNKS_PER_TIER,
+           CSILK_MAX_TLS_CHUNKS);
+    assert(CSILK_MAX_TLS_CHUNKS_PER_TIER > 0);
+    assert(CSILK_MAX_TLS_CHUNKS > 0);
+
+#ifdef TEST_OOM
+    csilk_arena_flush_free_list();
+
+    int            n_small = CSILK_MAX_TLS_CHUNKS_PER_TIER + 4;
+    csilk_arena_t* small_arenas[n_small];
+    for (int i = 0; i < n_small; i++) {
+        small_arenas[i] = csilk_arena_new(CSILK_DEFAULT_ARENA_SIZE);
+        assert(small_arenas[i] != NULL);
+        assert(csilk_arena_alloc(small_arenas[i], 64) != NULL);
+    }
+    for (int i = 0; i < n_small; i++) {
+        csilk_arena_free(small_arenas[i]);
+    }
+    int expected_single_tier = CSILK_MAX_TLS_CHUNKS_PER_TIER < CSILK_MAX_TLS_CHUNKS
+                                   ? CSILK_MAX_TLS_CHUNKS_PER_TIER
+                                   : CSILK_MAX_TLS_CHUNKS;
+    assert(csilk_arena_get_tls_chunk_count() == expected_single_tier);
+
+    int            n_med = CSILK_MAX_TLS_CHUNKS_PER_TIER + 2;
+    int            n_large = CSILK_MAX_TLS_CHUNKS_PER_TIER + 2;
+    csilk_arena_t* med_arenas[n_med];
+    csilk_arena_t* large_arenas[n_large];
+    for (int i = 0; i < n_med; i++) {
+        med_arenas[i] = csilk_arena_new(16384);
+        assert(med_arenas[i] != NULL);
+        assert(csilk_arena_alloc(med_arenas[i], 5000) != NULL);
+    }
+    for (int i = 0; i < n_large; i++) {
+        large_arenas[i] = csilk_arena_new(65536);
+        assert(large_arenas[i] != NULL);
+        assert(csilk_arena_alloc(large_arenas[i], 30000) != NULL);
+    }
+    for (int i = 0; i < n_med; i++) {
+        csilk_arena_free(med_arenas[i]);
+    }
+    for (int i = 0; i < n_large; i++) {
+        csilk_arena_free(large_arenas[i]);
+    }
+    assert(csilk_arena_get_tls_chunk_count() <= CSILK_MAX_TLS_CHUNKS);
+    csilk_arena_flush_free_list();
+#endif
+    printf("arena TLS chunk cap tests passed!\n");
+}
+
 int
 main()
 {
@@ -337,6 +390,7 @@ main()
     test_arena_multi_tier_tls_cache();
     test_arena_pthread_tls_cleanup();
     test_arena_calloc();
+    test_arena_tls_chunk_limits();
 #ifdef TEST_OOM
     test_arena_tls_cache();
 #endif

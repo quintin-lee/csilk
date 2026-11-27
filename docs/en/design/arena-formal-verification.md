@@ -153,7 +153,7 @@ arena pointer becomes dangling (caller must not reuse)
 ### Multi-Tier TLS Cache Reuse Logic
 ```
 int tier = arena_size_to_tier(curr->size);
-if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
+if (tier >= 0 && tls_tier_counts[tier] < CSILK_MAX_TLS_CHUNKS_PER_TIER &&
     total_tls_chunk_count < CSILK_MAX_TLS_CHUNKS) {
     arena_ensure_tls_cleanup_registered();
     curr->next = tls_tier_free_lists[tier];
@@ -163,7 +163,7 @@ if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
     arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
 }
 ```
-Standard tiered chunks (4KB, 16KB, 64KB) are recycled up to `MAX_TLS_CHUNKS_PER_TIER` (8) per tier, bounded globally by `CSILK_MAX_TLS_CHUNKS` (16).
+Standard tiered chunks (4KB, 16KB, 64KB) are recycled up to `CSILK_MAX_TLS_CHUNKS_PER_TIER` (8) per tier, bounded globally by `CSILK_MAX_TLS_CHUNKS` (16), both injected via CMake compile-time definitions.
 Non-tiered chunks are freed immediately.
 The TLS cache is protected on thread exit via `pthread_key` destructor and explicit worker thread flushes.
 

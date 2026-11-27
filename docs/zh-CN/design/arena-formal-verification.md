@@ -153,7 +153,7 @@ arena 指针变为悬空（调用方不得重用）
 ### 多档 TLS 缓存复用逻辑
 ```c
 int tier = arena_size_to_tier(curr->size);
-if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
+if (tier >= 0 && tls_tier_counts[tier] < CSILK_MAX_TLS_CHUNKS_PER_TIER &&
     total_tls_chunk_count < CSILK_MAX_TLS_CHUNKS) {
     arena_ensure_tls_cleanup_registered();
     curr->next = tls_tier_free_lists[tier];
@@ -163,7 +163,7 @@ if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
     arena_aligned_free(curr, curr->size + sizeof(csilk_arena_chunk_t));
 }
 ```
-标准分档大小（4KB、16KB、64KB）的 chunk 按档位最多缓存 `MAX_TLS_CHUNKS_PER_TIER`（8）个，全局受限 `CSILK_MAX_TLS_CHUNKS`（16）。
+标准分档大小（4KB、16KB、64KB）的 chunk 按档位最多缓存 `CSILK_MAX_TLS_CHUNKS_PER_TIER`（8）个，全局受限 `CSILK_MAX_TLS_CHUNKS`（16），均由 CMake 编译期宏统一注入。
 非分档大小的 chunk 立即释放。
 TLS 缓存通过 `pthread_key` 析构函数及 Worker 线程退出显式清理确保在线程销毁时完全释放。
 

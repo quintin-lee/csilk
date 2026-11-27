@@ -41,8 +41,6 @@ _Atomic int g_oom_fail_after = -1;
 _Atomic int g_oom_count = 0;
 #endif
 
-enum { MAX_TLS_CHUNKS_PER_TIER = 8 };
-
 /** @brief CPU cache line size hint for arena alignment. */
 enum { CSILK_CACHE_LINE_SIZE = 64 };
 
@@ -353,7 +351,7 @@ arena_alloc_slow(csilk_arena_t* arena, size_t size, size_t alignment)
     if (chunk_size > SIZE_MAX - arena->total_allocated) {
         /* Roll back: unsplice chunk and free it. */
         arena->head = chunk->next;
-        if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
+        if (tier >= 0 && tls_tier_counts[tier] < CSILK_MAX_TLS_CHUNKS_PER_TIER &&
             arena_get_total_tls_chunk_count() < CSILK_MAX_TLS_CHUNKS) {
             chunk->next = tls_tier_free_lists[tier];
             tls_tier_free_lists[tier] = chunk;
@@ -544,7 +542,7 @@ csilk_arena_free(csilk_arena_t* arena)
 
         /* Return tiered chunks to the thread-local free list if there is room. */
         int tier = arena_size_to_tier(curr->size);
-        if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
+        if (tier >= 0 && tls_tier_counts[tier] < CSILK_MAX_TLS_CHUNKS_PER_TIER &&
             arena_get_total_tls_chunk_count() < CSILK_MAX_TLS_CHUNKS) {
             arena_ensure_tls_cleanup_registered();
             curr->next = tls_tier_free_lists[tier];
@@ -594,7 +592,7 @@ csilk_arena_reset(csilk_arena_t* arena)
         while (curr) {
             csilk_arena_chunk_t* next = curr->next;
             int                  tier = arena_size_to_tier(curr->size);
-            if (tier >= 0 && tls_tier_counts[tier] < MAX_TLS_CHUNKS_PER_TIER &&
+            if (tier >= 0 && tls_tier_counts[tier] < CSILK_MAX_TLS_CHUNKS_PER_TIER &&
                 arena_get_total_tls_chunk_count() < CSILK_MAX_TLS_CHUNKS) {
                 arena_ensure_tls_cleanup_registered();
                 curr->next = tls_tier_free_lists[tier];
