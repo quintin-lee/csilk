@@ -64,7 +64,7 @@ A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) 
 - 🧬 **Embedded SIMD Vector Index Engine** — Native 32-byte aligned AVX2 SIMD vector distance kernels (`csilk_simd_vector_cosine`, `csilk_simd_vector_l2`, `csilk_simd_vector_dot`) and multi-layer HNSW skip-graph index (`csilk_hnsw_index_t`) supporting $O(\log N)$ ANN vector similarity search (`csilk_vector_db_new_embedded`).
 - 🛡️ **Dynamic Rule WAF Filter & OTLP APM Dashboard** — Dynamic regex & CIDR IP WAF filtering (`csilk_waf_filter_*`) and lock-free 2048-span W3C trace context ring buffer (`csilk_otlp_tracer_start_span`) with single-page embedded Web APM Dashboard (`/admin/apm`).
 
-### 📐 ABI Stability & Modularity (v2.0 Web Core + Optional Modules)
+### 📐 ABI Stability & Modularity (v1.2 Web Core + Optional Modules)
 
 - 🔒 **Opaque ABI & SOVERSION 2** — Clean Core vs Optional Module boundaries with `libcsilk.map` (`csilk_*` whitelist) and automated ABI symbol checks (`check_abi_compatibility.sh`).
 - 🧩 **WASM Sandbox Plugin Engine** — Native WebAssembly plugin sandbox (`csilk_wasm_plugin_*`) with LEB128 section validation, fuel-budget circuit breakers, and zero-copy Host ABI access.
@@ -182,7 +182,7 @@ yyjson (and liburing when `-DCSILK_USE_URING=ON`, or llhttp/nghttp2 when not ins
 For global package management support, `csilk` has been integrated with major C/C++ dependency managers:
 
 * **vcpkg (CMake)**: `vcpkg install csilk`
-* **Conan 2.0+**: `conan create . --version 1.0.0`
+* **Conan 2.0+**: `conan create . --version 1.2.0`
 * **Homebrew (macOS)**: `brew install quintin-lee/tap/csilk`
 
 ### Installation (Debian/Ubuntu)

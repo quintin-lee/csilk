@@ -64,7 +64,7 @@
 - 🧬 **原生内嵌式 SIMD 向量检索索引引擎** — 32 字节内存对齐 AVX2 SIMD 距离算子（Cosine / L2 / 向量点积）与多层 HNSW 跳表图索引 (`csilk_hnsw_index_t`)，实现 $O(\log N)$ ANN 近似最近邻向量检索与全零依赖内嵌驱动 (`csilk_vector_db_new_embedded`)
 - 🛡️ **动态规则 WAF 过滤器与 OTLP 全链路追踪 Web 仪表盘** — 动态正则与 CIDR IP 过滤引擎 (`csilk_waf_filter_*`) 与 2048-Span W3C 链路追踪无锁环形缓冲区 (`csilk_otlp_tracer_start_span`)，搭配单页嵌入式 Web APM Dashboard (`/admin/apm`)
 
-### 📐 ABI 稳定性与模块化架构 (v2.0 Web Core + 可选域模块)
+### 📐 ABI 稳定性与模块化架构 (v1.2 Web Core + 可选域模块)
 
 - 🔒 **不透明 ABI 与 SOVERSION 2** — Web Core 与可选领域模块解耦，配合 `cmake/libcsilk.map`（`csilk_*` 符号白名单）与自动化 ABI 兼容检查 (`check_abi_compatibility.sh`)。
 - 🧩 **WASM 沙箱插件引擎** — 原生 WebAssembly 插件沙箱 (`csilk_wasm_plugin_*`)，支持 LEB128 段校验、Fuel 预算熔断及零拷贝 Host ABI 接口。
@@ -182,7 +182,7 @@ yyjson（以及 `-DCSILK_USE_URING=ON` 时的 liburing，或系统未安装时�
 在 C/C++ 依赖管理中，`csilk` 已提供主流的全球包管理生态支持：
 
 * **vcpkg (CMake)**: `vcpkg install csilk`
-* **Conan 2.0+**: `conan create . --version 1.0.0`
+* **Conan 2.0+**: `conan create . --version 1.2.0`
 * **Homebrew (macOS)**: `brew install quintin-lee/tap/csilk`
 
 ### 安装（Debian/Ubuntu）
