@@ -436,8 +436,9 @@ spa_fallback_handler(csilk_ctx_t* c)
     char doc_root_copy[PATH_MAX];
     csilk_mutex_lock(&server->config_mutex);
     if (server->spa_index_buf && server->spa_index_len > 0) {
-        size_t len = server->spa_index_len;
-        char*  body = c->arena ? csilk_arena_alloc(c->arena, len) : malloc(len);
+        size_t            len = server->spa_index_len;
+        csilk_ownership_t ownership = c->arena ? CSILK_OWN_ARENA : CSILK_OWN_HEAP;
+        char*             body = c->arena ? csilk_arena_alloc(c->arena, len) : malloc(len);
         if (body) {
             memcpy(body, server->spa_index_buf, len);
         }
@@ -446,8 +447,12 @@ spa_fallback_handler(csilk_ctx_t* c)
             csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "");
             return;
         }
+        csilk_response_body_release(c);
+        c->response.body = body;
+        c->response.body_len = len;
+        c->response.body_capacity = 0;
+        c->response.body_ownership = ownership;
         csilk_set_header(c, "Content-Type", "text/html");
-        csilk_set_response_body_ex(c, body, len, c->arena ? CSILK_OWN_ARENA : CSILK_OWN_HEAP);
         csilk_status(c, CSILK_STATUS_OK);
         return;
     }
