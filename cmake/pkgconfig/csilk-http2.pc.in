@@ -4,11 +4,9 @@ libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
 Name: csilk-http2
-Description: Csilk HTTP/2 protocol engine (nghttp2)
+Description: Csilk HTTP/2 protocol engine (compatibility alias for csilk-http)
 Version: @CSILK_VERSION@
 URL: https://github.com/quintin-lee/csilk
-Requires: csilk-tls
-Requires.private: @CSILK_HTTP2_PC_REQUIRES_PRIVATE@
-Libs: -L${libdir} -lcsilk-http2
-Libs.private: @CSILK_HTTP2_PC_LIBS_PRIVATE@
+Requires: csilk-http
+Libs:
 Cflags: -I${includedir} -D_GNU_SOURCE -pthread

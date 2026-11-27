@@ -139,13 +139,19 @@ install(FILES
 )
 
 # ── pkg-config (.pc files) ──────────────────────────────────────────────
-# Base
-set(CSILK_BASE_PC_LIBS_PRIVATE "")
+# Base (primitives + json + crypto + reflection)
+set(CSILK_BASE_PC_REQUIRES_PRIVATE "openssl")
+set(CSILK_BASE_PC_LIBS_PRIVATE "-lyyjson -lcrypto")
+if(CSILK_USE_URING)
+  string(APPEND CSILK_BASE_PC_LIBS_PRIVATE " -luring")
+else()
+  string(APPEND CSILK_BASE_PC_LIBS_PRIVATE " -luv")
+endif()
 if(NOT APPLE AND NOT WIN32)
-  string(APPEND CSILK_BASE_PC_LIBS_PRIVATE "-lm -lpthread")
+  string(APPEND CSILK_BASE_PC_LIBS_PRIVATE " -lm -lpthread")
 endif()
 
-# Core
+# Core (compat alias for runtime)
 set(CSILK_CORE_PC_REQUIRES_PRIVATE "")
 if(CSILK_USE_URING)
   set(CSILK_CORE_PC_REQUIRES_PRIVATE "liburing")
@@ -165,51 +171,38 @@ if(NOT APPLE AND NOT WIN32)
   string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -lm -lpthread")
 endif()
 
-# JSON
-set(CSILK_JSON_PC_REQUIRES "")
-set(CSILK_JSON_PC_LIBS_PRIVATE "-lyyjson")
-
-# Crypto
-set(CSILK_CRYPTO_PC_REQUIRES "csilk-base openssl")
-set(CSILK_CRYPTO_PC_LIBS_PRIVATE "-lcrypto")
-
-# Runtime
-set(CSILK_RUNTIME_PC_REQUIRES "csilk-base csilk-crypto csilk-json csilk-reflection")
-set(CSILK_RUNTIME_PC_REQUIRES_PRIVATE "")
-set(CSILK_RUNTIME_PC_LIBS_PRIVATE "-luv -lyaml -lpthread -lm")
+# Runtime (context, router, server, I/O backend + TLS)
+set(CSILK_RUNTIME_PC_REQUIRES "csilk-base")
+set(CSILK_RUNTIME_PC_REQUIRES_PRIVATE "openssl")
+set(CSILK_RUNTIME_PC_LIBS_PRIVATE "-lssl -lcrypto -lyaml")
 if(CSILK_USE_URING)
-  set(CSILK_RUNTIME_PC_REQUIRES "csilk-base csilk-crypto csilk-json csilk-reflection liburing")
-  set(CSILK_RUNTIME_PC_LIBS_PRIVATE "-luring -lyaml -lpthread -lm")
+  string(APPEND CSILK_RUNTIME_PC_REQUIRES " liburing")
+  string(APPEND CSILK_RUNTIME_PC_LIBS_PRIVATE " -luring")
+else()
+  string(APPEND CSILK_RUNTIME_PC_LIBS_PRIVATE " -luv")
+endif()
+if(NOT APPLE AND NOT WIN32)
+  string(APPEND CSILK_RUNTIME_PC_LIBS_PRIVATE " -lpthread -lm")
 endif()
 
-# Protocols
-set(CSILK_PROTOCOLS_PC_REQUIRES "csilk-http csilk-http2 csilk-reflection")
+# HTTP (HTTP/1.1 + HTTP/2 + WebSocket/OpenAPI/Swagger protocols)
+set(CSILK_HTTP_PC_REQUIRES "csilk-runtime")
 if(CSILK_ENABLE_MQ)
-  string(APPEND CSILK_PROTOCOLS_PC_REQUIRES " csilk-mq")
+  string(APPEND CSILK_HTTP_PC_REQUIRES " csilk-mq")
 endif()
-set(CSILK_PROTOCOLS_PC_REQUIRES_PRIVATE "")
-set(CSILK_PROTOCOLS_PC_LIBS_PRIVATE "")
-
-# Middleware
-set(CSILK_MIDDLEWARE_PC_REQUIRES "csilk-http csilk-tls")
-if(CSILK_ENABLE_MQ)
-  string(APPEND CSILK_MIDDLEWARE_PC_REQUIRES " csilk-mq")
+set(CSILK_HTTP_PC_REQUIRES_PRIVATE "zlib")
+if(NOT TARGET nghttp2_static)
+  string(APPEND CSILK_HTTP_PC_REQUIRES_PRIVATE " libnghttp2")
 endif()
-set(CSILK_MIDDLEWARE_PC_REQUIRES_PRIVATE "zlib")
-set(CSILK_MIDDLEWARE_PC_LIBS_PRIVATE "-lz -lcrypto -lpthread")
+set(CSILK_HTTP_PC_LIBS_PRIVATE "-lz -lnghttp2 -lssl -lcrypto")
+if(LLHTTP_LIB)
+  string(APPEND CSILK_HTTP_PC_LIBS_PRIVATE " -lllhttp")
+else()
+  string(APPEND CSILK_HTTP_PC_LIBS_PRIVATE " -lcsilk-llhttp")
+endif()
 
-# Permission
-set(CSILK_PERMISSION_PC_REQUIRES "csilk-runtime csilk-json")
-set(CSILK_PERMISSION_PC_REQUIRES_PRIVATE "")
-set(CSILK_PERMISSION_PC_LIBS_PRIVATE "")
-
-# Reflection
-set(CSILK_REFLECTION_PC_REQUIRES "csilk-base csilk-json")
-set(CSILK_REFLECTION_PC_REQUIRES_PRIVATE "")
-set(CSILK_REFLECTION_PC_LIBS_PRIVATE "")
-
-# Application
-set(CSILK_APP_PC_REQUIRES "csilk-http csilk-protocols csilk-middleware csilk-reflection")
+# Application (app builder, groups, routes + middleware)
+set(CSILK_APP_PC_REQUIRES "csilk-http")
 if(CSILK_ENABLE_DB)
   string(APPEND CSILK_APP_PC_REQUIRES " csilk-db")
 endif()
@@ -222,11 +215,19 @@ endif()
 if(CSILK_ENABLE_WASM)
   string(APPEND CSILK_APP_PC_REQUIRES " csilk-wasm")
 endif()
-set(CSILK_APP_PC_REQUIRES_PRIVATE "")
-set(CSILK_APP_PC_LIBS_PRIVATE "")
+set(CSILK_APP_PC_REQUIRES_PRIVATE "zlib")
+set(CSILK_APP_PC_LIBS_PRIVATE "-lz -lcrypto")
+if(NOT APPLE AND NOT WIN32)
+  string(APPEND CSILK_APP_PC_LIBS_PRIVATE " -lpthread")
+endif()
+
+# Permission
+set(CSILK_PERMISSION_PC_REQUIRES "csilk-runtime csilk-base")
+set(CSILK_PERMISSION_PC_REQUIRES_PRIVATE "")
+set(CSILK_PERMISSION_PC_LIBS_PRIVATE "")
 
 # Vector
-set(CSILK_VECTOR_PC_REQUIRES "csilk-runtime csilk-json")
+set(CSILK_VECTOR_PC_REQUIRES "csilk-runtime csilk-base")
 set(CSILK_VECTOR_PC_REQUIRES_PRIVATE "libcurl")
 set(CSILK_VECTOR_PC_LIBS_PRIVATE "-lcurl")
 
@@ -234,27 +235,9 @@ set(CSILK_VECTOR_PC_LIBS_PRIVATE "-lcurl")
 set(CSILK_WASM_PC_REQUIRES "csilk-core")
 set(CSILK_WASM_PC_LIBS_PRIVATE "")
 
-# TLS
-set(CSILK_TLS_PC_REQUIRES_PRIVATE "openssl")
-set(CSILK_TLS_PC_LIBS_PRIVATE "-lssl -lcrypto")
-
 # MQ
 set(CSILK_MQ_PC_REQUIRES_PRIVATE "")
 set(CSILK_MQ_PC_LIBS_PRIVATE "")
-
-# HTTP/2
-set(CSILK_HTTP2_PC_REQUIRES_PRIVATE "libnghttp2")
-set(CSILK_HTTP2_PC_LIBS_PRIVATE "-lnghttp2")
-
-# HTTP
-set(CSILK_HTTP_PC_REQUIRES "csilk-core csilk-tls csilk-http2")
-set(CSILK_HTTP_PC_REQUIRES_PRIVATE "zlib")
-set(CSILK_HTTP_PC_LIBS_PRIVATE "-lz -lssl -lcrypto")
-if(LLHTTP_LIB)
-  string(APPEND CSILK_HTTP_PC_LIBS_PRIVATE " -lllhttp")
-else()
-  string(APPEND CSILK_HTTP_PC_LIBS_PRIVATE " -lcsilk-llhttp")
-endif()
 
 # DB
 set(CSILK_DB_PC_REQUIRES_PRIVATE "sqlite3")
@@ -284,7 +267,7 @@ set(CSILK_WORKFLOW_PC_REQUIRES_PRIVATE "yaml-0.1")
 set(CSILK_WORKFLOW_PC_LIBS_PRIVATE "-lyaml")
 
 # HTTP/3
-set(CSILK_H3_PC_REQUIRES "csilk-runtime csilk-http csilk-tls")
+set(CSILK_H3_PC_REQUIRES "csilk-runtime csilk-http")
 set(CSILK_H3_PC_REQUIRES_PRIVATE "openssl")
 set(CSILK_H3_PC_LIBS_PRIVATE "-lngtcp2 -lnghttp3")
 if(NGTCP2_LIB AND NGHTTP3_LIB)
@@ -299,17 +282,17 @@ endif()
 string(APPEND CSILK_H3_PC_LIBS_PRIVATE " -lssl -lcrypto")
 
 # MCP
-set(CSILK_MCP_PC_REQUIRES "csilk-protocols csilk-http csilk-runtime csilk-json csilk-ai")
+set(CSILK_MCP_PC_REQUIRES "csilk-http csilk-runtime csilk-base csilk-ai")
 set(CSILK_MCP_PC_REQUIRES_PRIVATE "libcurl")
 set(CSILK_MCP_PC_LIBS_PRIVATE "-lcurl")
 
 # gRPC
-set(CSILK_GRPC_PC_REQUIRES "csilk-middleware csilk-http csilk-runtime csilk-json")
+set(CSILK_GRPC_PC_REQUIRES "csilk-app csilk-http csilk-runtime csilk-base")
 set(CSILK_GRPC_PC_REQUIRES_PRIVATE "")
 set(CSILK_GRPC_PC_LIBS_PRIVATE "")
 
 # Observability
-set(CSILK_OBSERVABILITY_PC_REQUIRES "csilk-app csilk-middleware csilk-http csilk-runtime csilk-json")
+set(CSILK_OBSERVABILITY_PC_REQUIRES "csilk-app csilk-http csilk-runtime csilk-base")
 if(CSILK_ENABLE_GRPC)
   string(APPEND CSILK_OBSERVABILITY_PC_REQUIRES " csilk-grpc")
 endif()
@@ -330,7 +313,7 @@ endif()
 
 # Umbrella static closure. Requires lists pull the enabled CSilk archives;
 # Libs.private supplies implementation dependencies for --static consumers.
-set(CSILK_PC_REQUIRES "csilk-app csilk-http")
+set(CSILK_PC_REQUIRES "csilk-app csilk-http csilk-runtime csilk-base")
 set(CSILK_PC_LIBS_PRIVATE "-lyyjson -lssl -lcrypto -lz -lnghttp2 -lyaml")
 set(CSILK_PC_CFLAGS "")
 if(CSILK_NEED_CURL)

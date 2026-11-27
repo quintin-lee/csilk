@@ -4,10 +4,9 @@ libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
 Name: csilk-crypto
-Description: Csilk cryptography and cipher implementations
+Description: Csilk cryptography and cipher implementations (compatibility alias for csilk-base)
 Version: @CSILK_VERSION@
 URL: https://github.com/quintin-lee/csilk
-Requires: @CSILK_CRYPTO_PC_REQUIRES@
-Libs: -L${libdir} -lcsilk-crypto
-Libs.private: @CSILK_CRYPTO_PC_LIBS_PRIVATE@
+Requires: csilk-base
+Libs:
 Cflags: -I${includedir} -D_GNU_SOURCE -pthread

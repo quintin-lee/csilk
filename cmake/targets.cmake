@@ -218,18 +218,31 @@ function(csilk_add_module NAME SOURCE_VAR OUTPUT_NAME)
       PARENT_SCOPE)
 endfunction()
 
-# ── Core Web & HTTP Modules (Always Built) ───────────────────────────────
-csilk_add_module(csilk_base CSILK_BASE_SOURCES "csilk-base")
-csilk_add_module(csilk_json CSILK_JSON_SOURCES "csilk-json")
-csilk_add_module(csilk_crypto CSILK_CRYPTO_SOURCES "csilk-crypto")
-csilk_add_module(csilk_reflection CSILK_REFLECTION_SOURCES "csilk-reflection")
-csilk_add_module(csilk_runtime CSILK_RUNTIME_SOURCES "csilk-runtime")
-csilk_add_module(csilk_tls CSILK_TLS_SOURCES "csilk-tls")
-csilk_add_module(csilk_http2 CSILK_HTTP2_SOURCES "csilk-http2")
-csilk_add_module(csilk_http CSILK_HTTP_SOURCES "csilk-http")
-csilk_add_module(csilk_protocols CSILK_PROTOCOLS_SOURCES "csilk-protocols")
-csilk_add_module(csilk_middleware CSILK_MIDDLEWARE_SOURCES "csilk-middleware")
-csilk_add_module(csilk_app CSILK_APP_SOURCES "csilk-app")
+# ── Core Web & HTTP Modules (4 Layered Targets, Always Built) ────────────
+set(CSILK_BASE_LAYER_SOURCES
+    ${CSILK_BASE_SOURCES}
+    ${CSILK_JSON_SOURCES}
+    ${CSILK_CRYPTO_SOURCES}
+    ${CSILK_REFLECTION_SOURCES}
+)
+set(CSILK_RUNTIME_LAYER_SOURCES
+    ${CSILK_RUNTIME_SOURCES}
+    ${CSILK_TLS_SOURCES}
+)
+set(CSILK_HTTP_LAYER_SOURCES
+    ${CSILK_HTTP_SOURCES}
+    ${CSILK_HTTP2_SOURCES}
+    ${CSILK_PROTOCOLS_SOURCES}
+)
+set(CSILK_APP_LAYER_SOURCES
+    ${CSILK_APP_SOURCES}
+    ${CSILK_MIDDLEWARE_SOURCES}
+)
+
+csilk_add_module(csilk_base CSILK_BASE_LAYER_SOURCES "csilk-base")
+csilk_add_module(csilk_runtime CSILK_RUNTIME_LAYER_SOURCES "csilk-runtime")
+csilk_add_module(csilk_http CSILK_HTTP_LAYER_SOURCES "csilk-http")
+csilk_add_module(csilk_app CSILK_APP_LAYER_SOURCES "csilk-app")
 
 # ── Optional Feature Modules (Controlled via CSILK_ENABLE_* / CSILK_BUILD_FULL) ──
 if(CSILK_ENABLE_HTTP3)
@@ -266,24 +279,36 @@ if(CSILK_ENABLE_OBSERVABILITY)
   csilk_add_module(csilk_observability CSILK_OBSERVABILITY_SOURCES "csilk-observability")
 endif()
 
-# ── Compatibility target ─────────────────────────────────────────────────
-# Keep csilk::core as a stable consumer entry point while runtime owns the
-# implementation sources.
-add_library(csilk_core INTERFACE)
-target_link_libraries(csilk_core INTERFACE csilk_runtime)
-add_library(csilk::core ALIAS csilk_core)
+# ── Compatibility targets ────────────────────────────────────────────────
+# Keep fine-grained csilk_* / csilk::* targets as INTERFACE wrappers backed
+# by the 4 layered Web Core libraries so external consumers keep working.
+function(csilk_add_compat_alias NAME LAYER_TARGET)
+  add_library(${NAME} INTERFACE)
+  target_link_libraries(${NAME} INTERFACE ${LAYER_TARGET})
+  string(REPLACE "csilk_" "" _short_name "${NAME}")
+  add_library(csilk::${_short_name} ALIAS ${NAME})
 
-if(CSILK_BUILD_SHARED)
-  add_library(csilk_core_shared INTERFACE)
-  target_link_libraries(csilk_core_shared INTERFACE csilk_runtime_shared)
-  add_library(csilk::core_shared ALIAS csilk_core_shared)
-endif()
+  if(CSILK_BUILD_SHARED)
+    add_library(${NAME}_shared INTERFACE)
+    target_link_libraries(${NAME}_shared INTERFACE ${LAYER_TARGET}_shared)
+    add_library(csilk::${_short_name}_shared ALIAS ${NAME}_shared)
+  endif()
+endfunction()
+
+csilk_add_compat_alias(csilk_json csilk_base)
+csilk_add_compat_alias(csilk_crypto csilk_base)
+csilk_add_compat_alias(csilk_reflection csilk_base)
+csilk_add_compat_alias(csilk_core csilk_runtime)
+csilk_add_compat_alias(csilk_tls csilk_runtime)
+csilk_add_compat_alias(csilk_http2 csilk_http)
+csilk_add_compat_alias(csilk_protocols csilk_http)
+csilk_add_compat_alias(csilk_middleware csilk_app)
 
 # ── Static module dependencies ────────────────────────────────────────────
 if(CSILK_USE_URING)
-  csilk_link_module(csilk_base Threads::Threads uring)
+  csilk_link_module(csilk_base yyjson OpenSSL::Crypto Threads::Threads uring)
 else()
-  csilk_link_module(csilk_base Threads::Threads csilk::libuv)
+  csilk_link_module(csilk_base yyjson OpenSSL::Crypto Threads::Threads csilk::libuv)
 endif()
 if(NOT APPLE AND NOT WIN32)
   target_link_libraries(csilk_base PRIVATE m)
@@ -292,15 +317,10 @@ if(NOT APPLE AND NOT WIN32)
   endif()
 endif()
 
-csilk_link_module(csilk_json yyjson)
-csilk_link_module(csilk_crypto csilk_base OpenSSL::Crypto Threads::Threads)
-csilk_link_module(csilk_reflection csilk_base csilk_json)
-
 csilk_link_module(csilk_runtime
     csilk_base
-    csilk_crypto
-    csilk_json
-    csilk_reflection
+    OpenSSL::SSL
+    OpenSSL::Crypto
     Threads::Threads
 )
 if(TARGET csilk::yaml)
@@ -325,17 +345,10 @@ endif()
 # csilk_io_* wrappers in <csilk/core/sys_io.h> and <csilk/core/sync.h> are
 # static inline in the libuv backend, so every module whose objects reference
 # them must link the I/O backend directly.
-if(TARGET csilk::libuv)
-  csilk_link_module(csilk_tls csilk_runtime OpenSSL::SSL OpenSSL::Crypto csilk::libuv)
-else()
-  csilk_link_module(csilk_tls csilk_runtime OpenSSL::SSL OpenSSL::Crypto)
-endif()
-csilk_link_module(csilk_http2 csilk_runtime csilk_tls nghttp2)
 csilk_link_module(csilk_http
     csilk_runtime
-    csilk_json
-    csilk_tls
-    csilk_http2
+    csilk_base
+    nghttp2
     ZLIB::ZLIB
     OpenSSL::SSL
     OpenSSL::Crypto
@@ -344,34 +357,19 @@ if(TARGET csilk::llhttp)
   csilk_link_module(csilk_http csilk::llhttp)
 endif()
 
-csilk_link_module(csilk_protocols
-    csilk_http
-    csilk_http2
-    csilk_runtime
-    csilk_json
-    csilk_reflection
-)
-csilk_link_module(csilk_middleware
+csilk_link_module(csilk_app
     csilk_http
     csilk_runtime
-    csilk_json
-    csilk_tls
+    csilk_base
     ZLIB::ZLIB
     OpenSSL::Crypto
     Threads::Threads
-)
-csilk_link_module(csilk_app
-    csilk_http
-    csilk_protocols
-    csilk_middleware
-    csilk_reflection
 )
 
 if(CSILK_ENABLE_HTTP3)
   csilk_link_module(csilk_h3
       csilk_runtime
       csilk_http
-      csilk_tls
       csilk::ngtcp2
       csilk::nghttp3
       OpenSSL::SSL
@@ -393,12 +391,11 @@ if(CSILK_ENABLE_MQ)
   else()
     csilk_link_module(csilk_mq csilk_runtime)
   endif()
-  csilk_link_module(csilk_protocols csilk_mq)
-  csilk_link_module(csilk_middleware csilk_mq)
+  csilk_link_module(csilk_http csilk_mq)
   csilk_link_module(csilk_app csilk_mq)
 endif()
 if(CSILK_ENABLE_DB)
-  csilk_link_module(csilk_db csilk_runtime csilk_json SQLite3::SQLite3)
+  csilk_link_module(csilk_db csilk_runtime csilk_base SQLite3::SQLite3)
   foreach(DB_TARGET csilk::mysql csilk::pq csilk::hiredis csilk::mongoc)
     if(TARGET ${DB_TARGET})
       csilk_link_module(csilk_db ${DB_TARGET})
@@ -408,40 +405,40 @@ if(CSILK_ENABLE_DB)
 endif()
 if(CSILK_ENABLE_VECTOR)
   if(NOT APPLE AND NOT WIN32)
-    csilk_link_module(csilk_vector csilk_runtime csilk_json CURL::libcurl m)
+    csilk_link_module(csilk_vector csilk_runtime csilk_base CURL::libcurl m)
   else()
-    csilk_link_module(csilk_vector csilk_runtime csilk_json CURL::libcurl)
+    csilk_link_module(csilk_vector csilk_runtime csilk_base CURL::libcurl)
   endif()
 endif()
 if(CSILK_ENABLE_AI)
   if(NOT APPLE AND NOT WIN32)
-    csilk_link_module(csilk_ai csilk_runtime csilk_json CURL::libcurl m ${CMAKE_DL_LIBS})
+    csilk_link_module(csilk_ai csilk_runtime csilk_base CURL::libcurl m ${CMAKE_DL_LIBS})
   else()
-    csilk_link_module(csilk_ai csilk_runtime csilk_json CURL::libcurl)
+    csilk_link_module(csilk_ai csilk_runtime csilk_base CURL::libcurl)
   endif()
   csilk_link_module(csilk_app csilk_ai)
 endif()
 if(CSILK_ENABLE_PERM)
-  csilk_link_module(csilk_permission csilk_runtime csilk_json)
+  csilk_link_module(csilk_permission csilk_runtime csilk_base)
 endif()
 if(CSILK_ENABLE_WORKFLOW)
   if(NOT APPLE AND NOT WIN32)
-    csilk_link_module(csilk_workflow csilk_runtime csilk_json csilk_ai csilk_mq m csilk::yaml)
+    csilk_link_module(csilk_workflow csilk_runtime csilk_base csilk_ai csilk_mq m csilk::yaml)
   else()
-    csilk_link_module(csilk_workflow csilk_runtime csilk_json csilk_ai csilk_mq csilk::yaml)
+    csilk_link_module(csilk_workflow csilk_runtime csilk_base csilk_ai csilk_mq csilk::yaml)
   endif()
   if(CSILK_ENABLE_WASM)
     csilk_link_module(csilk_workflow csilk_wasm)
   endif()
 endif()
 if(CSILK_ENABLE_MCP)
-  csilk_link_module(csilk_mcp csilk_protocols csilk_http csilk_runtime csilk_json csilk_ai CURL::libcurl)
+  csilk_link_module(csilk_mcp csilk_http csilk_runtime csilk_base csilk_ai CURL::libcurl)
 endif()
 if(CSILK_ENABLE_GRPC)
-  csilk_link_module(csilk_grpc csilk_middleware csilk_http csilk_runtime csilk_json)
+  csilk_link_module(csilk_grpc csilk_app csilk_http csilk_runtime csilk_base)
 endif()
 if(CSILK_ENABLE_OBSERVABILITY)
-  csilk_link_module(csilk_observability csilk_app csilk_middleware csilk_http csilk_runtime csilk_json Threads::Threads)
+  csilk_link_module(csilk_observability csilk_app csilk_http csilk_runtime csilk_base Threads::Threads)
   if(CSILK_ENABLE_GRPC)
     csilk_link_module(csilk_observability csilk_grpc)
   endif()
@@ -460,16 +457,9 @@ endif()
 add_library(csilk INTERFACE)
 
 set(CSILK_ENABLED_MODULES
-    csilk_runtime
     csilk_app
-    csilk_protocols
-    csilk_middleware
-    csilk_reflection
     csilk_http
-    csilk_http2
-    csilk_tls
-    csilk_crypto
-    csilk_json
+    csilk_runtime
     csilk_base
     yyjson
 )

@@ -12,15 +12,8 @@ file(MAKE_DIRECTORY "${_consumer}")
 
 set(_install_targets
     csilk_base
-    csilk_crypto
     csilk_runtime
-    csilk_json
     csilk_http
-    csilk_tls
-    csilk_http2
-    csilk_protocols
-    csilk_middleware
-    csilk_reflection
     csilk_app
     yyjson)
 
@@ -66,15 +59,8 @@ if(CSILK_BUILD_SHARED)
   list(APPEND _install_targets
       csilk_shared
       csilk_base_shared
-      csilk_crypto_shared
       csilk_runtime_shared
-      csilk_json_shared
       csilk_http_shared
-      csilk_tls_shared
-      csilk_http2_shared
-      csilk_protocols_shared
-      csilk_middleware_shared
-      csilk_reflection_shared
       csilk_app_shared)
   if(CSILK_ENABLE_HTTP3)
     list(APPEND _install_targets csilk_h3_shared)
@@ -264,6 +250,28 @@ if(_pkg_config_exe AND NOT CSILK_USE_URING)
   if(NOT _pc_static_res EQUAL 0)
     message(FATAL_ERROR "pkg-config --static --libs csilk failed:\n${_pc_static_out}\n${_pc_static_err}")
   endif()
+  foreach(_compat_pc IN ITEMS
+      csilk-core
+      csilk-json
+      csilk-crypto
+      csilk-reflection
+      csilk-tls
+      csilk-http2
+      csilk-protocols
+      csilk-middleware)
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E env "PKG_CONFIG_PATH=${_pc_dir}" "${_pkg_config_exe}" --static --libs "${_compat_pc}"
+        RESULT_VARIABLE _compat_pc_res
+        OUTPUT_VARIABLE _compat_pc_out
+        ERROR_VARIABLE _compat_pc_err
+    )
+    if(NOT _compat_pc_res EQUAL 0)
+      message(FATAL_ERROR "pkg-config --static --libs ${_compat_pc} failed:\n${_compat_pc_out}\n${_compat_pc_err}")
+    endif()
+    if(_compat_pc_out MATCHES "-lcsilk-(core|json|crypto|reflection|tls|http2|protocols|middleware)([ \t\r\n]|$)")
+      message(FATAL_ERROR "${_compat_pc}.pc must not emit removed archive flags:\n${_compat_pc_out}")
+    endif()
+  endforeach()
 endif()
 
 file(WRITE "${_consumer}/CMakeLists.txt" [=[

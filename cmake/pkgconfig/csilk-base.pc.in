@@ -4,9 +4,10 @@ libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
 Name: csilk-base
-Description: Csilk foundation primitives (arena, bounded buffer, kv store)
+Description: Csilk foundation primitives, JSON, crypto, and reflection
 Version: @CSILK_VERSION@
 URL: https://github.com/quintin-lee/csilk
+Requires.private: @CSILK_BASE_PC_REQUIRES_PRIVATE@
 Libs: -L${libdir} -lcsilk-base
 Libs.private: @CSILK_BASE_PC_LIBS_PRIVATE@
 Cflags: -I${includedir} -D_GNU_SOURCE -pthread
