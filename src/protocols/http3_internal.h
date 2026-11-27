@@ -84,6 +84,7 @@ struct csilk_h3_conn_s {
     socklen_t               remote_len;
     /* Connection state: 0=new, 1=handshake, 2=established, 3=closed. */
     int state;
+    int ctrl_streams_bound;
 #ifdef CSILK_HAS_NGTCP2
     /* Per-connection scratch buffer for response NVs (replaces the
      * file-scope static in h3_session.c). */

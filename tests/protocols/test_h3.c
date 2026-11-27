@@ -452,6 +452,7 @@ test_h3_session_send_response_and_body(void)
     assert(csilk_h3_session_send_body(s, 0, NULL, 0) == -1);
 
     nghttp3_conn_del(cl);
+    nghttp3_conn_close_stream(s, 0, NGHTTP3_H3_NO_ERROR);
     csilk_h3_session_destroy(s);
     csilk_h3_session_destroy(NULL); /* null-safe */
 
@@ -711,6 +712,7 @@ test_h3_response_streaming_and_backpressure(void)
     assert(sd->resp_ended == 1);
 
     nghttp3_conn_del(cl);
+    nghttp3_conn_close_stream(s, 0, NGHTTP3_H3_NO_ERROR);
     csilk_h3_session_destroy(s);
 
     printf("test_h3_response_streaming_and_backpressure: PASS\n");

@@ -134,13 +134,12 @@ _h3_recv_client_initial(ngtcp2_conn* conn, const ngtcp2_cid* dcid, void* user_da
         return rc;
     }
 
-    /* Point ngtcp2 at the conn_ref so the OpenSSL adapter can retrieve
-     * the ngtcp2_conn* during the handshake. */
-    ngtcp2_conn_set_tls_native_handle(conn, &c->ssl_conn_ref);
+    /* Point ngtcp2 at the OpenSSL crypto ctx so the adapter can drive TLS. */
+    ngtcp2_conn_set_tls_native_handle(conn, c->crypto_ctx);
     return 0;
 }
 
-/* QUIC handshake_completed callback: mark the connection established. */
+/* QUIC handshake_completed callback: mark the connection established and flush H3 control stream. */
 static int
 _h3_handshake_completed(ngtcp2_conn* conn, void* user_data)
 {
@@ -151,6 +150,21 @@ _h3_handshake_completed(ngtcp2_conn* conn, void* user_data)
     /* Notify ngtcp2 that the TLS handshake has completed so it can
      * switch to 1-RTT keys. */
     ngtcp2_conn_tls_handshake_completed(conn);
+    if (c) {
+        if (c->nghttp3_conn && !c->ctrl_streams_bound) {
+            int64_t ctrl_sid = -1;
+            int64_t qenc_sid = -1;
+            int64_t qdec_sid = -1;
+            if (ngtcp2_conn_open_uni_stream(conn, &ctrl_sid, NULL) == 0 &&
+                ngtcp2_conn_open_uni_stream(conn, &qenc_sid, NULL) == 0 &&
+                ngtcp2_conn_open_uni_stream(conn, &qdec_sid, NULL) == 0) {
+                nghttp3_conn_bind_control_stream(c->nghttp3_conn, ctrl_sid);
+                nghttp3_conn_bind_qpack_streams(c->nghttp3_conn, qenc_sid, qdec_sid);
+                c->ctrl_streams_bound = 1;
+            }
+        }
+        _h3_flush_http3_to_quic(c);
+    }
     return 0;
 }
 
@@ -229,9 +243,6 @@ _h3_recv_stream_data(ngtcp2_conn*   conn,
         return NGTCP2_ERR_CALLBACK_FAILURE;
     }
     if (consumed > 0) {
-        /* Inform nghttp3 of the write offset we consumed. */
-        nghttp3_conn_add_write_offset(c->nghttp3_conn, stream_id, (size_t)consumed);
-
         /* Update QUIC flow control windows */
         ngtcp2_conn_extend_max_stream_offset(conn, stream_id, (uint64_t)consumed);
         ngtcp2_conn_extend_max_offset(conn, (uint64_t)consumed);
@@ -420,8 +431,15 @@ _h3_new_conn(csilk_h3_transport_t*  t,
                dcid->data,
                dcid->datalen > sizeof(c->dcid_data) ? sizeof(c->dcid_data) : dcid->datalen);
     }
-    c->remote = *(const struct sockaddr_storage*)remote;
-    c->remote_len = remote_len;
+    memset(&c->remote, 0, sizeof(c->remote));
+    if (remote && remote_len > 0) {
+        size_t copy_len =
+            (size_t)remote_len > sizeof(c->remote) ? sizeof(c->remote) : (size_t)remote_len;
+        memcpy(&c->remote, remote, copy_len);
+        c->remote_len = (socklen_t)copy_len;
+    } else {
+        c->remote_len = 0;
+    }
 
     t->conns[t->conn_count] = c;
     t->conn_count++;
@@ -442,6 +460,12 @@ _h3_del_conn(csilk_h3_transport_t* t, struct csilk_h3_conn_s* c)
     }
 
     if (c->nghttp3_conn) {
+        for (int i = 0; i < c->stream_count; i++) {
+            if (c->streams[i].state != 0) {
+                nghttp3_conn_close_stream(
+                    c->nghttp3_conn, (int64_t)c->streams[i].stream_id, NGHTTP3_H3_NO_ERROR);
+            }
+        }
         nghttp3_conn_del(c->nghttp3_conn);
         c->nghttp3_conn = NULL;
     }
@@ -568,7 +592,7 @@ _h3_send_quic_packets(csilk_h3_transport_t* t, struct csilk_h3_conn_s* conn)
 
     ngtcp2_tstamp ts = csilk_io_hrtime();
 
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 64; i++) {
         ngtcp2_pkt_info pi;
         memset(&pi, 0, sizeof(pi));
 
@@ -650,7 +674,7 @@ _h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn)
         }
 
         uint8_t      pktbuf[NGTCP2_MAX_UDP_PAYLOAD_SIZE + 64];
-        ngtcp2_ssize pdatalen = 0;
+        ngtcp2_ssize pdatalen = -1;
         ngtcp2_ssize written = ngtcp2_conn_writev_stream(conn->ngtcp2_conn,
                                                          NULL,
                                                          NULL,
@@ -667,6 +691,9 @@ _h3_flush_http3_to_quic(struct csilk_h3_conn_s* conn)
                 nghttp3_conn_close_stream(
                     conn->nghttp3_conn, stream_id, NGHTTP3_H3_STREAM_CREATION_ERROR);
             }
+            break;
+        }
+        if (written == 0 && pdatalen <= 0) {
             break;
         }
 
@@ -773,6 +800,7 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
 
         ngtcp2_settings settings;
         ngtcp2_settings_default(&settings);
+        settings.initial_ts = csilk_io_hrtime();
         settings.initial_rtt = NGTCP2_DEFAULT_INITIAL_RTT;
 
         ngtcp2_transport_params tp;
@@ -786,14 +814,12 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
         tp.max_idle_timeout = 30 * NGTCP2_SECONDS;
         tp.original_dcid = hd.dcid;
         tp.original_dcid_present = 1;
-        tp.initial_scid = scid;
-        tp.initial_scid_present = 1;
         tp.active_connection_id_limit = 4;
 
         ngtcp2_callbacks cbs = _h3_callbacks();
 
         rc = ngtcp2_conn_server_new_versioned(&conn->ngtcp2_conn,
-                                              &hd.dcid,
+                                              &hd.scid,
                                               &scid,
                                               &ps.path,
                                               NGTCP2_PROTO_VER_V1,
@@ -815,13 +841,17 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
             return -1;
         }
 
-        /* Set the conn_ref as TLS native handle so the OpenSSL adapter
-         * can find the ngtcp2_conn* via SSL_get_app_data. */
-        ngtcp2_conn_set_tls_native_handle(conn->ngtcp2_conn, &conn->ssl_conn_ref);
+        /* Set crypto_ctx as TLS native handle so the OpenSSL adapter
+         * can bridge TLS <-> ngtcp2_conn via SSL_get_app_data. */
+        conn->ssl_conn_ref.get_conn = _h3_get_conn;
+        conn->ssl_conn_ref.user_data = conn;
+        SSL_set_app_data(conn->ssl, &conn->ssl_conn_ref);
+        ngtcp2_conn_set_tls_native_handle(conn->ngtcp2_conn, conn->crypto_ctx);
 
         /* Create the nghttp3 session. */
         conn->nghttp3_conn = csilk_h3_session_new(0, conn);
         if (!conn->nghttp3_conn) {
+            SSL_set_app_data(conn->ssl, NULL);
             ngtcp2_conn_del(conn->ngtcp2_conn);
             conn->ngtcp2_conn = NULL;
             ngtcp2_crypto_ossl_ctx_del(conn->crypto_ctx);
@@ -833,8 +863,6 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
         }
 
         conn->state = 1; /* handshake */
-
-        _h3_flush_http3_to_quic(conn);
 
         CSILK_LOG_I("H3: new QUIC conn (DCID=%02x%02x%02x%02x)",
                     hd.dcid.data[0],
@@ -872,6 +900,10 @@ _h3_process_datagram(csilk_h3_transport_t*  t,
         if (conn->state == 3) {
             return 0; /* already cleaned up */
         }
+    }
+
+    if (conn->state >= 2) {
+        _h3_flush_http3_to_quic(conn);
     }
 
     /* Send any pending QUIC packets (handshake responses, etc.) */
@@ -1252,6 +1284,7 @@ csilk_h3_worker_transport_new(csilk_server_t* server, void* wp, int udp_fd)
     t->udp_fd = udp_fd;
 #ifdef CSILK_HAS_NGTCP2
     t->udp_nonblocking = 1;
+    _h3_init_crypto_vtable();
     if (server && server->h3_state) {
         t->ssl_ctx = (SSL_CTX*)server->h3_state->ssl_ctx;
     }
@@ -1298,15 +1331,37 @@ csilk_h3_conn_close(csilk_client_t* client)
 
 #ifdef CSILK_HAS_NGTCP2
 static int
-_h3_init_ssl_ctx(csilk_h3_transport_t* t, const char* cert_pem, const char* key_pem)
+_h3_alpn_select_cb(SSL*                  ssl,
+                   const unsigned char** out,
+                   unsigned char*        outlen,
+                   const unsigned char*  in,
+                   unsigned int          inlen,
+                   void*                 arg)
 {
-    t->ssl_ctx = SSL_CTX_new(TLS_method());
-    if (!t->ssl_ctx) {
-        return -1;
+    (void)ssl;
+    (void)arg;
+    static const unsigned char alpn[] = {2, 'h', '3'};
+    if (SSL_select_next_proto((unsigned char**)out, outlen, alpn, sizeof(alpn), in, inlen) ==
+        OPENSSL_NPN_NEGOTIATED) {
+        return SSL_TLSEXT_ERR_OK;
     }
-    SSL_CTX_set_min_proto_version(t->ssl_ctx, TLS1_3_VERSION);
-    SSL_CTX_set_session_cache_mode(t->ssl_ctx, SSL_SESS_CACHE_SERVER);
-    SSL_CTX_set_max_early_data(t->ssl_ctx, 0xffffffff);
+    return SSL_TLSEXT_ERR_ALERT_FATAL;
+}
+
+static SSL_CTX*
+_h3_create_ssl_ctx(const char* cert_pem, const char* key_pem)
+{
+    if (!cert_pem || !key_pem) {
+        return NULL;
+    }
+    SSL_CTX* ctx = SSL_CTX_new(TLS_method());
+    if (!ctx) {
+        return NULL;
+    }
+    SSL_CTX_set_min_proto_version(ctx, TLS1_3_VERSION);
+    SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_SERVER);
+    SSL_CTX_set_max_early_data(ctx, 0xffffffff);
+    SSL_CTX_set_alpn_select_cb(ctx, _h3_alpn_select_cb, NULL);
 
     BIO*      cert_bio = BIO_new_mem_buf(cert_pem, (int)strlen(cert_pem));
     BIO*      key_bio = BIO_new_mem_buf(key_pem, (int)strlen(key_pem));
@@ -1318,8 +1373,8 @@ _h3_init_ssl_ctx(csilk_h3_transport_t* t, const char* cert_pem, const char* key_
         x509 = PEM_read_bio_X509(cert_bio, NULL, NULL, NULL);
         key = PEM_read_bio_PrivateKey(key_bio, NULL, NULL, NULL);
         if (x509 && key) {
-            SSL_CTX_use_certificate(t->ssl_ctx, x509);
-            SSL_CTX_use_PrivateKey(t->ssl_ctx, key);
+            SSL_CTX_use_certificate(ctx, x509);
+            SSL_CTX_use_PrivateKey(ctx, key);
             rc = 0;
         }
     }
@@ -1331,7 +1386,18 @@ _h3_init_ssl_ctx(csilk_h3_transport_t* t, const char* cert_pem, const char* key_
     }
     BIO_free_all(cert_bio);
     BIO_free_all(key_bio);
-    return rc;
+    if (rc != 0) {
+        SSL_CTX_free(ctx);
+        return NULL;
+    }
+    return ctx;
+}
+
+static int
+_h3_init_ssl_ctx(csilk_h3_transport_t* t, const char* cert_pem, const char* key_pem)
+{
+    t->ssl_ctx = _h3_create_ssl_ctx(cert_pem, key_pem);
+    return t->ssl_ctx ? 0 : -1;
 }
 #endif /* CSILK_HAS_NGTCP2 */
 
@@ -1361,7 +1427,9 @@ csilk_h3_quic_tls_new(SSL_CTX* ssl_ctx)
         return NULL;
     }
 
-    /* Enforce TLS 1.3 only for QUIC (RFC 9001 mandates TLS 1.3). */
+    /* Enforce TLS 1.3 only for QUIC (RFC 9001 mandates TLS 1.3) and configure
+     * server accept state prior to ngtcp2_crypto_ossl_configure_server_session(). */
+    SSL_set_accept_state(ssl);
     SSL_set_min_proto_version(ssl, TLS1_3_VERSION);
     SSL_set_max_proto_version(ssl, TLS1_3_VERSION);
     SSL_set_max_early_data(ssl, 0xffffffff);
@@ -1527,7 +1595,9 @@ _h3_worker_stop_cb(void* wp_arg)
         wp->h3_udp_active = false;
     }
     if (wp->h3_transport) {
-        csilk_h3_worker_transport_destroy((struct csilk_h3_transport_s*)wp->h3_transport);
+        struct csilk_h3_transport_s* wt = (struct csilk_h3_transport_s*)wp->h3_transport;
+        wt->udp_fd = -1; /* Owned & closed by wp->h3_udp_handle */
+        csilk_h3_worker_transport_destroy(wt);
         wp->h3_transport = NULL;
     }
 }
@@ -1541,9 +1611,56 @@ _csilk_h3_server_teardown(csilk_server_t* server)
     if (server->h3_state->transport) {
         csilk_h3_transport_destroy((csilk_h3_transport_t*)server->h3_state->transport);
         server->h3_state->transport = NULL;
+        server->h3_state->ssl_ctx = NULL;
     }
+#ifdef CSILK_HAS_NGTCP2
+    if (server->h3_state->ssl_ctx) {
+        SSL_CTX_free((SSL_CTX*)server->h3_state->ssl_ctx);
+        server->h3_state->ssl_ctx = NULL;
+    }
+#endif
     free(server->h3_state);
     server->h3_state = NULL;
+}
+
+int
+csilk_h3_set_enabled_tls(void* server, int port, const char* cert_pem, const char* key_pem)
+{
+    if (!server || port <= 0) {
+        return -1;
+    }
+    _h3_register_response_ops();
+    csilk_server_t* srv = (csilk_server_t*)server;
+    if (!srv->h3_state) {
+        srv->h3_state = calloc(1, sizeof(csilk_h3_state_t));
+        if (!srv->h3_state) {
+            return -1;
+        }
+        _csilk_server_register_teardown(srv, _csilk_h3_server_teardown);
+    }
+    srv->h3_state->port = port;
+    srv->h3_state->worker_init = _h3_worker_init_cb;
+    srv->h3_state->worker_stop = _h3_worker_stop_cb;
+    srv->h3_state->send_response = csilk_h3_send_response_for_ctx;
+    srv->h3_state->conn_close = csilk_h3_conn_close;
+#ifdef CSILK_HAS_NGTCP2
+    _h3_init_crypto_vtable();
+    if (cert_pem && key_pem) {
+        if (srv->h3_state->ssl_ctx) {
+            SSL_CTX_free((SSL_CTX*)srv->h3_state->ssl_ctx);
+            srv->h3_state->ssl_ctx = NULL;
+        }
+        srv->h3_state->ssl_ctx = _h3_create_ssl_ctx(cert_pem, key_pem);
+        if (!srv->h3_state->ssl_ctx) {
+            return -1;
+        }
+    }
+#else
+    (void)cert_pem;
+    (void)key_pem;
+#endif
+    CSILK_LOG_I("HTTP/3: enabled on server, UDP port %d", port);
+    return 0;
 }
 
 /**
@@ -1556,31 +1673,5 @@ _csilk_h3_server_teardown(csilk_server_t* server)
 int
 csilk_h3_set_enabled(void* server, int port)
 {
-    if (!server || port <= 0) {
-        return -1;
-    }
-    _h3_register_response_ops();
-    csilk_server_t* srv = (csilk_server_t*)server;
-    if (!srv->h3_state) {
-        srv->h3_state = calloc(1, sizeof(csilk_h3_state_t));
-        if (!srv->h3_state) {
-            return -1;
-        }
-    }
-    srv->h3_state->port = port;
-    srv->h3_state->worker_init = _h3_worker_init_cb;
-    srv->h3_state->worker_stop = _h3_worker_stop_cb;
-    srv->h3_state->send_response = csilk_h3_send_response_for_ctx;
-    srv->h3_state->conn_close = csilk_h3_conn_close;
-    _csilk_server_register_teardown(srv, _csilk_h3_server_teardown);
-    csilk_h3_transport_t* t = csilk_h3_transport_new(port, NULL, NULL);
-    if (t) {
-        t->server = srv;
-        srv->h3_state->transport = t;
-#ifdef CSILK_HAS_NGTCP2
-        srv->h3_state->ssl_ctx = t->ssl_ctx;
-#endif
-    }
-    CSILK_LOG_I("HTTP/3: enabled on server, UDP port %d", port);
-    return 0;
+    return csilk_h3_set_enabled_tls(server, port, NULL, NULL);
 }

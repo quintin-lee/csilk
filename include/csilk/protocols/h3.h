@@ -175,6 +175,17 @@ void csilk_h3_transport_destroy(csilk_h3_transport_t* t);
  */
 int csilk_h3_set_enabled(void* server, int port);
 
+/**
+ * @brief Enable HTTP/3 on a csilk_server_t with PEM-encoded TLS 1.3 credentials.
+ *
+ * @param server    Server instance.
+ * @param port      UDP port for QUIC (e.g. 443).
+ * @param cert_pem  PEM-encoded TLS certificate (NULL = no TLS).
+ * @param key_pem   PEM-encoded TLS private key (NULL = no TLS).
+ * @return 0 on success, -1 on failure.
+ */
+int csilk_h3_set_enabled_tls(void* server, int port, const char* cert_pem, const char* key_pem);
+
 #ifdef __cplusplus
 } /* extern "C" */
 #endif

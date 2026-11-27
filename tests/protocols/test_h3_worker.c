@@ -40,9 +40,8 @@ test_worker_pool_h3_fields_and_reset(void)
     assert(server != NULL);
 
     /* Verify server H3 state fields exist */
-    server->h3_state = calloc(1, sizeof(csilk_h3_state_t));
+    assert(csilk_h3_set_enabled(server, 4433) == 0);
     assert(server->h3_state != NULL);
-    server->h3_state->port = 4433;
     assert(server->h3_state->port == 4433);
     assert(server->h3_state->ssl_ctx == NULL);
 
@@ -150,9 +149,10 @@ test_h3_multi_worker_udp_reuseport(void)
 
     csilk_server_t* server = csilk_server_new(NULL);
     assert(server != NULL);
-    server->h3_state = calloc(1, sizeof(csilk_h3_state_t));
+    assert(csilk_h3_set_enabled(server, 24433) == 0);
     assert(server->h3_state != NULL);
-    server->h3_state->port = 24433;
+    assert(server->h3_state->worker_init != NULL);
+    assert(server->h3_state->worker_stop != NULL);
 
     csilk_io_loop_t loop0;
     csilk_io_loop_init(&loop0);
@@ -172,23 +172,23 @@ test_h3_multi_worker_udp_reuseport(void)
     wp1.loop_ptr = &loop1;
 
     /* Bind worker 0 */
-    int r0 = _csilk_worker_init_h3(server, &wp0, &loop0);
+    int r0 = server->h3_state->worker_init(server, &wp0, &loop0);
     assert(r0 == 0);
     assert(wp0.h3_udp_active == true);
     assert(wp0.h3_transport != NULL);
 
     /* Bind worker 1 to the same port using SO_REUSEPORT */
-    int r1 = _csilk_worker_init_h3(server, &wp1, &loop1);
+    int r1 = server->h3_state->worker_init(server, &wp1, &loop1);
     assert(r1 == 0);
     assert(wp1.h3_udp_active == true);
     assert(wp1.h3_transport != NULL);
 
     /* Stop both workers */
-    _csilk_worker_stop_h3(&wp0);
+    server->h3_state->worker_stop(&wp0);
     assert(wp0.h3_udp_active == false);
     assert(wp0.h3_transport == NULL);
 
-    _csilk_worker_stop_h3(&wp1);
+    server->h3_state->worker_stop(&wp1);
     assert(wp1.h3_udp_active == false);
     assert(wp1.h3_transport == NULL);
 
@@ -214,9 +214,10 @@ test_h3_shutdown_drain_active_clients(void)
 
     csilk_server_t* server = csilk_server_new(NULL);
     assert(server != NULL);
-    server->h3_state = calloc(1, sizeof(csilk_h3_state_t));
+    assert(csilk_h3_set_enabled(server, 24434) == 0);
     assert(server->h3_state != NULL);
-    server->h3_state->port = 24434;
+    assert(server->h3_state->worker_init != NULL);
+    assert(server->h3_state->worker_stop != NULL);
 
     csilk_io_loop_t loop;
     csilk_io_loop_init(&loop);
@@ -228,7 +229,7 @@ test_h3_shutdown_drain_active_clients(void)
     wp.loop_ptr = &loop;
     _csilk_worker_set_current_pool(&wp);
 
-    int r = _csilk_worker_init_h3(server, &wp, &loop);
+    int r = server->h3_state->worker_init(server, &wp, &loop);
     assert(r == 0);
 
     ngtcp2_cid dcid;
@@ -253,7 +254,7 @@ test_h3_shutdown_drain_active_clients(void)
     assert(wp.active_clients == NULL);
     assert(atomic_load(&wp.client_pool_count) == 1);
 
-    _csilk_worker_stop_h3(&wp);
+    server->h3_state->worker_stop(&wp);
     for (int i = 0; i < 10 && csilk_io_loop_alive(&loop); i++) {
         csilk_io_run(&loop, CSILK_IO_RUN_NOWAIT);
     }
