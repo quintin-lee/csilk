@@ -258,10 +258,6 @@ csilk_wasm_plugin_set_fuel(csilk_wasm_plugin_t* plugin, uint32_t fuel_limit)
     }
     csilk_mutex_lock(&plugin->mutex);
     plugin->config.fuel_limit = fuel_limit;
-    if (plugin->use_wamr && plugin->wasm_instance) {
-        wasm_runtime_set_module_inst_fuel((wasm_module_inst_t)(uintptr_t)plugin->wasm_instance,
-                                          fuel_limit);
-    }
     csilk_mutex_unlock(&plugin->mutex);
     return 0;
 }
@@ -274,10 +270,6 @@ csilk_wasm_plugin_get_fuel(const csilk_wasm_plugin_t* plugin)
     }
     csilk_mutex_lock((csilk_mutex_t*)&plugin->mutex);
     uint32_t fuel = (uint32_t)plugin->config.fuel_limit;
-    if (plugin->use_wamr && plugin->wasm_instance) {
-        fuel =
-            wasm_runtime_get_module_inst_fuel((wasm_module_inst_t)(uintptr_t)plugin->wasm_instance);
-    }
     csilk_mutex_unlock((csilk_mutex_t*)&plugin->mutex);
     return fuel;
 }

@@ -6,6 +6,7 @@
  */
 
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -208,6 +209,13 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
 
     /* WAMR real execution path */
     if (plugin->use_wamr && plugin->wasm_module_id) {
+        if (plugin->config.fuel_limit == 0) {
+            csilk_mutex_unlock(&plugin->mutex);
+            if (err_buf && err_len > 0) {
+                snprintf(err_buf, err_len, "CSILK_WASM_TRAP_FUEL_EXHAUSTED");
+            }
+            return NULL;
+        }
         wasm_module_inst_t   inst = (wasm_module_inst_t)(uintptr_t)plugin->wasm_instance;
         wasm_function_inst_t func = wasm_runtime_lookup_function(inst, func_name);
         if (!func) {
@@ -226,6 +234,12 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
             }
             return NULL;
         }
+#if defined(WASM_ENABLE_INSTRUCTION_METERING) && WASM_ENABLE_INSTRUCTION_METERING != 0
+        int instr_limit = (plugin->config.fuel_limit > (uint64_t)INT_MAX)
+                              ? INT_MAX
+                              : (int)plugin->config.fuel_limit;
+        wasm_runtime_set_instruction_count_limit(env, instr_limit);
+#endif
         /* argv holds the i32/i64 return value after the call. */
         uint32_t argv[2] = {0};
         int      rc = wasm_runtime_call_wasm(env, func, 0, argv);
@@ -234,8 +248,14 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
             csilk_mutex_unlock(&plugin->mutex);
             if (err_buf && err_len > 0) {
                 const char* exc = wasm_runtime_get_exception(inst);
-                snprintf(
-                    err_buf, err_len, "CSILK_WASM_TRAP_EXECUTION_ERR: %s", exc ? exc : "unknown");
+                if (exc && strstr(exc, "instruction limit") != NULL) {
+                    snprintf(err_buf, err_len, "CSILK_WASM_TRAP_FUEL_EXHAUSTED");
+                } else {
+                    snprintf(err_buf,
+                             err_len,
+                             "CSILK_WASM_TRAP_EXECUTION_ERR: %s",
+                             exc ? exc : "unknown");
+                }
             }
             return NULL;
         }
@@ -245,13 +265,16 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
         uint32_t ret = argv[0];
         if (ret != 0) {
             /* Read the string from WAMR's linear memory. */
-            wasm_memory_t mem = wasm_runtime_get_linear_memory(inst);
-            uint32_t      mem_size = mem ? wasm_runtime_get_linear_memory_size(mem) : 0;
-            if (mem && ret < mem_size && (size_t)mem_size - ret >= 1) {
-                const char* p = (const char*)mem + ret;
-                size_t      avail = (size_t)(mem_size - ret);
+            wasm_memory_inst_t mem = wasm_runtime_get_default_memory(inst);
+            void*              mem_base = mem ? wasm_memory_get_base_address(mem) : NULL;
+            uint64_t           mem_size =
+                mem ? (wasm_memory_get_cur_page_count(mem) * wasm_memory_get_bytes_per_page(mem))
+                              : 0;
+            if (mem_base && (uint64_t)ret < mem_size && mem_size - (uint64_t)ret >= 1) {
+                const char* p = (const char*)mem_base + ret;
+                uint64_t    avail = mem_size - (uint64_t)ret;
                 size_t      max_scan =
-                    avail < (size_t)(1024 * 1024 + 1) ? avail : (size_t)(1024 * 1024 + 1);
+                    avail < (uint64_t)(1024 * 1024 + 1) ? (size_t)avail : (size_t)(1024 * 1024 + 1);
                 size_t str_len = strnlen(p, max_scan);
                 /* Verify the string is non-empty and NUL-terminated strictly within bounds */
                 if (str_len == 0 || str_len >= max_scan) {
@@ -266,10 +289,10 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
                 }
             } else {
                 fprintf(stderr,
-                        "[csilk][WASM] invalid return offset %u (mem=%p, mem_size=%u)\n",
+                        "[csilk][WASM] invalid return offset %u (mem=%p, mem_size=%llu)\n",
                         ret,
-                        (void*)mem,
-                        mem_size);
+                        mem_base,
+                        (unsigned long long)mem_size);
             }
         }
         csilk_mutex_unlock(&plugin->mutex);
