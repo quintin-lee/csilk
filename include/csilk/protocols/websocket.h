@@ -3,7 +3,7 @@
  * @file websocket.h
  * @brief WebSocket upgrade, framing, and room management for the csilk framework.
  *
- * @version 0.5.2
+ * @version 1.2.0
  * @copyright MIT License
  */
 

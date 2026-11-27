@@ -261,9 +261,9 @@ info "Updating Doxygen @version in header and source files ..."
 
 HEADER_COUNT=0
 while IFS= read -r file; do
-    run_or_print "sed -i 's/@version ${OLD_VERSION}/@version ${VERSION}/g' '$file'"
+    run_or_print "sed -i -E 's/@version [0-9]+\.[0-9]+\.[0-9]+/@version ${VERSION}/g' '$file'"
     HEADER_COUNT=$((HEADER_COUNT + 1))
-done < <(grep -rl "@version ${OLD_VERSION}" --include="*.h" --include="*.c" include/ src/ 2>/dev/null || true)
+done < <(grep -rlE "@version [0-9]+\.[0-9]+\.[0-9]+" --include="*.h" --include="*.c" include/ src/ 2>/dev/null || true)
 
 ok "Updated ${HEADER_COUNT} header/source files"
 

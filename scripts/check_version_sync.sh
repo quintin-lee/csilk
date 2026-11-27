@@ -49,6 +49,17 @@ fi
 
 echo "CMake version: $CMAKE_VERSION"
 
+# Verify @version Doxygen tags in include/ and src/ match CMAKE_VERSION
+STALE_HEADERS=$(grep -rnE "@version [0-9]+\.[0-9]+\.[0-9]+" --include="*.h" --include="*.c" "$PROJECT_DIR/include" "$PROJECT_DIR/src" 2>/dev/null \
+  | grep -v "@version ${CMAKE_VERSION}$" || true)
+
+if [ -n "$STALE_HEADERS" ]; then
+  echo "✗ Stale @version tags found (expected @version $CMAKE_VERSION):"
+  echo "$STALE_HEADERS"
+  exit 1
+fi
+echo "✓ Header/source @version tags OK ($CMAKE_VERSION)"
+
 # If expected version was explicitly provided, verify CMake matches it
 if [ -n "$EXPECTED_VERSION" ]; then
   EXPECTED_CLEAN="${EXPECTED_VERSION#v}"

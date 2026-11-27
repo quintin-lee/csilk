@@ -6,7 +6,7 @@
  * Groups allow sharing a common prefix and middleware set across multiple
  * routes (e.g., "/api/v1").  Supports nesting via csilk_group_group.
  *
- * @version 0.5.2
+ * @version 1.2.0
  * @copyright MIT License
  */
 
