@@ -23,7 +23,7 @@ static csilk_mutex_t           s_secret_lock;
 static csilk_once_t            s_secret_once = CSILK_ONCE_INIT;
 static csilk_secret_manager_fn s_secret_manager = NULL;
 static char                    s_custom_prefix[64] = {0};
-static test_override_t         s_test_overrides[MAX_TEST_OVERRIDES];
+static test_override_t*        s_test_overrides = NULL;
 static size_t                  s_override_count = 0;
 static bool                    s_test_mode = false;
 static bool                    s_test_mode_initialized = false;
@@ -31,16 +31,15 @@ static bool                    s_test_mode_initialized = false;
 /* ---- External-provider result cache (bounded, TTL) ----
  * The external Secret Manager callback may be slow (Vault/HTTP); we invoke it
  * OUTSIDE s_secret_lock so a slow provider cannot stall every thread that
- * touches any secret. Its results are cached here (fixed table + FNV hash +
- * monotonic-TTL) so repeated lookups of the same key skip the provider.
- * Cache state is guarded by s_secret_lock. */
+ * touches any secret. Its results are cached lazily here (fixed table + FNV
+ * hash + monotonic-TTL) on first provider hit so idle processes pay 0 .bss. */
 #define SECRET_CACHE_ENTRIES 64
 typedef struct {
     char     key[128];
     char     value[1024];
     uint64_t expires_ms; /* 0 = empty slot; else monotonic-ms expiry */
 } secret_cache_entry_t;
-static secret_cache_entry_t s_secret_cache[SECRET_CACHE_ENTRIES];
+static secret_cache_entry_t* s_secret_cache = NULL;
 
 static _Thread_local char   s_tls_secret_ring[4][TLS_BUF_SIZE];
 static _Thread_local size_t s_tls_secret_idx = 0;
@@ -50,16 +49,52 @@ static _Thread_local size_t s_tls_env_idx = 0;
 static const char* const FORBIDDEN_PATTERNS[] = {
     "change-me", "default-secret", "hard-coded-secret", "replace-with-", NULL};
 
+static void secret_secure_zero(void* ptr, size_t len);
+
+static void
+secret_atexit_cleanup(void)
+{
+    if (s_test_overrides) {
+        secret_secure_zero(s_test_overrides, MAX_TEST_OVERRIDES * sizeof(test_override_t));
+        free(s_test_overrides);
+        s_test_overrides = NULL;
+    }
+    if (s_secret_cache) {
+        secret_secure_zero(s_secret_cache, SECRET_CACHE_ENTRIES * sizeof(secret_cache_entry_t));
+        free(s_secret_cache);
+        s_secret_cache = NULL;
+    }
+}
+
 static void
 secret_lock_init(void)
 {
     csilk_mutex_init(&s_secret_lock);
+    atexit(secret_atexit_cleanup);
 }
 
 static void
 ensure_lock_init(void)
 {
     csilk_once(&s_secret_once, secret_lock_init);
+}
+
+static test_override_t*
+ensure_test_overrides(void)
+{
+    if (!s_test_overrides) {
+        s_test_overrides = calloc(MAX_TEST_OVERRIDES, sizeof(test_override_t));
+    }
+    return s_test_overrides;
+}
+
+static secret_cache_entry_t*
+ensure_secret_cache(void)
+{
+    if (!s_secret_cache) {
+        s_secret_cache = calloc(SECRET_CACHE_ENTRIES, sizeof(secret_cache_entry_t));
+    }
+    return s_secret_cache;
 }
 
 /* Monotonic-ms clock for cache expiry (immune to wall-clock step). */
@@ -100,7 +135,11 @@ secret_secure_zero(void* ptr, size_t len)
 static void
 secret_cache_put(const char* key, const char* value, uint64_t ttl_ms)
 {
-    secret_cache_entry_t* e = &s_secret_cache[secret_cache_slot(key)];
+    secret_cache_entry_t* cache = ensure_secret_cache();
+    if (!cache) {
+        return;
+    }
+    secret_cache_entry_t* e = &cache[secret_cache_slot(key)];
     secret_secure_zero(e, sizeof(*e));
     strncpy(e->key, key, sizeof(e->key) - 1);
     e->key[sizeof(e->key) - 1] = '\0';
@@ -114,6 +153,9 @@ secret_cache_put(const char* key, const char* value, uint64_t ttl_ms)
 static bool
 secret_cache_get(const char* key, char* out, size_t out_size)
 {
+    if (!s_secret_cache) {
+        return false;
+    }
     secret_cache_entry_t* e = &s_secret_cache[secret_cache_slot(key)];
     if (e->expires_ms == 0 || strncmp(e->key, key, sizeof(e->key)) != 0) {
         return false;
@@ -202,17 +244,22 @@ csilk_secret_set_test_override(const char* key, const char* value)
     s_test_mode = true;
     s_test_mode_initialized = true;
 
+    test_override_t* overrides = ensure_test_overrides();
+    if (!overrides) {
+        csilk_mutex_unlock(&s_secret_lock);
+        return;
+    }
+
     for (size_t i = 0; i < s_override_count; i++) {
-        if (strcasecmp(s_test_overrides[i].key, key) == 0) {
+        if (strcasecmp(overrides[i].key, key) == 0) {
             if (value) {
-                secret_secure_zero(s_test_overrides[i].value, sizeof(s_test_overrides[i].value));
-                strncpy(s_test_overrides[i].value, value, sizeof(s_test_overrides[i].value) - 1);
-                s_test_overrides[i].value[sizeof(s_test_overrides[i].value) - 1] = '\0';
+                secret_secure_zero(overrides[i].value, sizeof(overrides[i].value));
+                strncpy(overrides[i].value, value, sizeof(overrides[i].value) - 1);
+                overrides[i].value[sizeof(overrides[i].value) - 1] = '\0';
             } else {
-                s_test_overrides[i] = s_test_overrides[s_override_count - 1];
+                overrides[i] = overrides[s_override_count - 1];
                 s_override_count--;
-                secret_secure_zero(&s_test_overrides[s_override_count],
-                                   sizeof(s_test_overrides[0]));
+                secret_secure_zero(&overrides[s_override_count], sizeof(overrides[0]));
             }
             csilk_mutex_unlock(&s_secret_lock);
             return;
@@ -220,16 +267,12 @@ csilk_secret_set_test_override(const char* key, const char* value)
     }
 
     if (value && s_override_count < MAX_TEST_OVERRIDES) {
-        strncpy(s_test_overrides[s_override_count].key,
-                key,
-                sizeof(s_test_overrides[s_override_count].key) - 1);
-        s_test_overrides[s_override_count].key[sizeof(s_test_overrides[s_override_count].key) - 1] =
-            '\0';
-        strncpy(s_test_overrides[s_override_count].value,
+        strncpy(overrides[s_override_count].key, key, sizeof(overrides[s_override_count].key) - 1);
+        overrides[s_override_count].key[sizeof(overrides[s_override_count].key) - 1] = '\0';
+        strncpy(overrides[s_override_count].value,
                 value,
-                sizeof(s_test_overrides[s_override_count].value) - 1);
-        s_test_overrides[s_override_count]
-            .value[sizeof(s_test_overrides[s_override_count].value) - 1] = '\0';
+                sizeof(overrides[s_override_count].value) - 1);
+        overrides[s_override_count].value[sizeof(overrides[s_override_count].value) - 1] = '\0';
         s_override_count++;
     }
     csilk_mutex_unlock(&s_secret_lock);
@@ -240,7 +283,9 @@ csilk_secret_clear_test_overrides(void)
 {
     ensure_lock_init();
     csilk_mutex_lock(&s_secret_lock);
-    secret_secure_zero(s_test_overrides, sizeof(s_test_overrides));
+    if (s_test_overrides) {
+        secret_secure_zero(s_test_overrides, MAX_TEST_OVERRIDES * sizeof(test_override_t));
+    }
     s_override_count = 0;
     csilk_mutex_unlock(&s_secret_lock);
 }

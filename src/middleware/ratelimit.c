@@ -39,7 +39,9 @@ typedef struct {
     _Atomic uint32_t state;      /**< Lockless state & reader-guard count. */
 } atomic_ip_entry_t;
 
-static atomic_ip_entry_t ip_table[MAX_IP_ENTRIES];
+static _Atomic(atomic_ip_entry_t*) g_ip_table = NULL;
+static csilk_once_t                g_ip_table_once = CSILK_ONCE_INIT;
+static csilk_once_t                g_rl_atexit_once = CSILK_ONCE_INIT;
 /** @brief Default saturation policy.
  *
  * EVICT_LRU is the most permissive default: when the bounded IP table is
@@ -78,7 +80,8 @@ typedef struct {
     _Atomic uint32_t state;            /**< Lockless state & reader-guard count. */
 } atomic_key_entry_t;
 
-static atomic_key_entry_t key_table[MAX_KEY_ENTRIES];
+static _Atomic(atomic_key_entry_t*) g_key_table = NULL;
+static csilk_once_t                 g_key_table_once = CSILK_ONCE_INIT;
 
 /** @brief Internal Sliding Window Rate Limiter structure. */
 struct csilk_sliding_limiter_s {
@@ -126,6 +129,61 @@ csilk_rate_limit_get_saturation_policy(void)
                                                                 memory_order_acquire);
 }
 
+static void
+ratelimit_atexit_cleanup(void)
+{
+    free(atomic_exchange_explicit(&g_ip_table, NULL, memory_order_acq_rel));
+    free(atomic_exchange_explicit(&g_key_table, NULL, memory_order_acq_rel));
+}
+
+static void
+register_rl_atexit(void)
+{
+    atexit(ratelimit_atexit_cleanup);
+}
+
+static void
+init_ip_table_once(void)
+{
+    csilk_once(&g_rl_atexit_once, register_rl_atexit);
+    atomic_ip_entry_t* tbl = calloc(MAX_IP_ENTRIES, sizeof(atomic_ip_entry_t));
+    if (tbl) {
+        atomic_store_explicit(&g_ip_table, tbl, memory_order_release);
+    }
+}
+
+static void
+init_key_table_once(void)
+{
+    csilk_once(&g_rl_atexit_once, register_rl_atexit);
+    atomic_key_entry_t* tbl = calloc(MAX_KEY_ENTRIES, sizeof(atomic_key_entry_t));
+    if (tbl) {
+        atomic_store_explicit(&g_key_table, tbl, memory_order_release);
+    }
+}
+
+static inline atomic_ip_entry_t*
+get_ip_table(void)
+{
+    atomic_ip_entry_t* tbl = atomic_load_explicit(&g_ip_table, memory_order_acquire);
+    if (__builtin_expect(tbl != NULL, 1)) {
+        return tbl;
+    }
+    csilk_once(&g_ip_table_once, init_ip_table_once);
+    return atomic_load_explicit(&g_ip_table, memory_order_acquire);
+}
+
+static inline atomic_key_entry_t*
+get_key_table(void)
+{
+    atomic_key_entry_t* tbl = atomic_load_explicit(&g_key_table, memory_order_acquire);
+    if (__builtin_expect(tbl != NULL, 1)) {
+        return tbl;
+    }
+    csilk_once(&g_key_table_once, init_key_table_once);
+    return atomic_load_explicit(&g_key_table, memory_order_acquire);
+}
+
 /**
  * @brief Reset every slot in the IP rate-limit table to its empty state.
  *
@@ -137,12 +195,16 @@ csilk_rate_limit_get_saturation_policy(void)
 static void
 reset_ip_table(void)
 {
+    atomic_ip_entry_t* tbl = atomic_load_explicit(&g_ip_table, memory_order_acquire);
+    if (!tbl) {
+        return;
+    }
     for (uint32_t i = 0; i < MAX_IP_ENTRIES; i++) {
-        atomic_store_explicit(&ip_table[i].state, 0, memory_order_relaxed);
-        atomic_store_explicit(&ip_table[i].count, 0, memory_order_relaxed);
-        atomic_store_explicit(&ip_table[i].last_reset, 0, memory_order_relaxed);
-        atomic_store_explicit(&ip_table[i].last_seen, 0, memory_order_relaxed);
-        ip_table[i].ip[0] = '\0';
+        atomic_store_explicit(&tbl[i].state, 0, memory_order_relaxed);
+        atomic_store_explicit(&tbl[i].count, 0, memory_order_relaxed);
+        atomic_store_explicit(&tbl[i].last_reset, 0, memory_order_relaxed);
+        atomic_store_explicit(&tbl[i].last_seen, 0, memory_order_relaxed);
+        tbl[i].ip[0] = '\0';
     }
 }
 
@@ -155,13 +217,17 @@ reset_ip_table(void)
 static void
 reset_key_table(void)
 {
+    atomic_key_entry_t* tbl = atomic_load_explicit(&g_key_table, memory_order_acquire);
+    if (!tbl) {
+        return;
+    }
     for (uint32_t i = 0; i < MAX_KEY_ENTRIES; i++) {
-        atomic_store_explicit(&key_table[i].state, 0, memory_order_relaxed);
-        atomic_store_explicit(&key_table[i].count, 0, memory_order_relaxed);
-        atomic_store_explicit(&key_table[i].last_reset, 0, memory_order_relaxed);
-        atomic_store_explicit(&key_table[i].last_seen, 0, memory_order_relaxed);
-        atomic_store_explicit(&key_table[i].window_seconds, 0, memory_order_relaxed);
-        key_table[i].key[0] = '\0';
+        atomic_store_explicit(&tbl[i].state, 0, memory_order_relaxed);
+        atomic_store_explicit(&tbl[i].count, 0, memory_order_relaxed);
+        atomic_store_explicit(&tbl[i].last_reset, 0, memory_order_relaxed);
+        atomic_store_explicit(&tbl[i].last_seen, 0, memory_order_relaxed);
+        atomic_store_explicit(&tbl[i].window_seconds, 0, memory_order_relaxed);
+        tbl[i].key[0] = '\0';
     }
 }
 
@@ -241,6 +307,11 @@ get_or_create_key_entry(const char*                    key,
                         uint64_t                       window_seconds,
                         csilk_rate_saturation_policy_t policy)
 {
+    atomic_key_entry_t* tbl = get_key_table();
+    if (!tbl) {
+        return NULL;
+    }
+
     uint32_t start_idx = key_hash(key);
     int32_t  expired_idx = -1;
     int32_t  lru_idx = -1;
@@ -249,7 +320,7 @@ get_or_create_key_entry(const char*                    key,
 
     for (uint32_t i = 0; i < probe_len; i++) {
         uint32_t            idx = (start_idx + i) % MAX_KEY_ENTRIES;
-        atomic_key_entry_t* slot = &key_table[idx];
+        atomic_key_entry_t* slot = &tbl[idx];
 
         for (int spin = 0; spin < 64; spin++) {
             uint32_t s = atomic_load_explicit(&slot->state, memory_order_acquire);
@@ -257,8 +328,8 @@ get_or_create_key_entry(const char*                    key,
                 /* Key does not exist beyond an empty slot. Prefer reclaiming an
                  * already-seen expired slot to keep probe chains compact. */
                 if (expired_idx >= 0 &&
-                    try_reclaim_key_slot(&key_table[expired_idx], key, now, window_seconds, true)) {
-                    return &key_table[expired_idx];
+                    try_reclaim_key_slot(&tbl[expired_idx], key, now, window_seconds, true)) {
+                    return &tbl[expired_idx];
                 }
                 uint32_t expected = 0;
                 if (atomic_compare_exchange_strong_explicit(
@@ -312,13 +383,13 @@ get_or_create_key_entry(const char*                    key,
     }
 
     if (expired_idx >= 0 &&
-        try_reclaim_key_slot(&key_table[expired_idx], key, now, window_seconds, true)) {
-        return &key_table[expired_idx];
+        try_reclaim_key_slot(&tbl[expired_idx], key, now, window_seconds, true)) {
+        return &tbl[expired_idx];
     }
 
     if (policy == CSILK_RATE_SATURATION_EVICT_LRU && lru_idx >= 0 &&
-        try_reclaim_key_slot(&key_table[lru_idx], key, now, window_seconds, false)) {
-        return &key_table[lru_idx];
+        try_reclaim_key_slot(&tbl[lru_idx], key, now, window_seconds, false)) {
+        return &tbl[lru_idx];
     }
 
     return NULL;
@@ -441,6 +512,11 @@ try_reclaim_ip_slot(atomic_ip_entry_t* slot, const char* ip, time_t now, bool re
 static atomic_ip_entry_t*
 get_or_create_ip_entry(const char* ip, time_t now, csilk_rate_saturation_policy_t policy)
 {
+    atomic_ip_entry_t* tbl = get_ip_table();
+    if (!tbl) {
+        return NULL;
+    }
+
     uint32_t start_idx = ip_hash(ip);
     int32_t  expired_idx = -1;
     int32_t  lru_idx = -1;
@@ -449,14 +525,13 @@ get_or_create_ip_entry(const char* ip, time_t now, csilk_rate_saturation_policy_
 
     for (uint32_t i = 0; i < probe_len; i++) {
         uint32_t           idx = (start_idx + i) % MAX_IP_ENTRIES;
-        atomic_ip_entry_t* slot = &ip_table[idx];
+        atomic_ip_entry_t* slot = &tbl[idx];
 
         for (int spin = 0; spin < 64; spin++) {
             uint32_t s = atomic_load_explicit(&slot->state, memory_order_acquire);
             if (s == 0) {
-                if (expired_idx >= 0 &&
-                    try_reclaim_ip_slot(&ip_table[expired_idx], ip, now, true)) {
-                    return &ip_table[expired_idx];
+                if (expired_idx >= 0 && try_reclaim_ip_slot(&tbl[expired_idx], ip, now, true)) {
+                    return &tbl[expired_idx];
                 }
                 uint32_t expected = 0;
                 if (atomic_compare_exchange_strong_explicit(
@@ -501,13 +576,13 @@ get_or_create_ip_entry(const char* ip, time_t now, csilk_rate_saturation_policy_
         }
     }
 
-    if (expired_idx >= 0 && try_reclaim_ip_slot(&ip_table[expired_idx], ip, now, true)) {
-        return &ip_table[expired_idx];
+    if (expired_idx >= 0 && try_reclaim_ip_slot(&tbl[expired_idx], ip, now, true)) {
+        return &tbl[expired_idx];
     }
 
     if (policy == CSILK_RATE_SATURATION_EVICT_LRU && lru_idx >= 0 &&
-        try_reclaim_ip_slot(&ip_table[lru_idx], ip, now, false)) {
-        return &ip_table[lru_idx];
+        try_reclaim_ip_slot(&tbl[lru_idx], ip, now, false)) {
+        return &tbl[lru_idx];
     }
 
     return NULL;
