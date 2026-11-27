@@ -11,6 +11,7 @@
 #include "csilk/core/middleware.h"
 #include "csilk/core/sync.h"
 
+#include <limits.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -151,13 +152,32 @@ csilk_otlp_exporter_export_json(csilk_otlp_exporter_t* exp, char* out_buf, size_
     return exported_count;
 }
 
+#ifdef CSILK_HAS_GRPC
+static int
+otlp_wrap_grpc_frame(const uint8_t* payload, size_t payload_len, uint8_t* out_buf, size_t out_cap)
+{
+    if (!out_buf || payload_len > (size_t)INT_MAX - 5 || out_cap < payload_len + 5) {
+        return -1;
+    }
+    out_buf[0] = 0x00; /* uncompressed */
+    uint32_t len_be = (uint32_t)payload_len;
+    out_buf[1] = (uint8_t)((len_be >> 24) & 0xFF);
+    out_buf[2] = (uint8_t)((len_be >> 16) & 0xFF);
+    out_buf[3] = (uint8_t)((len_be >> 8) & 0xFF);
+    out_buf[4] = (uint8_t)(len_be & 0xFF);
+    if (payload_len > 0 && payload) {
+        memcpy(out_buf + 5, payload, payload_len);
+    }
+    return (int)(payload_len + 5);
+}
+#endif
+
 /**
  * @brief Serialize buffered spans into an OTLP/gRPC binary frame.
  *
  * First renders the spans to OTLP/JSON via csilk_otlp_exporter_export_json()
  * (which also flushes the buffer), then wraps that JSON in a standard 5-byte
- * gRPC frame (uncompressed, big-endian length prefix) using
- * csilk_grpc_frame_encode().
+ * gRPC frame (uncompressed, big-endian length prefix).
  *
  * @param exp       Exporter instance. Must not be NULL.
  * @param[out] out_buf  Destination buffer for the gRPC frame.
@@ -181,8 +201,7 @@ csilk_otlp_exporter_export_grpc(csilk_otlp_exporter_t* exp, uint8_t* out_buf, si
     }
 
     size_t json_len = strlen(json_buf);
-    int frame_len = csilk_grpc_frame_encode((const uint8_t*)json_buf, json_len, out_buf, buf_size);
-    return frame_len;
+    return otlp_wrap_grpc_frame((const uint8_t*)json_buf, json_len, out_buf, buf_size);
 #else
     (void)exp;
     (void)out_buf;

@@ -793,7 +793,9 @@ void csilk_otlp_exporter_free(csilk_otlp_exporter_t* exp);
 
 /* --- HTTP/JSON <-> gRPC Transcoding Gateway Middleware --- */
 
+#ifdef CSILK_HAS_GRPC
 /** @brief Encapsulate a binary Protobuf message into a 5-byte gRPC frame.
+ *  Canonical declaration lives in <csilk/protocols/grpc.h>.
  * @param proto_payload Raw Protobuf message bytes.
  * @param payload_len Length of @p proto_payload in bytes.
  * @param[out] out_buf Output buffer (must be at least payload_len + 5 bytes).
@@ -805,7 +807,9 @@ int csilk_grpc_frame_encode(const uint8_t* proto_payload,
                             size_t         max_buf_len);
 
 /** @brief HTTP/JSON <-> gRPC Transcoding Gateway middleware.
+ *  Canonical declaration lives in <csilk/protocols/grpc.h>.
  * Detects 'Content-Type: application/grpc+json' or 'X-gRPC-Gateway: 1' header,
  * converts JSON payload to gRPC framed Protobuf binary format, and sets 'Content-Type: application/grpc'.
  * @param c Request context. */
 void csilk_grpc_gateway_middleware(csilk_ctx_t* c);
+#endif /* CSILK_HAS_GRPC */

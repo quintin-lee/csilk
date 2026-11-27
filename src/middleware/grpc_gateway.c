@@ -10,6 +10,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/middleware.h"
+#include "csilk/protocols/grpc.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,16 +19,14 @@
 /**
  * @brief Encapsulate raw Protobuf payload into a standard 5-byte gRPC frame.
  *
- * Frame structure:
- * - Byte 0: Compression Flag (0x00 = uncompressed, 0x01 = compressed).
- * - Bytes 1..4: 32-bit Big-Endian unsigned integer representing payload byte length.
- * - Bytes 5..N: Raw Protobuf binary payload.
+ * Delegates to csilk_grpc_frame_encode_ex() with compressed = 0 so both entry
+ * points share identical length bounds and big-endian framing logic.
  *
  * @param proto_payload Raw binary Protobuf byte payload.
  * @param payload_len Byte length of @p proto_payload.
  * @param[out] out_buf Destination frame buffer (must be at least payload_len + 5 bytes).
  * @param max_buf_len Capacity of @p out_buf.
- * @return Total gRPC frame length in bytes (payload_len + 5), or -1 if buffer capacity is insufficient.
+ * @return Total gRPC frame length in bytes (payload_len + 5), or -1 if invalid or insufficient capacity.
  */
 int
 csilk_grpc_frame_encode(const uint8_t* proto_payload,
@@ -35,25 +34,7 @@ csilk_grpc_frame_encode(const uint8_t* proto_payload,
                         uint8_t*       out_buf,
                         size_t         max_buf_len)
 {
-    if (!out_buf || max_buf_len < payload_len + 5) {
-        return -1;
-    }
-
-    /* Byte 0: Compressed-Flag (0x00 = uncompressed) */
-    out_buf[0] = 0x00;
-
-    /* Bytes 1..4: Message Length in Big-Endian (Network Byte Order) */
-    uint32_t len_be = (uint32_t)payload_len;
-    out_buf[1] = (uint8_t)((len_be >> 24) & 0xFF);
-    out_buf[2] = (uint8_t)((len_be >> 16) & 0xFF);
-    out_buf[3] = (uint8_t)((len_be >> 8) & 0xFF);
-    out_buf[4] = (uint8_t)(len_be & 0xFF);
-
-    /* Copy Protobuf payload after 5-byte header */
-    if (payload_len > 0 && proto_payload) {
-        memcpy(out_buf + 5, proto_payload, payload_len);
-    }
-    return (int)(payload_len + 5);
+    return csilk_grpc_frame_encode_ex(proto_payload, payload_len, 0, out_buf, max_buf_len);
 }
 
 /**

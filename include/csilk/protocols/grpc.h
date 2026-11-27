@@ -20,11 +20,40 @@
 extern "C" {
 #endif
 
+typedef struct csilk_ctx_s csilk_ctx_t;
+
 /** @brief Key-value pair for gRPC metadata/trailer parsing. */
 typedef struct {
     const char* key;
     const char* val;
 } csilk_kv_t;
+
+/**
+ * @brief Encapsulate an uncompressed Protobuf payload into a 5-byte gRPC frame.
+ *
+ * Equivalent to csilk_grpc_frame_encode_ex(proto_payload, payload_len, 0, out_buf, max_buf_len).
+ *
+ * @param proto_payload Raw binary Protobuf byte payload.
+ * @param payload_len   Length of @p proto_payload in bytes.
+ * @param[out] out_buf  Destination frame buffer (must hold at least payload_len + 5 bytes).
+ * @param max_buf_len   Capacity of @p out_buf.
+ * @return Total gRPC frame length (payload_len + 5), or -1 on error.
+ */
+int csilk_grpc_frame_encode(const uint8_t* proto_payload,
+                            size_t         payload_len,
+                            uint8_t*       out_buf,
+                            size_t         max_buf_len);
+
+/**
+ * @brief HTTP/JSON <-> gRPC Transcoding Gateway middleware.
+ *
+ * Detects 'Content-Type: application/grpc+json' or 'X-gRPC-Gateway: 1' header,
+ * frames JSON payload into the 5-byte gRPC wire envelope, and sets
+ * 'Content-Type: application/grpc' and 'grpc-status: 0'.
+ *
+ * @param c Request context.
+ */
+void csilk_grpc_gateway_middleware(csilk_ctx_t* c);
 
 /**
  * @brief Parse a gRPC frame from a buffer.
