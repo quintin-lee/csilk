@@ -46,7 +46,7 @@ Use these rules whenever performing work in this repository. They ensure correct
 
 ### Fuzzing
 
-- **Build fuzzers**: `cmake --build build --target fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket fuzz_raft_rpc fuzz_mcp fuzz_sql_rewrite` (requires clang-19 + ASAN).
+- **Build fuzzers**: Core harnesses (`fuzz_test fuzz_yaml fuzz_url fuzz_headers fuzz_h2 fuzz_websocket`) build in Core-Only mode; optional harnesses (`fuzz_raft_rpc fuzz_mcp fuzz_sql_rewrite fuzz_wasm fuzz_h3`) require `-DCSILK_BUILD_FULL=ON` (or their respective `CSILK_ENABLE_*` flag) plus `clang-19` + ASAN.
 - **Run**: `./fuzz_test -max_total_time=120 -dict=fuzz/fuzz.dict fuzz/corpus/fuzz_test` (etc.).
 - **Add corpus**: seed corpora live in `fuzz/corpus/<name>/`; dictionary at `fuzz/fuzz.dict`.
 
@@ -159,20 +159,34 @@ Router uses a segment-prefix trie. Swaps are serialized under `server->config_mu
 
 ### Key module dependency graph
 
-Arrows point from dependent → dependency (`A ──→ B` = A links against B):
+Web Core (11 modules, always built with `-DCSILK_BUILD_FULL=OFF`, zero SQLite3/libcurl dependencies) forms the base layer; all 11 optional domain modules (`CSILK_ENABLE_*` / `-DCSILK_BUILD_FULL=ON`) depend cleanly downward without Web Core up-references. Arrows point from dependent → dependency (`A ──→ B` = A links against B):
 ```
-workflow ──→ { core, json, ai, mq, wasm, yaml }
-http       ──→ { core, json, tls, http2, mq, zlib, llhttp }
-http2      ──→ { core, tls, nghttp2 }
-db         ──→ { core, sqlite3, curl, mysql, pq, hiredis, mongoc }
-ai         ──→ { core, json, curl }
-tls        ──→ { core, openssl }
-mq         ──→ core
-wasm       ──→ core
-bypass     ──→ core
-core       ──→ { json, openssl, threads, {libuv|liburing}, yaml, m }
+# Web Core (always built)
+app        ──→ { http, protocols, middleware, reflection } (+ optional db, ai, mq, wasm if enabled)
+middleware ──→ { http, runtime, json, tls, zlib, openssl, threads } (+ optional mq if enabled)
+protocols  ──→ { http, http2, runtime, json, reflection } (+ optional mq if enabled)
+http       ──→ { runtime, json, tls, http2, zlib, openssl, llhttp }
+http2      ──→ { runtime, tls, nghttp2 }
+tls        ──→ { runtime, openssl }
+runtime    ──→ { base, crypto, json, reflection, openssl, threads, {libuv|liburing}, yaml, m }
+reflection ──→ { base, json }
+crypto     ──→ { base, openssl, threads }
 json       ──→ yyjson
-umbrella   ──→ { core, json, tls, mq, http2, http, db, ai, workflow, wasm, bypass }
+base       ──→ { threads, {libuv|liburing}, m }
+
+# Optional Domain Modules (CSILK_ENABLE_* = OFF by default, ON via -DCSILK_BUILD_FULL=ON)
+workflow   ──→ { runtime, json, ai, mq, wasm, yaml, m }
+mcp        ──→ { protocols, http, runtime, json, ai, curl }
+grpc       ──→ { middleware, http, runtime, json }
+h3         ──→ { runtime, http, tls, ngtcp2, nghttp3, openssl }
+db         ──→ { runtime, json, sqlite3, optional mysql/pq/hiredis/mongoc }
+ai         ──→ { runtime, json, curl }
+vector     ──→ { runtime, json, curl, m }
+permission ──→ { runtime, json }
+mq         ──→ runtime
+wasm       ──→ { runtime, optional vmlib }
+bypass     ──→ runtime
+umbrella   ──→ { Web Core + all enabled CSILK_ENABLE_* modules }
 ```
 
 ## Key Directories
@@ -182,24 +196,24 @@ umbrella   ──→ { core, json, tls, mq, http2, http, db, ai, workflow, wasm,
 | `src/core/` | HTTP server scaffolding, arena, config, ctx, router, logger, sync, IO abstractions |
 | `src/core/uring/` | io_uring event loop, connection, server, thread pool |
 | `src/core/http/` | HTTP/1.1 server, connection, TLS, router, app, swagger |
-| `src/core/primitives/` | Arena, bounded buffer, KV store, URL decoding |
-| `src/core/config/` | YAML config, logger, tiered secret provider (`secret.c`), lifecycle hooks, admin dashboard |
+| `src/core/primitives/` | Arena, bounded buffer, KV store, URL/query decoding, router, response |
+| `src/core/config/` | YAML config, logger, tiered secret provider (`secret.c`), lifecycle hooks, hot reload |
 | `src/core/ctx/` | Request context, async lifecycle, generation tracking |
 | `src/core/json/` | JSON engine sources (wraps yyjson) |
 | `src/core/cache/` | MVCC cache for DB-abstraction layer |
-| `src/core/plugin/` | WASM VM & WASI sandbox plugin engine |
-| `src/core/io/` | AF_XDP & DPDK kernel-bypass drivers, IO perf probes |
+| `src/core/plugin/` | Dynamic `.so` plugin loader (`loader.c`) + optional WASM VM & WASI sandbox (`CSILK_ENABLE_WASM`) |
+| `src/core/io/` | Optional kernel-bypass AF_XDP & `io_uring` UDP extensions, IO perf probes (`CSILK_ENABLE_BYPASS`) |
 | `src/core/server/` | Multi-worker server lifecycle, RCU router swap, driver injection, shutdown, worker pool |
-| `src/core/internal/` | Internal-only headers (header_map, query, lfqueue) not exposed in include/ |
+| `src/core/internal/` | Internal-only headers (`header_map`, `query`, `lfqueue`, `srv_internal`, `srv_impl`) not exposed in include/ |
 | `src/crypto/` | base64, sha1, bcrypt, blowfish sboxes, cipher/crypto dispatch |
-| `src/drivers/db/` | SQLite, MySQL, PostgreSQL, Redis, MongoDB drivers, native prepared statements, savepoint scope (`tx_scope.c`), migration engine (`migration/`) |
-| `src/drivers/ai/` | OpenAI, Ollama, DeepSeek LLM client drivers, tool registry (`tool_registry.c`), AI tracing container (`ai_trace.c`) |
+| `src/drivers/db/` | *(Optional)* SQLite, MySQL, PostgreSQL, Redis, MongoDB drivers, prepared statements, savepoint scope, migrations |
+| `src/drivers/ai/` | *(Optional)* OpenAI, Ollama, Anthropic LLM drivers, tool registry, AI tracing container |
 | `src/drivers/cipher/` | OpenSSL-backed AES-256-GCM, RSA-OAEP, RSA-PSS |
-| `src/drivers/vector/` | HNSW SIMD vector index (AVX2 cosine/L2/dot) |
-| `src/middleware/` | auth, cors, csrf, jwt, ratelimit, sliding-ratelimit, session, sse, metrics, otlp, waf, circuit-breaker, grpc-gateway, gzip |
-| `src/protocols/` | WebSocket (RFC 6455), HTTP/2 (nghttp2), HTTP/3 (QUIC), swagger, MCP protocol & stdio client pool (`mcp_stdio_pool.c`) |
-| `src/messaging/` | MQ core, pubsub, WAL, raft RPC, consensus, snapshot |
-| `src/workflow/` | Agent engine, DAG scheduler, DSL parser, autonomous ReAct agent loop (`wf_ai_react_loop.c`), Agent Skill registry + bounded local L3 executor (`skill.c`), WAL, trace |
+| `src/drivers/vector/` | *(Optional)* HNSW SIMD vector index (AVX2 cosine/L2/dot) & Qdrant/Milvus drivers |
+| `src/middleware/` | auth, cors, csrf, jwt, ratelimit (fixed + sliding window), session, sse, metrics, otlp, waf (`csilk_waf_filter_*`), circuit-breaker, gzip, optional grpc-gateway |
+| `src/protocols/` | WebSocket (`websocket.c`, `ws_room.c`), HTTP/2 (`nghttp2`), Swagger/OpenAPI; optional HTTP/3 (`http3.c`, `h3.c`) and MCP (`mcp_*.c`) |
+| `src/messaging/` | *(Optional)* MQ core, pubsub, shared WAL helpers (`wal_common.h`/`.c`), raft RPC, consensus, snapshot |
+| `src/workflow/` | *(Optional)* DAG scheduler, DSL parser, ReAct loop, Agent Skills, WAL (reusing `messaging/wal_common`), trace |
 | `src/app/` | High-level app API, groups, routes, admin handlers |
 | `src/reflection/` | Reflection marshal/unmarshal/free (struct binding for JSON) |
 | `src/util/` | CPU flame graph (backtrace sampling), RFC 4180 CSV parser & serializer (`csv.c`) |
@@ -218,15 +232,15 @@ umbrella   ──→ { core, json, tls, mq, http2, http, db, ai, workflow, wasm,
 ### Configure & build
 
 ```bash
-# Minimal configure (Release, system compiler)
-cmake -B build -S .
+# Minimal Core-Only configure (Release, default CSILK_BUILD_FULL=OFF, zero SQLite/CURL)
+cmake -B build_core -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_BUILD_SHARED=ON
 
-# Debug build with clang (recommended for development)
-cmake -B build -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang \
-  -DCSILK_BUILD_SHARED=ON -DENABLE_OOM_TEST=ON
+# Full Debug build with clang (enables all 11 optional domain modules + OOM tests)
+cmake -B build_full -S . -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_COMPILER=clang \
+  -DCSILK_BUILD_FULL=ON -DCSILK_BUILD_SHARED=ON -DENABLE_OOM_TEST=ON
 
 # Build all targets (libraries + tests + examples)
-cmake --build build -j$(nproc)
+cmake --build build_full -j$(nproc)
 
 # With native host CPU tuning (-march=native) for benchmarks/profiling
 cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCSILK_ENABLE_NATIVE_ARCH=ON
@@ -401,7 +415,7 @@ csilk_get(app, "/api/echo", echo_handler);
 | `src/core/server/server_lifecycle.c` → split into `server_rcu.c` + `server_driver.c` | Server startup, RCU router swap, driver injection |
 | `src/core/server/server_shutdown.c` | Ordered teardown path |
 | `src/middleware/jwt.c` | JWT HS256 middleware + validation policies |
-| `src/middleware/waf.c` | eBPF XDP dynamic WAF + OTLP APM ring buffer |
+| `src/middleware/waf.c` | Dynamic WAF filter (`csilk_waf_filter_*`) + pattern/IP rules |
 | `src/drivers/db/` | Database abstraction + SQLite/MySQL/PQ/Redis/Mongo drivers |
 | `src/drivers/vector/hnsw.c` | HNSW skip-graph index with AVX2 SIMD distance kernels |
 | `src/reflection/reflect.c` | Reflection marshal/unmarshal for struct↔JSON binding |

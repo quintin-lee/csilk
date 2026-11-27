@@ -62,11 +62,11 @@ A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) 
 - 🐍 **Python CFFI/ctypes Bindings** — Native Python wrappers (`CircuitBreaker`, `SlidingLimiter`, `trace_middleware`), plus native `async def` coroutine routing support
 - **WAF (Web Application Firewall)** middleware
 - 🧬 **Embedded SIMD Vector Index Engine** — Native 32-byte aligned AVX2 SIMD vector distance kernels (`csilk_simd_vector_cosine`, `csilk_simd_vector_l2`, `csilk_simd_vector_dot`) and multi-layer HNSW skip-graph index (`csilk_hnsw_index_t`) supporting $O(\log N)$ ANN vector similarity search (`csilk_vector_db_new_embedded`).
-- 🛡️ **eBPF XDP Dynamic WAF & OTLP APM Dashboard** — Zero-downtime BPF-Map hot-reloading dynamic WAF rule engine (`csilk_xdp_waf_add_ip_rule`) and lock-free 2048-span W3C trace context ring buffer (`csilk_otlp_tracer_start_span`) with single-page embedded Web APM Dashboard (`/admin/apm`).
+- 🛡️ **Dynamic Rule WAF Filter & OTLP APM Dashboard** — Dynamic regex & CIDR IP WAF filtering (`csilk_waf_filter_*`) and lock-free 2048-span W3C trace context ring buffer (`csilk_otlp_tracer_start_span`) with single-page embedded Web APM Dashboard (`/admin/apm`).
 
-### 📐 ABI Stability & Ecosystem (v1.0 LTS Ready)
+### 📐 ABI Stability & Modularity (v2.0 Web Core + Optional Modules)
 
-- 🔒 **Opaque ABI & SOVERSION 1 Lockdown** — 100% opaque handle encapsulation and `libcsilk.map` symbol whitelist enforcement (`cmake/libcsilk.map`), ensuring backward-incompatible binary changes are strictly blocked for the entire 1.x cycle.
+- 🔒 **Opaque ABI & SOVERSION 2** — Clean Core vs Optional Module boundaries with `libcsilk.map` (`csilk_*` whitelist) and automated ABI symbol checks (`check_abi_compatibility.sh`).
 - 🧩 **WASM Sandbox Plugin Engine** — Native WebAssembly plugin sandbox (`csilk_wasm_plugin_*`) with LEB128 section validation, fuel-budget circuit breakers, and zero-copy Host ABI access.
 - 📦 **Global Package Management & Distribution** — Verified `vcpkg` ports (`cmake/ports/csilk`), modern `Conan 2.0+` recipes (`conanfile.py`), Homebrew Formula (`Formula/csilk.rb`), and GitHub Actions OIDC Trusted Publishing for PyPI (`wheels.yml`).
 - 📊 **Industrial-Grade Performance Benchmarks** — 100,000 Keep-Alive connections with **~3.8 MB RSS**, P99 latency **< 2ms**, and up to **228K QPS** (see `benchmarks/COMPARATIVE_BENCHMARK_WHITEPAPER.md`).
@@ -174,10 +174,10 @@ graph TB
 - [libyaml](https://github.com/yaml/libyaml) - YAML parser
 - [OpenSSL](https://www.openssl.org/) - TLS/SSL and Cryptographic library
 - [zlib](https://www.zlib.net/) - Gzip compression
-- [libcurl](https://curl.se/libcurl/) - HTTP client (AI drivers)
-- [sqlite3](https://www.sqlite.org/) - Embedded SQL database
+- [libcurl](https://curl.se/libcurl/) - HTTP client *(optional: AI / Vector / MCP modules only)*
+- [sqlite3](https://www.sqlite.org/) - Embedded SQL database *(optional: DB module only)*
 
-yyjson (and liburing when `-DCSILK_USE_URING=ON`, or llhttp/nghttp2 when not installed on the system) are automatically fetched during build via CMake's FetchContent. libuv (default I/O backend), libyaml, OpenSSL, zlib, libcurl, and sqlite3 are discovered as system dependencies.
+yyjson (and liburing when `-DCSILK_USE_URING=ON`, or llhttp/nghttp2 when not installed on the system) are automatically fetched during build via CMake's FetchContent. Web Core requires only libuv (default I/O backend), libyaml, OpenSSL, zlib, llhttp, and nghttp2; libcurl and sqlite3 are only required when enabling optional modules (`-DCSILK_BUILD_FULL=ON` or `-DCSILK_ENABLE_{DB,AI,VECTOR,MCP}=ON`).
 
 For global package management support, `csilk` has been integrated with major C/C++ dependency managers:
 
@@ -187,7 +187,11 @@ For global package management support, `csilk` has been integrated with major C/
 
 ### Installation (Debian/Ubuntu)
 ```bash
-sudo apt install libyaml-dev libssl-dev zlib1g-dev libcurl4-openssl-dev libsqlite3-dev
+# Web Core minimal dependencies (zero SQLite3 / libcurl)
+sudo apt install libyaml-dev libssl-dev zlib1g-dev libuv1-dev
+
+# Additional packages for -DCSILK_BUILD_FULL=ON (AI, Vector, MCP, DB)
+sudo apt install libcurl4-openssl-dev libsqlite3-dev
 ```
 
 ## Supported Platforms
@@ -256,9 +260,20 @@ make
 # cmake .. -DCSILK_USE_URING=ON
 
 # Available CMake options:
+#   -DCSILK_BUILD_FULL=OFF               Build lightweight Web Core only (OFF) or all optional domain modules (ON)
+#   -DCSILK_ENABLE_DB=OFF                Optional Database drivers & migrations (auto-enabled by WORKFLOW? No, opt-in)
+#   -DCSILK_ENABLE_AI=OFF                Optional LLM AI drivers & tracing (requires libcurl)
+#   -DCSILK_ENABLE_VECTOR=OFF            Optional HNSW Vector DB & Qdrant/Milvus drivers (requires libcurl)
+#   -DCSILK_ENABLE_MQ=OFF                Optional Message Queue & Raft consensus
+#   -DCSILK_ENABLE_WORKFLOW=OFF          Optional DAG Workflow & ReAct agent engine (enables AI, MQ, WASM)
+#   -DCSILK_ENABLE_MCP=OFF               Optional Model Context Protocol (enables AI)
+#   -DCSILK_ENABLE_GRPC=OFF              Optional gRPC framing & JSON transcoding gateway
+#   -DCSILK_ENABLE_WASM=OFF              Optional WASM plugin sandbox (pair with -DCSILK_ENABLE_WAMR=ON for runtime)
+#   -DCSILK_ENABLE_BYPASS=OFF            Optional kernel-bypass UDP / AF_XDP extensions
+#   -DCSILK_ENABLE_PERM=OFF              Optional RBAC permission driver
+#   -DCSILK_ENABLE_HTTP3=OFF             Optional HTTP/3 QUIC transport (requires ngtcp2/nghttp3)
 #   -DCSILK_BUILD_SHARED=ON              Build dynamic libraries in addition to static (default ON)
 #   -DCSILK_USE_URING=ON                 Use io_uring backend instead of libuv (Linux-only, default OFF)
-#   -DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF Fail-close experimental/simulated stubs (AF_XDP, DPDK, WASM VM, H3 listener)
 #   -DUSE_ASAN=ON                        Enable AddressSanitizer (default OFF)
 #   -DUSE_TSAN=ON                        Enable ThreadSanitizer (default OFF)
 #   -DUSE_FUZZER=ON                      Enable libFuzzer (default OFF)
@@ -275,32 +290,35 @@ gcovr -r build_cov --filter src/  # 69% line coverage
 
 ## Modular Sub-Libraries & Integration
 
-> **Experimental / Simulated Module Boundaries**: The core HTTP/1.1, HTTP/2 (`nghttp2`), TLS 1.3 (`OpenSSL`), Router, Arena, MQ/Raft, SQLite/MySQL/PostgreSQL/Redis, HNSW vector engine, and Workflow/ReAct/MCP modules are production implementations. In addition, `csilk_wasm` supports real WebAssembly execution via WAMR 2.4.4 when configured with `-DCSILK_ENABLE_WAMR=ON`, and `csilk_http2` includes a real `ngtcp2` + `nghttp3` HTTP/3 QUIC data plane when configured with `-DCSILK_ENABLE_HTTP3=ON` (both fail-closed by default). By contrast, `csilk_bypass` **AF_XDP** / **DPDK** ring entrypoints (`af_xdp.c`, `dpdk_pmd.c`; while `udp.c` provides real `io_uring` multishot UDP receive), the non-WAMR **WASM stub VM**, the standalone **HTTP/3 UDP listener skeleton** (`csilk_h3_listener_*`), and **MongoDB multi-document transactions** (`transaction_*` fail closed with `-1`) are experimental or partial boundaries. By default (`-DCSILK_ENABLE_EXPERIMENTAL_STUBS=OFF`), simulated stub entrypoints fail closed (`ENOTSUP`/`NULL`).
+> **Core vs Optional Module Architecture**: By default (`-DCSILK_BUILD_FULL=OFF`), csilk builds only the **Web Core** (11 targets: `base`, `json`, `crypto`, `reflection`, `runtime`, `tls`, `http2`, `http`, `protocols`, `middleware`, `app`) with zero `sqlite3` or `libcurl` dependencies. Enable all domain subsystems with `-DCSILK_BUILD_FULL=ON` or selectively via `-DCSILK_ENABLE_*`. `csilk_wasm` supports real WebAssembly execution via WAMR 2.4.4 (`-DCSILK_ENABLE_WAMR=ON`), and `csilk_h3` provides real `ngtcp2` + `nghttp3` HTTP/3 QUIC adapters (`-DCSILK_ENABLE_HTTP3=ON`); both fail closed (`ENOTSUP`/`NULL`) when their underlying runtime library is absent.
 
-csilk is decomposed into 19 modular targets (plus the `csilk::core` compatibility alias and `csilk::csilk` umbrella) available as both static (`.a`) and dynamic (`.so`) libraries:
+csilk is decomposed into 11 always-built Web Core modules plus 11 optional domain modules (alongside the `csilk::core` compatibility alias and `csilk::csilk` umbrella), available as static (`.a`) and shared (`.so`) libraries:
 
 | Module Target | Shared Target | Static Archive | Dynamic Library | Description |
 |:---|:---|:---|:---|:---|
-| `csilk::base` | `csilk::base_shared` | `libcsilk-base.a` | `libcsilk-base.so` | Foundation primitives: arena, header map, bounded buffer, KV store, URL/query |
-| `csilk::json` | `csilk::json_shared` | `libcsilk-json.a` | `libcsilk-json.so` | High-performance JSON engine wrapping yyjson |
-| `csilk::crypto` | `csilk::crypto_shared` | `libcsilk-crypto.a` | `libcsilk-crypto.so` | Cryptographic primitives (bcrypt, TOTP, SHA-1, Base64, UUID) and OpenSSL cipher driver |
-| `csilk::runtime` (`csilk::core`) | `csilk::runtime_shared` (`csilk::core_shared`) | `libcsilk-runtime.a` | `libcsilk-runtime.so` | Core runtime: context, SIMD trie router, multi-worker server, RCU hot reload, io_uring, config, secret, MVCC cache |
-| `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | OpenSSL TLS 1.3 encryption engine |
-| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | HTTP/2 (`nghttp2`) session/stream pool and HTTP/3 (`ngtcp2`/`nghttp3`) QUIC adapters |
-| `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | HTTP/1.1 parser (`llhttp`), pipeline, SWAR fast paths, zero-copy response writer |
-| `csilk::protocols` | `csilk::protocols_shared` | `libcsilk-protocols.a` | `libcsilk-protocols.so` | WebSocket & rooms, OpenAPI 3.0 & Swagger UI, MCP (JSON-RPC, stdio pool, WS), gRPC framing |
-| `csilk::middleware` | `csilk::middleware_shared` | `libcsilk-middleware.a` | `libcsilk-middleware.so` | 23 built-in middlewares (Auth, JWT, CORS, CSRF, WAF, XDP-WAF, RateLimit, CircuitBreaker, OTLP, Gzip, SSE, Static, etc.) |
-| `csilk::app` | `csilk::app_shared` | `libcsilk-app.a` | `libcsilk-app.so` | High-level `csilk_app_t` builder, route groups, and unified Admin Dashboard |
-| `csilk::reflection` | `csilk::reflection_shared` | `libcsilk-reflection.a` | `libcsilk-reflection.so` | C struct-to-JSON marshal/unmarshal reflection engine |
-| `csilk::permission` | `csilk::permission_shared` | `libcsilk-permission.a` | `libcsilk-permission.so` | Pluggable RBAC permission engine |
-| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | Database abstraction, SQLite/MySQL/PostgreSQL/Redis/MongoDB, prepared statements, savepoints, Flyway migration engine |
-| `csilk::vector` | `csilk::vector_shared` | `libcsilk-vector.a` | `libcsilk-vector.so` | Embedded AVX2 SIMD HNSW vector index (with zero-copy mmap persistence) and Milvus/Qdrant drivers |
-| `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | LLM client drivers (OpenAI, Ollama, Anthropic, embedded llama.cpp), tool registry, AI tracing |
-| `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | Internal event bus, PubSub, WAL persistence, Raft consensus engine |
-| `csilk::workflow` | `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | Workflow DAG scheduler, WAL resume, YAML DSL, ReAct agent loop, Agent Skills with Linux seccomp sandbox |
-| `csilk::wasm` | `csilk::wasm_shared` | `libcsilk-wasm.a` | `libcsilk-wasm.so` | WebAssembly plugin sandbox (optional WAMR 2.4.4 runtime or fail-closed stub) |
-| `csilk::bypass` | `csilk::bypass_shared` | `libcsilk-bypass.a` | `libcsilk-bypass.so` | Native `io_uring` multishot UDP transport, I/O perf probe, and experimental AF_XDP/DPDK stubs |
-| `csilk::csilk` | `csilk::shared` | `libcsilk.a` | `libcsilk.so` | Monolithic composite umbrella library |
+| `csilk::base` | `csilk::base_shared` | `libcsilk-base.a` | `libcsilk-base.so` | *(Core)* Foundation primitives: arena, header map, bounded buffer, KV store, URL |
+| `csilk::json` | `csilk::json_shared` | `libcsilk-json.a` | `libcsilk-json.so` | *(Core)* High-performance JSON engine wrapping yyjson |
+| `csilk::crypto` | `csilk::crypto_shared` | `libcsilk-crypto.a` | `libcsilk-crypto.so` | *(Core)* Cryptographic primitives (bcrypt, TOTP, SHA-1, Base64, UUID) and OpenSSL cipher driver |
+| `csilk::reflection` | `csilk::reflection_shared` | `libcsilk-reflection.a` | `libcsilk-reflection.so` | *(Core)* C struct-to-JSON marshal/unmarshal reflection engine |
+| `csilk::runtime` (`csilk::core`) | `csilk::runtime_shared` (`csilk::core_shared`) | `libcsilk-runtime.a` | `libcsilk-runtime.so` | *(Core)* Context, query, SIMD trie router, multi-worker server, RCU hot reload, io_uring, config, secret, MVCC cache |
+| `csilk::tls` | `csilk::tls_shared` | `libcsilk-tls.a` | `libcsilk-tls.so` | *(Core)* OpenSSL TLS 1.3 encryption engine |
+| `csilk::http2` | `csilk::http2_shared` | `libcsilk-http2.a` | `libcsilk-http2.so` | *(Core)* HTTP/2 (`nghttp2`) session and stream pool |
+| `csilk::http` | `csilk::http_shared` | `libcsilk-http.a` | `libcsilk-http.so` | *(Core)* HTTP/1.1 parser (`llhttp`), pipeline, SWAR fast paths, zero-copy response writer |
+| `csilk::protocols` | `csilk::protocols_shared` | `libcsilk-protocols.a` | `libcsilk-protocols.so` | *(Core)* WebSocket & rooms, OpenAPI 3.0 & Swagger UI |
+| `csilk::middleware` | `csilk::middleware_shared` | `libcsilk-middleware.a` | `libcsilk-middleware.so` | *(Core)* Built-in middlewares (Auth, JWT, CORS, CSRF, WAF filter, RateLimit + Sliding Window, CircuitBreaker, OTLP, Gzip, SSE, Static) |
+| `csilk::app` | `csilk::app_shared` | `libcsilk-app.a` | `libcsilk-app.so` | *(Core)* High-level `csilk_app_t` builder, route groups, and unified Admin Dashboard |
+| `csilk::h3` | `csilk::h3_shared` | `libcsilk-h3.a` | `libcsilk-h3.so` | *(Optional `-DCSILK_ENABLE_HTTP3`)* HTTP/3 QUIC (`ngtcp2`/`nghttp3`) engine & listener |
+| `csilk::mcp` | `csilk::mcp_shared` | `libcsilk-mcp.a` | `libcsilk-mcp.so` | *(Optional `-DCSILK_ENABLE_MCP`)* Model Context Protocol (JSON-RPC, stdio pool, SSE/WS adapters) |
+| `csilk::grpc` | `csilk::grpc_shared` | `libcsilk-grpc.a` | `libcsilk-grpc.so` | *(Optional `-DCSILK_ENABLE_GRPC`)* gRPC framing & HTTP/JSON transcoding gateway |
+| `csilk::permission` | `csilk::permission_shared` | `libcsilk-permission.a` | `libcsilk-permission.so` | *(Optional `-DCSILK_ENABLE_PERM`)* Pluggable RBAC permission engine |
+| `csilk::db` | `csilk::db_shared` | `libcsilk-db.a` | `libcsilk-db.so` | *(Optional `-DCSILK_ENABLE_DB`)* Database abstraction, SQLite/MySQL/PG/Redis/MongoDB, prepared statements, savepoints, migrations |
+| `csilk::vector` | `csilk::vector_shared` | `libcsilk-vector.a` | `libcsilk-vector.so` | *(Optional `-DCSILK_ENABLE_VECTOR`)* Embedded AVX2 SIMD HNSW vector index and Milvus/Qdrant drivers |
+| `csilk::ai` | `csilk::ai_shared` | `libcsilk-ai.a` | `libcsilk-ai.so` | *(Optional `-DCSILK_ENABLE_AI`)* LLM client drivers (OpenAI, Ollama, Anthropic), tool registry, AI tracing |
+| `csilk::mq` | `csilk::mq_shared` | `libcsilk-mq.a` | `libcsilk-mq.so` | *(Optional `-DCSILK_ENABLE_MQ`)* Internal event bus, PubSub, WAL persistence, Raft consensus |
+| `csilk::workflow` | `csilk::workflow_shared` | `libcsilk-workflow.a` | `libcsilk-workflow.so` | *(Optional `-DCSILK_ENABLE_WORKFLOW`)* Workflow DAG scheduler, WAL resume, YAML DSL, ReAct agent loop, Agent Skills |
+| `csilk::wasm` | `csilk::wasm_shared` | `libcsilk-wasm.a` | `libcsilk-wasm.so` | *(Optional `-DCSILK_ENABLE_WASM`)* WebAssembly plugin sandbox (WAMR 2.4.4 runtime when `-DCSILK_ENABLE_WAMR=ON`) |
+| `csilk::bypass` | `csilk::bypass_shared` | `libcsilk-bypass.a` | `libcsilk-bypass.so` | *(Optional `-DCSILK_ENABLE_BYPASS`)* Native `io_uring` multishot UDP transport, I/O perf probe, and AF_XDP extensions |
+| `csilk::csilk` | `csilk::shared` | `libcsilk.a` | `libcsilk.so` | Umbrella target aggregating Web Core plus all currently enabled optional modules |
 
 ### CMake Integration
 
@@ -514,16 +532,16 @@ src/
    ├── crypto/         # base64, sha1, url, uuid, crypto primitives, bcrypt
    ├── app/            # Application Layer (app, admin dashboard, workflow engine)
    ├── drivers/        # Driver implementations
-   │   ├── ai/         # AI engine + OpenAI/Ollama/Anthropic/llama.cpp backends
+   │   ├── ai/         # Optional AI engine (OpenAI/Ollama/Anthropic backends)
    │   ├── cipher/     # Cipher driver (OpenSSL)
-   │   ├── perm/       # Permission driver (manager + simple backend)
-   │   ├── db/         # Database abstraction + backends (SQLite, MySQL, PG, Mongo, Redis)
-   │   └── vector/     # Embedded HNSW SIMD vector DB + Qdrant/Milvus drivers
-   ├── messaging/      # Internal Event Bus (Message Queue + Raft consensus)
+   │   ├── perm/       # Optional permission driver (RBAC manager)
+   │   ├── db/         # Optional database abstraction (SQLite, MySQL, PG, Mongo, Redis)
+   │   └── vector/     # Optional HNSW SIMD vector DB + Qdrant/Milvus drivers
+   ├── messaging/      # Optional internal event bus (Message Queue + Raft consensus)
    ├── reflection/     # Reflection Engine implementation
-   ├── protocols/      # Protocol Extensions (WebSocket, HTTP/3, Swagger, MCP, gRPC)
-   ├── workflow/       # Workflow DAG scheduler, ReAct agent loop, Agent Skill sandbox
-   └── middleware/     # 23 built-in middleware modules
+   ├── protocols/      # WebSocket, Swagger/OpenAPI + optional HTTP/3, MCP
+   ├── workflow/       # Optional Workflow DAG scheduler, ReAct agent loop, Agent Skill sandbox
+   └── middleware/     # Built-in HTTP middleware modules (WAF filter, RateLimit + Sliding Window, etc.)
 
 include/csilk/        # Public Hierarchical Headers
   ├── core/           # Core internal definitions
