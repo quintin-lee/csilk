@@ -282,36 +282,13 @@ csilk_wasm_plugin_exec(csilk_wasm_plugin_t* plugin,
         }
         return res;
     }
-#endif
-
-    /* Stub / fallback path */
-    csilk_wasm_exec_ctx_t ctx;
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.fuel = plugin->config.fuel_limit;
-
-    if (json_input && strcmp(json_input, "{\"infinite_loop\":true}") == 0) {
-        /* Simulate fuel exhaustion trap */
-        ctx.fuel = 0;
-    }
-
-    if (ctx.fuel == 0) {
-        if (err_buf && err_len > 0) {
-            snprintf(err_buf, err_len, "CSILK_WASM_TRAP_FUEL_EXHAUSTED");
-        }
-        csilk_mutex_unlock(&plugin->mutex);
-        return NULL;
-    }
-
-    char* res = strdup("{\"status\":\"ok\",\"result\":\"wasm_execution_success\"}");
-    if (res == NULL) {
-        csilk_mutex_unlock(&plugin->mutex);
-        return NULL;
-    }
-    /* Stub path is not real execution — warn so users know their plugin
-     * did not actually run.  Production must enable -DCSILK_ENABLE_WAMR=ON. */
-    fprintf(stderr,
-            "[csilk][WASM] WARNING: stub execution path active "
-            "(CSILK_ENABLE_WAMR=OFF); returning canned result\n");
+#else
+    (void)func_name;
+    (void)json_input;
+    (void)err_buf;
+    (void)err_len;
+    errno = ENOTSUP;
     csilk_mutex_unlock(&plugin->mutex);
-    return res;
+    return NULL;
+#endif
 }

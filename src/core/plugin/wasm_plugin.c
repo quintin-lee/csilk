@@ -218,11 +218,9 @@ csilk_wasm_plugin_is_valid(const csilk_wasm_plugin_t* plugin)
 /**
  * @brief Execute a WASM plugin function within a request context.
  * @param[in] plugin    Validated plugin to execute.
- * @param[in] ctx       Request context (currently unused by the stub).
+ * @param[in] ctx       Request context.
  * @param[in] func_name Entry function name (validated non-NULL).
- * @return 0 on success, -1 on invalid plugin or NULL func_name.
- * @note The current implementation validates the plugin and returns 0 without
- *       performing real execution.
+ * @return 0 on success, -1 with errno=ENOTSUP when WAMR runtime is unavailable.
  */
 int
 csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const char* func_name)
@@ -231,31 +229,34 @@ csilk_wasm_plugin_execute(csilk_wasm_plugin_t* plugin, csilk_ctx_t* ctx, const c
         return -1;
     }
 
-    csilk_mutex_lock(&plugin->mutex);
-
-    /* Fuel budget enforcement */
-    if (plugin->config.fuel_limit == 0 || strcmp(func_name, "infinite_loop") == 0) {
-        csilk_mutex_unlock(&plugin->mutex);
-        if (ctx) {
-            csilk_set_status(ctx, 500);
-            csilk_set_header(ctx, "X-WASM-Error", "TRAP_FUEL_EXHAUSTED");
-            csilk_abort(ctx);
+#ifdef HAS_WAMR
+    if (!plugin->use_wamr) {
+        errno = ENOTSUP;
+        return -1;
+    }
+    char  err_buf[128] = {0};
+    char* res = csilk_wasm_plugin_exec(plugin, func_name, "{}", err_buf, sizeof(err_buf));
+    if (!res) {
+        if (strcmp(err_buf, "CSILK_WASM_TRAP_FUEL_EXHAUSTED") == 0) {
+            if (ctx) {
+                csilk_set_status(ctx, 500);
+                csilk_set_header(ctx, "X-WASM-Error", "TRAP_FUEL_EXHAUSTED");
+                csilk_abort(ctx);
+            }
+            return CSILK_WASM_ERR_OUT_OF_FUEL;
         }
-        return CSILK_WASM_ERR_OUT_OF_FUEL;
+        return -1;
     }
-
-    /* Deduct simulated instruction fuel; resets to configured limit each call */
-    if (plugin->config.fuel_limit > 100) {
-        /* fuel_limit is the max; current execution budget is fuel_limit (reset per call) */
-        (void)0; /* WAMR path handles real fuel; stub path is stateless */
-    }
-
+    free(res);
     if (ctx) {
         csilk_set_header(ctx, "X-WASM-Plugin", func_name);
     }
-
-    csilk_mutex_unlock(&plugin->mutex);
     return 0;
+#else
+    (void)ctx;
+    errno = ENOTSUP;
+    return -1;
+#endif
 }
 
 int

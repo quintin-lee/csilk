@@ -3,9 +3,9 @@
  * @brief AF_XDP (XSK) kernel bypass zero-copy network socket driver.
  *
  * Real Linux AF_XDP (XSK) kernel bypass driver with 4-ring DMA descriptor
- * queues (Fill, Completion, RX, TX) and zero-copy UMEM support. When running
- * without CAP_NET_RAW / root or on non-Linux platforms, gracefully falls back
- * to high-performance in-memory ring simulation.
+ * queues (Fill, Completion, RX, TX) and zero-copy UMEM support. Fails closed
+ * (returns NULL with errno set) when AF_XDP sockets are unavailable or
+ * unprivileged.
  *
  * @copyright MIT License
  */
@@ -57,8 +57,6 @@ struct csilk_xdp_socket_s {
     uint8_t*           umem_area;
     size_t             umem_size;
     int                fd;
-    size_t             rx_head;
-    size_t             tx_head;
     bool               real_socket;
     csilk_xdp_stats_t  stats;
 
@@ -77,17 +75,6 @@ struct csilk_xdp_socket_s {
     void*  cr_map;
     size_t cr_map_sz;
 #endif
-
-    /* Simulation queues (used when real_socket == false) */
-    uint64_t* sim_fr_addrs;
-    size_t    sim_fr_head;
-    size_t    sim_fr_tail;
-    size_t    sim_fr_count;
-
-    uint64_t* sim_cr_addrs;
-    size_t    sim_cr_head;
-    size_t    sim_cr_tail;
-    size_t    sim_cr_count;
 };
 
 /* --- Public Function Implementations --- */
@@ -128,12 +115,10 @@ csilk_xdp_socket_new(const csilk_xdp_config_t* config)
 
     memset(xsk->umem_area, 0, xsk->umem_size);
     xsk->fd = -1;
-    xsk->rx_head = 0;
-    xsk->tx_head = 0;
     xsk->real_socket = false;
 
 #if defined(__linux__)
-    /* Attempt to initialize real AF_XDP Linux socket if privileged */
+    /* Initialize real AF_XDP Linux socket; fail closed if unprivileged/unsupported */
     xsk->fd = socket(AF_XDP, SOCK_RAW, 0);
     if (xsk->fd >= 0) {
         struct xdp_umem_reg mr = {
@@ -276,38 +261,23 @@ csilk_xdp_socket_new(const csilk_xdp_config_t* config)
         }
 
         if (!ok) {
-            /* If real socket setup failed, cleanup and use simulation */
-            if (xsk->rx_map && xsk->rx_map != MAP_FAILED) {
-                munmap(xsk->rx_map, xsk->rx_map_sz);
-            }
-            if (xsk->tx_map && xsk->tx_map != MAP_FAILED) {
-                munmap(xsk->tx_map, xsk->tx_map_sz);
-            }
-            if (xsk->fr_map && xsk->fr_map != MAP_FAILED) {
-                munmap(xsk->fr_map, xsk->fr_map_sz);
-            }
-            if (xsk->cr_map && xsk->cr_map != MAP_FAILED) {
-                munmap(xsk->cr_map, xsk->cr_map_sz);
-            }
-            xsk->rx_map = xsk->tx_map = xsk->fr_map = xsk->cr_map = NULL;
-            close(xsk->fd);
-            xsk->fd = -1;
-            xsk->real_socket = false;
+            int saved_errno = errno ? errno : ENOTSUP;
+            csilk_xdp_socket_free(xsk);
+            errno = saved_errno;
+            return NULL;
         }
+        return xsk;
+    } else {
+        int saved_errno = errno ? errno : ENOTSUP;
+        csilk_xdp_socket_free(xsk);
+        errno = saved_errno;
+        return NULL;
     }
+#else
+    csilk_xdp_socket_free(xsk);
+    errno = ENOTSUP;
+    return NULL;
 #endif
-
-    /* Setup simulation buffers */
-    xsk->sim_fr_addrs = calloc(xsk->config.frame_num, sizeof(uint64_t));
-    xsk->sim_cr_addrs = calloc(xsk->config.frame_num, sizeof(uint64_t));
-    xsk->sim_fr_head = 0;
-    xsk->sim_fr_tail = 0;
-    xsk->sim_fr_count = 0;
-    xsk->sim_cr_head = 0;
-    xsk->sim_cr_tail = 0;
-    xsk->sim_cr_count = 0;
-
-    return xsk;
 }
 
 /**
@@ -337,12 +307,6 @@ csilk_xdp_socket_free(csilk_xdp_socket_t* xsk)
         close(xsk->fd);
     }
 #endif
-    if (xsk->sim_fr_addrs) {
-        free(xsk->sim_fr_addrs);
-    }
-    if (xsk->sim_cr_addrs) {
-        free(xsk->sim_cr_addrs);
-    }
     if (xsk->umem_area) {
         free(xsk->umem_area);
     }
@@ -380,16 +344,8 @@ csilk_xdp_rx_burst(csilk_xdp_socket_t* xsk, const uint8_t** frame_data, size_t* 
     }
 #endif
 
-    size_t   frame_idx = xsk->rx_head % xsk->config.frame_num;
-    uint8_t* frame_ptr = xsk->umem_area + (frame_idx * xsk->config.frame_size);
-
-    *frame_data = frame_ptr;
-    *frame_len = xsk->config.frame_size;
-    xsk->rx_head++;
-    xsk->stats.rx_packets++;
-    xsk->stats.rx_bytes += xsk->config.frame_size;
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 /**
@@ -461,22 +417,8 @@ csilk_xdp_tx_burst(csilk_xdp_socket_t* xsk, const uint8_t* frame_data, size_t fr
     }
 #endif
 
-    size_t   frame_idx = xsk->tx_head % xsk->config.frame_num;
-    uint8_t* frame_ptr = xsk->umem_area + (frame_idx * xsk->config.frame_size);
-
-    memcpy(frame_ptr, frame_data, frame_len);
-    xsk->tx_head++;
-    xsk->stats.tx_packets++;
-    xsk->stats.tx_bytes += frame_len;
-
-    if (xsk->sim_cr_addrs && xsk->sim_cr_count < xsk->config.frame_num) {
-        xsk->sim_cr_addrs[xsk->sim_cr_tail % xsk->config.frame_num] =
-            frame_idx * xsk->config.frame_size;
-        xsk->sim_cr_tail++;
-        xsk->sim_cr_count++;
-    }
-
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 /**
@@ -502,13 +444,8 @@ csilk_xdp_fill_ring_produce(csilk_xdp_socket_t* xsk, uint64_t addr)
     }
 #endif
 
-    if (!xsk->sim_fr_addrs || xsk->sim_fr_count >= xsk->config.frame_num) {
-        return -1;
-    }
-    xsk->sim_fr_addrs[xsk->sim_fr_tail % xsk->config.frame_num] = addr;
-    xsk->sim_fr_tail++;
-    xsk->sim_fr_count++;
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 /**
@@ -534,13 +471,8 @@ csilk_xdp_complete_ring_reap(csilk_xdp_socket_t* xsk, uint64_t* addr)
     }
 #endif
 
-    if (!xsk->sim_cr_addrs || xsk->sim_cr_count == 0) {
-        return -1;
-    }
-    *addr = xsk->sim_cr_addrs[xsk->sim_cr_head % xsk->config.frame_num];
-    xsk->sim_cr_head++;
-    xsk->sim_cr_count--;
-    return 0;
+    errno = ENOTSUP;
+    return -1;
 }
 
 /**

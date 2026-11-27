@@ -158,20 +158,7 @@ test_h3_alt_svc_and_listener_edge_cases(void)
     assert(alt_svc != nullptr && strstr(alt_svc, "h3=\":443\"") != nullptr);
     csilk_test_ctx_free(ctx);
 
-    /* Listener invalid binds */
-    assert(csilk_h3_listener_bind(0) == nullptr);
-    assert(csilk_h3_listener_bind(-1) == nullptr);
-    assert(csilk_h3_listener_bind(80000) == nullptr);
-
-    /* Listener null close */
-    csilk_h3_listener_close(nullptr);
-
-    /* Listener process packet invalid args */
-    uint64_t conn_id = 0;
-    uint8_t  pkt[16] = {0xC0, 1, 2, 3, 4, 5, 6, 7, 8};
-    assert(csilk_h3_listener_process_packet(nullptr, pkt, 16, &conn_id) == -1);
-
-    printf("test_h3_alt_svc_and_listener_edge_cases: PASS\n");
+    printf("test_h3_alt_svc_edge_cases: PASS\n");
 }
 
 static void
@@ -216,17 +203,6 @@ test_h3_alt_svc_header()
 
     csilk_test_ctx_free(ctx);
     printf("test_h3_alt_svc_header: PASS\n");
-}
-
-static void
-test_h3_listener()
-{
-    printf("Testing HTTP/3 UDP Socket Listener (fail-closed)...\n");
-
-    csilk_h3_listener_t* listener = csilk_h3_listener_bind(4433);
-    assert(listener == NULL);
-    assert(errno == ENOTSUP);
-    printf("test_h3_listener (fail-closed): PASS\n");
 }
 
 static void
@@ -771,7 +747,6 @@ main()
     test_h3_frame_edge_cases();
     test_h3_alt_svc_header();
     test_h3_alt_svc_and_listener_edge_cases();
-    test_h3_listener();
     test_h3_transport_new_destroy();
     test_h3_session_data();
     test_h3_set_enabled();

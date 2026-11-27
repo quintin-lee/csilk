@@ -22,39 +22,39 @@
  * @copyright MIT License
  */
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "wasm_internal.h"
 
 /**
- * @brief WASI fd_write host import (stub).
- * @param[in] plugin   Plugin instance (validated non-NULL).
- * @param[in] fd       File descriptor selector (currently ignored).
+ * @brief WASI fd_write host import (unimplemented without full WASI snapshot).
+ * @param[in] plugin   Plugin instance.
+ * @param[in] fd       File descriptor selector.
  * @param[in] iovs     Pointer to caller iovec array in plugin memory.
- * @param[in] iovs_len Number of iovecs (must be > 0).
- * @return 0 on success, -1 on invalid arguments.
- * @note The current implementation discards output; it exists only to satisfy
- *       the imported symbol so modules that reference it can instantiate.
+ * @param[in] iovs_len Number of iovecs.
+ * @return -1 with errno set to ENOTSUP (enable WAMR for real WASI fd_write).
  */
 int32_t
 csilk_wasi_fd_write(csilk_wasm_plugin_t* plugin, int32_t fd, const uint8_t* iovs, int32_t iovs_len)
 {
-    if (!plugin || !iovs || iovs_len <= 0) {
-        return -1;
-    }
+    (void)plugin;
     (void)fd;
-    return 0;
+    (void)iovs;
+    (void)iovs_len;
+    errno = ENOTSUP;
+    return -1;
 }
 
 /**
- * @brief WASI clock_time_get host import (stub).
+ * @brief WASI clock_time_get host import.
  * @param[in]  plugin   Plugin instance (validated non-NULL).
- * @param[in]  clock_id Clock identifier (currently ignored).
- * @param[out] out_time Receives the returned timestamp (fixed 1e9 ns).
- * @return 0 on success, -1 on invalid arguments.
- * @note Returns a constant timestamp rather than querying the real clock.
+ * @param[in]  clock_id WASI clock identifier (0 = CLOCK_REALTIME, else CLOCK_MONOTONIC).
+ * @param[out] out_time Receives current nanosecond timestamp.
+ * @return 0 on success, -1 on invalid arguments or clock error.
  */
 int32_t
 csilk_wasi_clock_time_get(csilk_wasm_plugin_t* plugin, uint32_t clock_id, uint64_t* out_time)
@@ -62,8 +62,12 @@ csilk_wasi_clock_time_get(csilk_wasm_plugin_t* plugin, uint32_t clock_id, uint64
     if (!plugin || !out_time) {
         return -1;
     }
-    (void)clock_id;
-    *out_time = 1000000000ULL;
+    struct timespec ts;
+    clockid_t       clk = (clock_id == 0) ? CLOCK_REALTIME : CLOCK_MONOTONIC;
+    if (clock_gettime(clk, &ts) != 0) {
+        return -1;
+    }
+    *out_time = (uint64_t)ts.tv_sec * 1000000000ULL + (uint64_t)ts.tv_nsec;
     return 0;
 }
 

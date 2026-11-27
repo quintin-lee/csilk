@@ -89,40 +89,6 @@ int csilk_h3_frame_decode(const uint8_t* in_buf,
  */
 void csilk_h3_inject_alt_svc_header(csilk_ctx_t* ctx, int port);
 
-/* --- HTTP/3 UDP Socket Listener --- */
-
-/** @brief Opaque handle for HTTP/3 UDP Socket Listener. */
-typedef struct csilk_h3_listener_s csilk_h3_listener_t;
-
-/**
- * @brief Bind an HTTP/3 UDP Socket Listener to a local port.
- *
- * @param port UDP port number to bind (e.g. 443).
- * @return Heap-allocated listener handle, or NULL on bind error.
- */
-csilk_h3_listener_t* csilk_h3_listener_bind(int port);
-
-/**
- * @brief Process an incoming QUIC/HTTP/3 packet and extract the 64-bit Connection ID.
- *
- * @param listener Active HTTP/3 UDP listener handle.
- * @param packet Raw UDP packet byte buffer.
- * @param len Length of UDP packet in bytes.
- * @param[out] out_conn_id Stores extracted 64-bit Connection ID.
- * @return 0 on successful packet parsing, -1 on invalid/corrupted packet.
- */
-int csilk_h3_listener_process_packet(csilk_h3_listener_t* listener,
-                                     const uint8_t*       packet,
-                                     size_t               len,
-                                     uint64_t*            out_conn_id);
-
-/**
- * @brief Close and free an HTTP/3 UDP Socket Listener.
- *
- * @param listener Listener handle to release.
- */
-void csilk_h3_listener_close(csilk_h3_listener_t* listener);
-
 /* --- HTTP/3 QUIC Transport (v1.2+) --- */
 
 /** @brief Opaque handle for HTTP/3 QUIC transport. */
