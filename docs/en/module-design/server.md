@@ -213,6 +213,9 @@ void csilk_server_free(csilk_server_t* server);
 - 释放 worker pool
 - 释放服务器结构体本身
 
+> [!WARNING]
+> **Router Token 生命周期契约**：调用方（含外部线程）**不得**跨 `csilk_server_free()` 持有通过 `csilk_server_router_acquire()` 获取的 `csilk_rcu_token_t`，也不得在 `csilk_server_free()` 开始后调用 `csilk_server_router_release()`——静态 reader slot 内嵌于 `server->reload_mgr` 中，会随 `free(server)` 一并释放（正常关闭会先 join 所有 worker 线程并通过 TLS 析构清空槽位）。若销毁期仍有超时未释放的 stuck reader，RCU 销毁会跳过受牵连的 retired 路由/`dl_handle`/动态溢出槽位而不再二次回收（宁泄漏不 UAF）。
+
 ---
 
 ## 3. 多 Worker 与连接池

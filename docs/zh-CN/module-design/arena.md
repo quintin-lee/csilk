@@ -146,6 +146,7 @@ flowchart TB
 **TLS 多档分块缓存**：
 - 支持 `4KB`（Small）、`16KB`（Medium）、`64KB`（Large）分档缓存
 - 每档最多缓存 `CSILK_MAX_TLS_CHUNKS_PER_TIER`（8）个块，全局上限 `CSILK_MAX_TLS_CHUNKS`（16），均可通过 CMake 编译期选项配置
+- **每线程最坏缓存占用**：默认配置下（每档 8 个、总计 16 个）最坏缓存 `8×64KB + 8×16KB = 640KB`（此前 CMake 覆盖全局上限为 8 时为 `8×64KB = 512KB`）；若同时放宽单档上限，总上限 16 对应最坏 `16×64KB = 1MB`。内存受限环境可通过 `-DCSILK_MAX_TLS_CHUNKS=8` 下调
 - 线程退出时通过 `pthread_key` 析构函数及 Worker 线程显式清理自动清空（`csilk_arena_flush_free_list()`）
 
 ### 4.2 `csilk_arena_reset()` — 轻量重置

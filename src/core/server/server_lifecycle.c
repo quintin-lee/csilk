@@ -673,7 +673,12 @@ csilk_server_free(csilk_server_t* server)
     csilk_dev_hot_reload_stop(server);
     _csilk_plugin_cleanup_server(server);
     /* _csilk_reload_mgr_free() performs a bounded grace-period wait and skips
-     * reclaiming any retired routers/handles still pinned by a stuck reader. */
+     * reclaiming any retired routers/dl_handles/tmp_paths or stuck dynamic
+     * overflow slots still pinned by an active reader. There is no second
+     * reclamation pass before free(server) below — pinned entries are
+     * intentionally leaked permanently ("prefer leak over UAF"). Callers must
+     * not hold a csilk_rcu_token_t across csilk_server_free() because static
+     * reader_slots[] inside server->reload_mgr are freed with server. */
     _csilk_reload_mgr_free(server);
     _csilk_dispatch_pool_cleanup();
 

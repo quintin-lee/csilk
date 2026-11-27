@@ -617,6 +617,26 @@ rcu_wait_slot_idle(csilk_rcu_slot_t* slot)
     return false;
 }
 
+/*
+ * Teardown RCU/EBR reclamation for server->reload_mgr.
+ *
+ * Precondition: no caller (worker or external thread) may hold an active
+ * csilk_rcu_token_t across csilk_server_free(), because static reader_slots[]
+ * are embedded directly inside server->reload_mgr and are freed with `server`.
+ * Normal shutdown joins all worker threads beforehand (clearing their slots via
+ * rcu_thread_exit_destructor).
+ *
+ * Leak-over-UAF trade-off: if any reader slot remains active after the bounded
+ * wait (e.g. a leaked token or stalled external reader), any stuck dynamic
+ * overflow slots and retired entries with retired_epoch >= min_stuck_epoch
+ * (router, dl_handle, tmp_path, and the record itself) are linked back onto
+ * mgr->overflow_head / mgr->retired_head and skipped. When called from
+ * csilk_server_free(), there is NO second reclamation pass before free(server)
+ * — those pinned entries are intentionally leaked permanently rather than
+ * risking UAF or dlclose()-ing code still referenced by a stuck reader.
+ * Linking them back keeps the retained state intact when unit tests invoke
+ * _csilk_reload_mgr_free() directly before freeing the server.
+ */
 CSILK_INTERNAL void
 _csilk_reload_mgr_free(csilk_server_t* server)
 {
@@ -660,7 +680,9 @@ _csilk_reload_mgr_free(csilk_server_t* server)
         }
     }
 
-    /* Wait for all overflow dynamic readers to exit; keep any stuck slot alive to prevent UAF */
+    /* Wait for all overflow dynamic readers to exit. Any stuck dynamic slot is
+     * linked back onto mgr->overflow_head and intentionally leaked permanently
+     * on server teardown (no second pass) rather than freed under an active token. */
     csilk_rcu_slot_t* ov =
         atomic_exchange_explicit(&mgr->overflow_head, NULL, memory_order_acq_rel);
     csilk_rcu_slot_t* stuck_ov_head = NULL;
@@ -693,7 +715,10 @@ _csilk_reload_mgr_free(csilk_server_t* server)
                     (unsigned long long)min_stuck_epoch);
     }
 
-    /* Reclaim retired entries only when safe; skip entries >= min_stuck_epoch on timeout */
+    /* Reclaim retired entries only when safe; skip entries >= min_stuck_epoch on
+     * timeout. Re-attached entries on retain_head receive NO second reclaim pass
+     * during csilk_server_free() — they are intentionally leaked permanently
+     * (router, dl_handle, tmp_path, and node) rather than risking UAF. */
     csilk_retired_router_t* list =
         atomic_exchange_explicit(&mgr->retired_head, NULL, memory_order_acq_rel);
     csilk_retired_router_t* retain_head = NULL;
@@ -718,6 +743,8 @@ _csilk_reload_mgr_free(csilk_server_t* server)
             }
             free(list);
         } else {
+            /* Intentionally retained (permanently leaked at server free) to
+             * avoid freeing a router/dl_handle still pinned by a stuck reader. */
             atomic_store_explicit(&list->retired_next, retain_head, memory_order_relaxed);
             retain_head = list;
             retained_count++;

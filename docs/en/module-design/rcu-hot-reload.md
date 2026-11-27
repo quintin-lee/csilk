@@ -221,6 +221,11 @@ void _csilk_reload_try_reclaim(csilk_server_t* server) {
 }
 ```
 
+### 6.3 Teardown & Token Lifetime Contract
+
+- **No router token may outlive `csilk_server_free()`**: Callers (including external threads outside server workers) **MUST NOT** hold an active `csilk_rcu_token_t` acquired via `csilk_server_router_acquire()` across `csilk_server_free()`, nor invoke `csilk_server_router_release()` after `csilk_server_free()` begins. Because static reader slots (`reader_slots[]`) are embedded directly inside `server->reload_mgr` and `csilk_server_free()` frees `server`, normal shutdown is safe only because all worker threads are joined beforehand (clearing their slots via `csilk_key_t` TLS destructors). External-thread misuse holding a token past teardown can still cause a use-after-free against the freed `server->reload_mgr`.
+- **Bounded Teardown & Leak-Over-UAF Trade-Off**: `_csilk_reload_mgr_free()` waits up to `CSILK_RCU_DEFAULT_TEARDOWN_TIMEOUT_MS` (5000 ms) per active slot for readers to exit. If a reader remains stuck at timeout (`active_epoch != 0`), teardown intentionally **skips reclaiming** any retired entries with `retired_epoch >= min_stuck_epoch` (`router`, `dl_handle`, `tmp_path`) as well as stuck dynamic overflow slots, linking them back onto `mgr->retired_head` / `mgr->overflow_head`. When `csilk_server_free()` proceeds to `free(server)`, there is **no second reclamation pass** — those pinned entries are permanently leaked rather than risking UAF or unmapping `.so` code (`dlclose`) still referenced by the stuck reader.
+
 ---
 
 ## 7. Thread-Local Storage Confinement
@@ -247,6 +252,7 @@ static _Thread_local tls_rcu_t g_tls_rcu = {NULL, NULL, 0};
 4. **Concurrent Hot-Reload & Server Shutdown**: Verifies memory safety during graceful draining and final cleanup.
 5. **Concurrent Route Lookup During Swaps**: Proves old readers observe consistent routing while new readers seamlessly match newly registered endpoints.
 6. **Reader Storm (1024 readers × 200 acquires + 8 writers)**: High-intensity reader storm with continuous writer reloads; validates EBR grace-period safety under heavy contention.
+7. **Stuck Reader Timeout Skips Unsafe Reclamation (`test_rcu_teardown_skips_reclaim_on_stuck_reader`)**: Holds a read-side token across `_csilk_reload_mgr_free()` timeout and verifies pinned retired entries are skipped (preventing UAF) and reclaimed only after token release.
 
 ---
 
@@ -254,6 +260,6 @@ static _Thread_local tls_rcu_t g_tls_rcu = {NULL, NULL, 0};
 
 | File | Purpose |
 |------|---------|
-| `src/core/server/server_rcu.c` | `csilk_server_router_acquire`, `csilk_server_router_release`, `csilk_server_set_router_full`, `_csilk_reload_try_reclaim` |
+| `src/core/server/server_rcu.c` | `csilk_server_router_acquire`, `csilk_server_router_release`, `csilk_server_set_router_full`, `_csilk_reload_try_reclaim`, `_csilk_reload_mgr_free` |
 | `include/csilk/core/hot_reload.h` | Dynamic hot reload public API |
-| `tests/core/test_rcu_lifecycle_stress.c` | 6-scenario formal stress suite (512 readers, 10k short-lived threads, 10k reloads, active readers, shutdown, reader storm) |
+| `tests/core/test_rcu_lifecycle_stress.c` | 7-scenario formal stress & lifetime suite (512 readers, 10k short-lived threads, 10k reloads, active readers, shutdown, reader storm, stuck-reader teardown) |

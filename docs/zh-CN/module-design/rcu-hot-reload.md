@@ -221,6 +221,11 @@ void _csilk_reload_try_reclaim(csilk_server_t* server) {
 }
 ```
 
+### 6.3 销毁期宽限与 Token 生命周期契约
+
+- **严禁跨 `csilk_server_free()` 持有路由 Token**：任何线程（包括服务器 Worker 之外的外部线程）**MUST NOT** 跨 `csilk_server_free()` 持有由 `csilk_server_router_acquire()` 获取的 `csilk_rcu_token_t`，也不得在 `csilk_server_free()` 开始后调用 `csilk_server_router_release()`。静态 reader slot（`reader_slots[]`）直接内嵌于 `server->reload_mgr`，会随 `free(server)` 一并释放；正常关闭会先 join 所有 Worker 线程（通过 `csilk_key_t` TLS 析构清空槽位），因此只有外部线程误用跨销毁持有 token 时才会触发 UAF。
+- **有界等待与“宁泄漏不 UAF”取舍**：`_csilk_reload_mgr_free()` 对每个活跃槽位最多等待 `CSILK_RCU_DEFAULT_TEARDOWN_TIMEOUT_MS`（5000 ms）。若超时仍有 stuck reader（`active_epoch != 0`），销毁流程会跳过 `retired_epoch >= min_stuck_epoch` 的 retired 条目（`router` / `dl_handle` / `tmp_path`）以及卡住的动态溢出槽位，将其挂回 `mgr->retired_head` / `mgr->overflow_head` 而不释放。随后 `csilk_server_free()` 直接释放 `server`，**不再进行二次 reclaim**——这些被 pin 住的条目将永久泄漏，以此避免在卡住的读者仍可能解引用路由或执行 `.so` 代码时引发 UAF。
+
 ---
 
 ## 7. 线程本地存储
@@ -243,11 +248,12 @@ static _Thread_local tls_rcu_t g_tls_rcu = {NULL, NULL, 0};
 `tests/core/test_rcu_lifecycle_stress.c` 包含全面的形式化验证场景：
 
 1. **512 并发读者扩展验证**：256 个静态槽位 + 256 个动态溢出槽位并发路由匹配与 Epoch 推进，验证无数据竞争。
-2. **10,000 短生命周期线程测试**：短命线程频繁进入退出，验证 `pthread_key` 线程退出析构器（`rcu_thread_exit_destructor`）自动注销 TID，动态溢出槽位零泄漏。
+2. **10,000 短生命周期线程测试**：短命线程频繁进入退出，验证 `csilk_key_t` 线程退出析构器（`rcu_thread_exit_destructor`）自动注销 TID，动态溢出槽位零泄漏。
 3. **10,000 次高频热重载**：验证单调 Epoch 不断递增下的内存回收与 RSS 稳定性。
 4. **热重载与服务器关机并发**：验证 `server_free` / `grace_period` 与热重载并发触发时的内存安全。
 5. **热重载与活跃路由匹配并发**：保证旧读者永远访问有效路由，新读者无缝切换到新路由。
 6. **Reader Storm (1024 读者 × 200 次 acquire + 8 写者)**：高强度 reader storm 配合持续写者热重载，验证 EBR 宽限期在高争用下的安全性。
+7. **卡住读者超时跳过不安全回收（`test_rcu_teardown_skips_reclaim_on_stuck_reader`）**：跨 `_csilk_reload_mgr_free()` 超时持有读端 token，验证被 pin 住的 retired 路由不会被提前释放（避免 UAF），且仅在释放 token 后才被安全回收。
 
 ---
 
@@ -255,6 +261,6 @@ static _Thread_local tls_rcu_t g_tls_rcu = {NULL, NULL, 0};
 
 | 文件 | 关键函数 / 用途 |
 |------|-----------------|
-| `src/core/server/server_rcu.c` | `csilk_server_router_acquire`, `csilk_server_router_release`, `csilk_server_set_router_full`, `_csilk_reload_try_reclaim` |
+| `src/core/server/server_rcu.c` | `csilk_server_router_acquire`, `csilk_server_router_release`, `csilk_server_set_router_full`, `_csilk_reload_try_reclaim`, `_csilk_reload_mgr_free` |
 | `include/csilk/core/hot_reload.h` | 动态热重载公共 API |
-| `tests/core/test_rcu_lifecycle_stress.c` | 6 个场景的形式化验证套件 (512 读者, 10K 短命线程, 10K 重载, 活跃读者, 关机, reader storm) |
+| `tests/core/test_rcu_lifecycle_stress.c` | 7 个场景的形式化验证套件 (512 读者, 10K 短命线程, 10K 重载, 活跃读者, 关机, reader storm, 卡住读者超时销毁) |

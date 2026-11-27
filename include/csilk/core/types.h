@@ -74,7 +74,12 @@ enum { CSILK_ARENA_TIER_LARGE = 2 };  /* 64KB - file uploads/large responses */
 #endif
 
 /** @brief Max cached arena chunks across all tiers (TLS free list total limit).
- *  Overridable via CMake -DCSILK_MAX_TLS_CHUNKS=<N> or by defining before include. */
+ *  Default 16. Together with CSILK_MAX_TLS_CHUNKS_PER_TIER=8 across the
+ *  4KB/16KB/64KB tiers, worst-case per-thread TLS cache footprint is
+ *  8*64KB + 8*16KB = 640KB (up from 8*64KB = 512KB when capped at 8, or up to
+ *  CSILK_MAX_TLS_CHUNKS * 64KB = 1MB if per-tier cap is also raised >= 16).
+ *  Overridable via CMake -DCSILK_MAX_TLS_CHUNKS=<N> (e.g. 8 for tighter RAM
+ *  budgets) or by defining before include. */
 #ifndef CSILK_MAX_TLS_CHUNKS
 #define CSILK_MAX_TLS_CHUNKS 16
 #endif

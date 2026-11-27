@@ -258,6 +258,9 @@ csilk_arena_t* arena = csilk_arena_new(16384);  // 16KB 块
 
 **MUST**: 在 `on_request_end` 中调用 `csilk_arena_reset()` 复用 Arena 内存，而非 `csilk_arena_free()` 销毁。**SHOULD**: 仅在连接关闭时释放 Arena。
 
+> [!NOTE]
+> **TLS Chunk 缓存内存权衡**：默认编译期参数为 `CSILK_MAX_TLS_CHUNKS=16`、`CSILK_MAX_TLS_CHUNKS_PER_TIER=8`（4KB/16KB/64KB 三档），单线程最坏 TLS 缓存占用为 `8×64KB + 8×16KB = 640KB`（若将单档上限同步调大至 ≥16，则理论峰值 `16×64KB = 1MB`；此前 CMake 全局上限 8 时为 `512KB`）。内存受限场景可在 CMake 配置时传入 `-DCSILK_MAX_TLS_CHUNKS=8`（并按需调小 `-DCSILK_MAX_TLS_CHUNKS_PER_TIER`）。
+
 ### 3.3 连接池与超时配置
 
 ```c

@@ -85,8 +85,16 @@ void csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
  *
  * **Thread-safety contract**: All worker threads MUST be joined before
  * calling this function.  The RCU/EBR reader-slot destructors run on each
- * thread exit via pthread_key; if a thread is still alive when this function
+ * thread exit via csilk_key_t; if a thread is still alive when this function
  * writes to the reload manager, it may access freed memory.
+ *
+ * Furthermore, **no thread (worker or external caller) may hold an active
+ * csilk_rcu_token_t acquired via csilk_server_router_acquire() across
+ * csilk_server_free(), nor call csilk_server_router_release() after
+ * csilk_server_free() begins**: static reader slots are embedded directly
+ * inside `server->reload_mgr` and are freed together with `server`.  Normal
+ * shutdown joins all workers beforehand, so only external-thread misuse
+ * holding a token across teardown can trigger a use-after-free.
  *
  * @param server Server instance to free.
  */
@@ -189,7 +197,11 @@ void csilk_server_set_storage_driver(csilk_server_t* server, csilk_storage_drive
  */
 int csilk_server_run(csilk_server_t* server, int port);
 
-/** @brief RCU / EBR read-side lease token for safe router and code lifecycle. */
+/** @brief RCU / EBR read-side lease token for safe router and code lifecycle.
+ *
+ *  @warning A token must NOT outlive the owning `csilk_server_t` instance
+ *           (`csilk_server_free()`). Always release it via
+ *           csilk_server_router_release() before destroying the server. */
 typedef struct csilk_rcu_token_s {
     void*    slot;   /**< Opaque reader slot pointer. */
     uint64_t epoch;  /**< Sampled epoch at acquisition. */
@@ -208,6 +220,11 @@ csilk_router_t* csilk_server_get_router(csilk_server_t* server);
  * ensuring the router and any dynamic library (.so) code remain valid for the
  * entire duration of request execution.
  *
+ * @warning Every acquisition MUST be paired with csilk_server_router_release()
+ *          **before** calling csilk_server_free(). Holding a router token
+ *          across server destruction is undefined behaviour (use-after-free on
+ *          static reader slots embedded in `server->reload_mgr`).
+ *
  * @param server Pointer to server instance.
  * @param token  Pointer to token populated with lease tracking state.
  * @return Active router pointer, or NULL if server is NULL.
@@ -218,6 +235,9 @@ csilk_router_t* csilk_server_router_acquire(csilk_server_t* server, csilk_rcu_to
  * @brief Release an RCU / EBR read-side critical section.
  *
  * Signals that request handler execution on the acquired router has completed.
+ *
+ * @warning MUST be called before csilk_server_free(). Invoking this after
+ *          server teardown accesses freed `server->reload_mgr` memory.
  *
  * @param server Pointer to server instance.
  * @param token  Pointer to token populated by csilk_server_router_acquire().
