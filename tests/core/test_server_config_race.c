@@ -177,6 +177,93 @@ test_concurrent_config_updates(void)
     csilk_router_free(router);
 }
 
+static void
+dummy_mw_handler(csilk_ctx_t* c)
+{
+    csilk_next(c);
+}
+
+static void
+dummy_route_handler(csilk_ctx_t* c)
+{
+    csilk_string(c, 200, "ok");
+}
+
+typedef struct {
+    csilk_server_t* server;
+    _Atomic(int)*   accepted_count;
+} mw_reg_arg_t;
+
+static void*
+mw_register_worker(void* raw_arg)
+{
+    mw_reg_arg_t* arg = (mw_reg_arg_t*)raw_arg;
+    for (int i = 0; i < 12; i++) {
+        if (csilk_server_use(arg->server, dummy_mw_handler) == 0) {
+            atomic_fetch_add_explicit(arg->accepted_count, 1, memory_order_relaxed);
+        }
+    }
+    return NULL;
+}
+
+static void*
+router_swap_worker(void* raw_arg)
+{
+    csilk_server_t* s = (csilk_server_t*)raw_arg;
+    csilk_handler_t h = dummy_route_handler;
+    for (int i = 0; i < 10; i++) {
+        csilk_router_t* nr = csilk_router_new();
+        assert(nr != NULL);
+        csilk_router_add(nr, "GET", "/mw", &h, 1);
+        csilk_server_set_router(s, nr);
+    }
+    return NULL;
+}
+
+static void
+test_concurrent_middleware_and_router_setup(void)
+{
+    printf("Testing concurrent csilk_server_use() + csilk_server_set_router() setup...\n");
+
+    csilk_router_t* router = csilk_router_new();
+    assert(router != NULL);
+    csilk_handler_t h = dummy_route_handler;
+    csilk_router_add(router, "GET", "/mw", &h, 1);
+
+    csilk_server_t* server = csilk_server_new(router);
+    assert(server != NULL);
+
+    _Atomic(int) accepted = 0;
+    pthread_t    mw_threads[4];
+    pthread_t    swap_threads[2];
+    mw_reg_arg_t mw_arg = {.server = server, .accepted_count = &accepted};
+
+    for (int i = 0; i < 4; i++) {
+        assert(pthread_create(&mw_threads[i], NULL, mw_register_worker, &mw_arg) == 0);
+    }
+    for (int i = 0; i < 2; i++) {
+        assert(pthread_create(&swap_threads[i], NULL, router_swap_worker, server) == 0);
+    }
+
+    for (int i = 0; i < 4; i++) {
+        pthread_join(mw_threads[i], NULL);
+    }
+    for (int i = 0; i < 2; i++) {
+        pthread_join(swap_threads[i], NULL);
+    }
+
+    assert(atomic_load_explicit(&accepted, memory_order_relaxed) == 32);
+    assert(server->middleware_count == 32);
+    assert(csilk_server_use(server, dummy_mw_handler) == -1);
+
+    csilk_server_wait_grace_period(server);
+    csilk_router_t* active_r = csilk_server_get_router(server);
+    assert(active_r != NULL);
+    csilk_server_free(server);
+    csilk_router_free(active_r);
+    printf("  Concurrent Middleware & Router Setup Test Passed.\n");
+}
+
 __attribute__((optimize("O0"))) int
 main(void)
 {
@@ -187,6 +274,7 @@ main(void)
     printf("=================================================================\n\n");
 
     test_concurrent_config_updates();
+    test_concurrent_middleware_and_router_setup();
 
     printf("\n=================================================================\n");
     printf("                   TEST COMPLETED SUCCESSFULLY                   \n");

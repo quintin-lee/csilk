@@ -91,6 +91,9 @@ graph TB
 > [!NOTE]
 > `active_clients` 归属于各自的 `worker_pool_t`，完全由对应的 Worker Event Loop 线程独占访问（线程封闭，非线程安全）。跨线程操作必须通过 `csilk_dispatch()` 投递至对应 Worker 的无锁任务队列执行。
 
+> [!IMPORTANT]
+> 全局中间件注册 API `csilk_server_use()`（以及 `csilk_app_use()` / `csilk_app_use_mw()`）内部通过 `server->config_mutex` 串行化写入，但**仅限在 `csilk_server_run()` 启动之前调用**；运行期如需变更路由或中间件，请构造新的路由器并通过 `csilk_server_set_router*()` 或 `csilk_hot_update()` 原子切换。
+
 ---
 
 

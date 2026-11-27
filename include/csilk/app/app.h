@@ -32,7 +32,7 @@
  *   csilk_app_run(app, 8080);
  *   csilk_app_free(app);
  *
- * @version 0.5.2
+ * @version 1.2.0
  * @copyright MIT License
  */
 
@@ -113,6 +113,8 @@ void csilk_app_log_json(csilk_app_t* app, int enable);
  * the route-specific handler.  The onion model applies — code before
  * csilk_next() runs on the way in, code after runs on the way out.
  *
+ * @note Must be called before csilk_app_run().
+ *
  * @param app Application handle.
  * @param h Middleware handler function. */
 void csilk_app_use(csilk_app_t* app, csilk_handler_t h);
@@ -142,6 +144,8 @@ int csilk_app_use_wasm(csilk_app_t* app, csilk_wasm_plugin_t* plugin, const char
  * The thunk is owned by the application and released by csilk_app_free().
  * @p user_data must remain valid for the lifetime of the app (typically a
  * config struct that outlives the server).
+ *
+ * @note Must be called before csilk_app_run().
  *
  * @param app Application handle.
  * @param mw  Dual-parameter middleware handler.

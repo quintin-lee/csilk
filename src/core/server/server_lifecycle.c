@@ -24,6 +24,7 @@
 #include <sched.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <dlfcn.h>
@@ -53,6 +54,21 @@
  * budget stays consistent (previously 64 vs 50 at different sites).
  */
 enum { SERVER_FREE_LOOP_DRAIN_MAX = 64 };
+
+/** @brief Maximum size of pre-read SPA index.html cached in memory (4 MiB). */
+enum { CSILK_SPA_MAX_CACHE_BYTES = 4 * 1024 * 1024 };
+
+/** @brief Async threadpool payload for SPA index.html cache-miss fallback. */
+typedef struct {
+    csilk_async_token_t token;
+    char                doc_root[PATH_MAX];
+    bool                allow_sendfile;
+    int                 status_code;
+    int                 fd;
+    size_t              total_size;
+    char*               body;
+    size_t              body_len;
+} spa_work_data_t;
 
 /**
  * @brief Pump an event loop nowait up to SERVER_FREE_LOOP_DRAIN_MAX times.
@@ -218,6 +234,188 @@ csilk_server_new(csilk_router_t* router)
 
 /* --- SPA fallback --- */
 
+static bool
+spa_path_is_safe(const char* path)
+{
+    if (!path || path[0] == '\0') {
+        return false;
+    }
+    for (const char* p = path; *p != '\0'; p++) {
+        if ((unsigned char)*p < 0x20) {
+            return false;
+        }
+        if (p[0] == '.' && p[1] == '.') {
+            char prev = (p == path) ? '/' : *(p - 1);
+            char next = *(p + 2);
+            bool prev_sep = (prev == '/' || prev == '\\');
+            bool next_sep = (next == '/' || next == '\\' || next == '\0');
+            if (prev_sep && next_sep) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static int
+spa_read_fd_all(int fd, size_t size, char** out_buf, size_t* out_len)
+{
+    *out_buf = NULL;
+    *out_len = 0;
+    if (size == 0) {
+        return -1;
+    }
+    char* buf = malloc(size);
+    if (!buf) {
+        return -1;
+    }
+    size_t total = 0;
+    while (total < size) {
+        ssize_t n = read(fd, buf + total, size - total);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            free(buf);
+            return -1;
+        }
+        if (n == 0) {
+            break;
+        }
+        total += (size_t)n;
+    }
+    if (total == 0) {
+        free(buf);
+        return -1;
+    }
+    *out_buf = buf;
+    *out_len = total;
+    return 0;
+}
+
+static int
+spa_read_index_file(const char* doc_root, char** out_buf, size_t* out_len)
+{
+    *out_buf = NULL;
+    *out_len = 0;
+    if (!spa_path_is_safe(doc_root)) {
+        return -1;
+    }
+    char path[PATH_MAX];
+    int  n = snprintf(path, sizeof(path), "%s/index.html", doc_root);
+    if (n < 0 || (size_t)n >= sizeof(path)) {
+        return -1;
+    }
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        return -1;
+    }
+    struct stat st;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0 ||
+        (size_t)st.st_size > CSILK_SPA_MAX_CACHE_BYTES) {
+        close(fd);
+        return -1;
+    }
+    int rc = spa_read_fd_all(fd, (size_t)st.st_size, out_buf, out_len);
+    close(fd);
+    return rc;
+}
+
+static void
+spa_work_cb(csilk_io_work_t* req)
+{
+    spa_work_data_t* data = (spa_work_data_t*)req->data;
+    if (!data) {
+        return;
+    }
+    data->status_code = CSILK_STATUS_NOT_FOUND;
+
+    char path[PATH_MAX];
+    int  n = snprintf(path, sizeof(path), "%s/index.html", data->doc_root);
+    if (n < 0 || (size_t)n >= sizeof(path)) {
+        return;
+    }
+
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        return;
+    }
+
+    struct stat st;
+    if (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_size <= 0) {
+        close(fd);
+        return;
+    }
+
+    if (data->allow_sendfile) {
+        data->fd = fd;
+        data->total_size = (size_t)st.st_size;
+        data->status_code = CSILK_STATUS_OK;
+        return;
+    }
+
+    if ((size_t)st.st_size > CSILK_SPA_MAX_CACHE_BYTES) {
+        close(fd);
+        return;
+    }
+    if (spa_read_fd_all(fd, (size_t)st.st_size, &data->body, &data->body_len) == 0) {
+        data->status_code = CSILK_STATUS_OK;
+    }
+    close(fd);
+}
+
+static void
+spa_after_work_cb(csilk_io_work_t* req, int status)
+{
+    spa_work_data_t* data = (spa_work_data_t*)req->data;
+    if (!data) {
+        return;
+    }
+    csilk_async_token_t token = data->token;
+    csilk_ctx_t*        c = token.ctx;
+    req->data = c;
+
+    bool valid = (status >= 0) && csilk_async_token_validate(&token) &&
+                 !atomic_load_explicit(&c->stream_closed, memory_order_acquire);
+    if (!valid) {
+        if (data->fd >= 0) {
+            close(data->fd);
+        }
+        free(data->body);
+        free(data);
+        csilk_ctx_release_async(&token);
+        return;
+    }
+
+    if (data->status_code == CSILK_STATUS_OK) {
+        if (data->fd >= 0) {
+            csilk_set_header(c, "Content-Type", "text/html");
+            csilk_status(c, CSILK_STATUS_OK);
+            csilk_set_file_response(c, data->fd, 0, data->total_size);
+            data->fd = -1;
+        } else if (data->body) {
+            csilk_set_header(c, "Content-Type", "text/html");
+            csilk_status(c, CSILK_STATUS_OK);
+            csilk_set_response_body_ex(c, data->body, data->body_len, CSILK_OWN_HEAP);
+            data->body = NULL;
+        } else {
+            csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+        }
+    } else {
+        if (data->fd >= 0) {
+            close(data->fd);
+            data->fd = -1;
+        }
+        free(data->body);
+        data->body = NULL;
+        csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+    }
+
+    _csilk_send_response(c);
+    free(data);
+    csilk_ctx_release_async(&token);
+}
+
 /** @brief Built-in SPA (Single Page Application) fallback handler. */
 static void
 spa_fallback_handler(csilk_ctx_t* c)
@@ -228,37 +426,74 @@ spa_fallback_handler(csilk_ctx_t* c)
         return;
     }
     csilk_client_t* client = (csilk_client_t*)c->_internal_client;
-    if (!client || !client->server || !client->server->spa_doc_root) {
+    csilk_server_t* server =
+        (client && client->server) ? client->server : (csilk_server_t*)c->server;
+    if (!server) {
         csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
         return;
     }
-    char path[PATH_MAX];
-    snprintf(path, sizeof(path), "%s/index.html", client->server->spa_doc_root);
 
-    FILE* f = fopen(path, "rb");
-    if (!f) {
+    char doc_root_copy[PATH_MAX];
+    csilk_mutex_lock(&server->config_mutex);
+    if (server->spa_index_buf && server->spa_index_len > 0) {
+        size_t len = server->spa_index_len;
+        char*  body = c->arena ? csilk_arena_alloc(c->arena, len) : malloc(len);
+        if (body) {
+            memcpy(body, server->spa_index_buf, len);
+        }
+        csilk_mutex_unlock(&server->config_mutex);
+        if (!body) {
+            csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "");
+            return;
+        }
+        csilk_set_header(c, "Content-Type", "text/html");
+        csilk_set_response_body_ex(c, body, len, c->arena ? CSILK_OWN_ARENA : CSILK_OWN_HEAP);
+        csilk_status(c, CSILK_STATUS_OK);
+        return;
+    }
+    if (!server->spa_doc_root || !spa_path_is_safe(server->spa_doc_root)) {
+        csilk_mutex_unlock(&server->config_mutex);
         csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
         return;
     }
-    fseek(f, 0, SEEK_END);
-    long fsize = ftell(f);
-    if (fsize <= 0) {
-        fclose(f);
+    int rn = snprintf(doc_root_copy, sizeof(doc_root_copy), "%s", server->spa_doc_root);
+    csilk_mutex_unlock(&server->config_mutex);
+    if (rn < 0 || (size_t)rn >= sizeof(doc_root_copy)) {
         csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
         return;
     }
-    rewind(f);
-    char* body = csilk_arena_calloc(c->arena, 1, (size_t)fsize + 1);
-    if (!body) {
-        fclose(f);
+
+    csilk_io_loop_t* loop = _csilk_ctx_loop(c);
+    if (!loop) {
+        csilk_string(c, CSILK_STATUS_NOT_FOUND, "Not Found");
+        return;
+    }
+
+    spa_work_data_t* data = calloc(1, sizeof(spa_work_data_t));
+    if (!data) {
         csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "");
         return;
     }
-    size_t nread = fread(body, 1, (size_t)fsize, f);
-    fclose(f);
-    csilk_set_header(c, "Content-Type", "text/html");
-    csilk_set_response_body_ex(c, body, nread, CSILK_OWN_ARENA);
-    csilk_status(c, CSILK_STATUS_OK);
+    data->fd = -1;
+    data->status_code = CSILK_STATUS_NOT_FOUND;
+    data->allow_sendfile = (client && !client->ssl && client->protocol == CSILK_PROTO_HTTP1);
+    snprintf(data->doc_root, sizeof(data->doc_root), "%s", doc_root_copy);
+
+    csilk_ctx_set_async(c, 1);
+    data->token = csilk_ctx_acquire_async(c);
+    csilk_io_work_t* req = csilk_get_work_req(c);
+    req->data = data;
+
+    int rc = csilk_io_queue_work(loop, req, spa_work_cb, spa_after_work_cb);
+    if (rc != 0) {
+        CSILK_LOG_E("SPA fallback: failed to queue async read: %d", rc);
+        csilk_async_token_t tok = data->token;
+        req->data = c;
+        free(data);
+        csilk_string(c, CSILK_STATUS_INTERNAL_SERVER_ERROR, "");
+        _csilk_send_response(c);
+        csilk_ctx_release_async(&tok);
+    }
 }
 
 /* --- Server configuration --- */
@@ -281,9 +516,9 @@ csilk_server_set_not_found_handler(csilk_server_t* server, csilk_handler_t handl
 
 /** @brief Enable SPA fallback: all unmatched GET requests serve index.html.
  *
- * Protects the free/strdup of spa_doc_root and the not_found_handler update
- * with the config mutex so that concurrent worker threads reading
- * spa_doc_root in spa_fallback_handler cannot observe a freed pointer.
+ * Rejects path traversal / control characters, pre-reads index.html into an
+ * in-memory cache when available, and updates spa_doc_root / spa_index_buf /
+ * not_found_handler under config_mutex.
  */
 void
 csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
@@ -291,35 +526,56 @@ csilk_server_set_spa_fallback(csilk_server_t* server, const char* doc_root)
     if (!server || !doc_root) {
         return;
     }
-    csilk_mutex_lock(&server->config_mutex);
-    char* new_root = strdup(doc_root);
-    if (new_root) {
-        free(server->spa_doc_root);
-        server->spa_doc_root = new_root;
-        server->not_found_handler = spa_fallback_handler;
+    if (!spa_path_is_safe(doc_root)) {
+        CSILK_LOG_W("SPA fallback: rejected unsafe doc_root path");
+        return;
     }
+    char* new_root = strdup(doc_root);
+    if (!new_root) {
+        return;
+    }
+    char*  new_buf = NULL;
+    size_t new_len = 0;
+    (void)spa_read_index_file(doc_root, &new_buf, &new_len);
+
+    csilk_mutex_lock(&server->config_mutex);
+    char* old_root = server->spa_doc_root;
+    char* old_buf = server->spa_index_buf;
+    server->spa_doc_root = new_root;
+    server->spa_index_buf = new_buf;
+    server->spa_index_len = new_len;
+    server->not_found_handler = spa_fallback_handler;
     csilk_mutex_unlock(&server->config_mutex);
+
+    free(old_root);
+    free(old_buf);
 }
 
-/** @brief Register a global middleware handler that runs before every request. */
+/** @brief Register a global middleware handler that runs before every request.
+ *
+ * Synchronized under server->config_mutex. Must be called before csilk_server_run().
+ */
 int
 csilk_server_use(csilk_server_t* server, csilk_handler_t handler)
 {
     if (!server || !handler) {
         return -1;
     }
+    csilk_mutex_lock(&server->config_mutex);
     if (server->middleware_count >= 32) {
+        csilk_mutex_unlock(&server->config_mutex);
         CSILK_LOG_E("Server: global middleware limit (32) reached. Middleware "
                     "dropped.");
         return -1;
     }
     server->middlewares[server->middleware_count++] = handler;
-    CSILK_LOG_D("Server: registered global middleware %p (count: %d)",
-                (void*)handler,
-                server->middleware_count);
-    if (server->router) {
-        csilk_router_compile(server->router, server->middlewares, (size_t)server->middleware_count);
+    int             count = server->middleware_count;
+    csilk_router_t* router = atomic_load_explicit(&server->router, memory_order_acquire);
+    if (router) {
+        csilk_router_compile(router, server->middlewares, (size_t)count);
     }
+    csilk_mutex_unlock(&server->config_mutex);
+    CSILK_LOG_D("Server: registered global middleware %p (count: %d)", (void*)handler, count);
     return 0;
 }
 
@@ -357,6 +613,10 @@ csilk_server_free(csilk_server_t* server)
     }
 
     free(server->spa_doc_root);
+    server->spa_doc_root = NULL;
+    free(server->spa_index_buf);
+    server->spa_index_buf = NULL;
+    server->spa_index_len = 0;
     if (server->worker_pools) {
         for (int w = 0; w < server->worker_pool_count; w++) {
             worker_pool_t* wp = &server->worker_pools[w];
@@ -407,7 +667,8 @@ csilk_server_free(csilk_server_t* server)
 
     csilk_dev_hot_reload_stop(server);
     _csilk_plugin_cleanup_server(server);
-    csilk_server_wait_grace_period(server);
+    /* _csilk_reload_mgr_free() performs a bounded grace-period wait and skips
+     * reclaiming any retired routers/handles still pinned by a stuck reader. */
     _csilk_reload_mgr_free(server);
     _csilk_dispatch_pool_cleanup();
 
@@ -659,8 +920,32 @@ csilk_server_run(csilk_server_t* server, int port)
         return -1;
     }
 
-    if (server->router && server->middleware_count > 0) {
-        csilk_router_compile(server->router, server->middlewares, (size_t)server->middleware_count);
+    csilk_mutex_lock(&server->config_mutex);
+    csilk_router_t* run_router = atomic_load_explicit(&server->router, memory_order_acquire);
+    if (run_router && server->middleware_count > 0) {
+        csilk_router_compile(run_router, server->middlewares, (size_t)server->middleware_count);
+    }
+    char* spa_root_to_warm = NULL;
+    if (server->spa_doc_root && !server->spa_index_buf) {
+        spa_root_to_warm = strdup(server->spa_doc_root);
+    }
+    csilk_mutex_unlock(&server->config_mutex);
+
+    if (spa_root_to_warm) {
+        char*  warm_buf = NULL;
+        size_t warm_len = 0;
+        if (spa_read_index_file(spa_root_to_warm, &warm_buf, &warm_len) == 0) {
+            csilk_mutex_lock(&server->config_mutex);
+            if (!server->spa_index_buf && server->spa_doc_root &&
+                strcmp(server->spa_doc_root, spa_root_to_warm) == 0) {
+                server->spa_index_buf = warm_buf;
+                server->spa_index_len = warm_len;
+                warm_buf = NULL;
+            }
+            csilk_mutex_unlock(&server->config_mutex);
+            free(warm_buf);
+        }
+        free(spa_root_to_warm);
     }
 
     if (server->config.enable_openapi && server->router) {

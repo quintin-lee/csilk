@@ -1,5 +1,5 @@
 /**
- * @file srv_types.h
+ * @file srv_internal.h
  * @brief Internal layout of csilk_server_s and csilk_client_s.
  *
  * This header defines the memory layout of the server and client structures.
@@ -282,13 +282,15 @@ struct csilk_server_s {
     worker_pool_t*
         worker_pools;      /**< Per-worker pools (size = worker_threads, index 0 = main loop). */
     int worker_pool_count; /**< Number of worker pools (= worker_threads). */
-    csilk_handler_t              not_found_handler; /**< Custom 404 handler (NULL = default). */
-    char*                        spa_doc_root;      /**< SPA fallback doc root (NULL = disabled). */
-    csilk_storage_driver_t*      storage_driver;    /**< Context storage driver. */
-    csilk_crypto_driver_t*       crypto_driver;     /**< Crypto algorithm driver. */
-    csilk_cipher_driver_t*       cipher_driver;     /**< Cipher algorithm driver. */
-    SSL_CTX*                     ssl_ctx;           /**< OpenSSL context. */
-    _Atomic(csilk_mq_t*)         mq;                /**< Message Queue instance (atomic pointer). */
+    csilk_handler_t         not_found_handler; /**< Custom 404 handler (NULL = default). */
+    char*                   spa_doc_root;      /**< SPA fallback doc root (NULL = disabled). */
+    char*                   spa_index_buf; /**< Pre-read SPA index.html cache (NULL if uncached). */
+    size_t                  spa_index_len; /**< Byte length of spa_index_buf. */
+    csilk_storage_driver_t* storage_driver; /**< Context storage driver. */
+    csilk_crypto_driver_t*  crypto_driver;  /**< Crypto algorithm driver. */
+    csilk_cipher_driver_t*  cipher_driver;  /**< Cipher algorithm driver. */
+    SSL_CTX*                ssl_ctx;        /**< OpenSSL context. */
+    _Atomic(csilk_mq_t*)    mq;             /**< Message Queue instance (atomic pointer). */
     _Atomic(csilk_hook_array_t*) hooks[CSILK_HOOK_COUNT]; /**< Registered immutable hook arrays. */
     csilk_mutex_t                hook_mutex;   /**< Protects hook registration/removal CoW. */
     csilk_mutex_t                config_mutex; /**< Protects runtime config updates. */
@@ -451,6 +453,9 @@ CSILK_INTERNAL void _csilk_reload_try_reclaim(csilk_server_t* server);
 
 /** @brief Destroy the reload manager and force reclamation of all remaining records. */
 CSILK_INTERNAL void _csilk_reload_mgr_free(csilk_server_t* server);
+
+/** @brief Override RCU teardown slot-idle wait timeout in ms (0 restores default 5000 ms). */
+CSILK_INTERNAL void _csilk_rcu_set_teardown_timeout_ms(uint32_t timeout_ms);
 
 /** @brief Register a subsystem teardown callback on @p server (deduplicated, LIFO). */
 CSILK_INTERNAL void _csilk_server_register_teardown(csilk_server_t*          server,

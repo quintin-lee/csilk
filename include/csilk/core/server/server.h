@@ -3,7 +3,7 @@
  * @file server.h
  * @brief Server lifecycle: creation, configuration, execution, and shutdown.
  *
- * @version 0.5.2
+ * @version 1.2.0
  * @copyright MIT License
  */
 
@@ -29,11 +29,19 @@ csilk_server_t* csilk_server_new(csilk_router_t* router);
  * @brief Register global middleware.
  *
  * Middleware is executed for every request in the order it was added.  The
- * handler array has a fixed maximum size (typically 64).
+ * handler array has a fixed maximum size (32).
+ *
+ * Thread-safe registration is guarded by the server's internal config mutex.
+ *
+ * @warning **Pre-start only**: Must be called before csilk_server_run().
+ *          Mutating compiled middleware chains on a running server can race
+ *          with concurrent worker dispatch; for runtime updates, build a new
+ *          router and swap it atomically via csilk_server_set_router*() or
+ *          csilk_hot_update().
  *
  * @param server  Server instance.
  * @param handler Middleware function.
- * @return 0 on success, -1 if the internal handler array is full.
+ * @return 0 on success, -1 if arguments are NULL or the handler array is full.
  */
 int csilk_server_use(csilk_server_t* server, csilk_handler_t handler);
 
@@ -55,6 +63,13 @@ void csilk_server_set_not_found_handler(csilk_server_t* server, csilk_handler_t 
  * Unmatched GET requests serve index.html from @p doc_root instead of
  * returning 404.  Overrides any custom 404 handler.  Useful for serving
  * React/Vue/Angular SPAs where the router handles URLs client-side.
+ *
+ * Rejects paths containing traversal sequences (`..`) or control characters.
+ * Pre-reads `doc_root/index.html` (up to 4 MiB) into an in-memory cache so
+ * request dispatch never performs synchronous disk I/O on the event-loop
+ * thread; if the file is absent at setup time or exceeds the cache limit,
+ * cache-miss requests offload opening/reading to the async I/O worker pool
+ * (and use zero-copy `sendfile` for plaintext HTTP/1.1).
  *
  * @param server   Server instance.
  * @param doc_root Directory containing index.html.  The path is copied

@@ -476,6 +476,56 @@ test_reader_storm(void)
 }
 
 /* ------------------------------------------------------------------ */
+/* Test 7: Stuck Reader Timeout Skips Unsafe Reclamation (No UAF)     */
+/* ------------------------------------------------------------------ */
+
+static void
+test_rcu_teardown_skips_reclaim_on_stuck_reader(void)
+{
+    printf("Running Test 7: RCU Teardown Timeout Skips Unsafe Reclamation...\n");
+    csilk_router_t* r0 = csilk_router_new();
+    csilk_handler_t h = dummy_route_handler;
+    csilk_router_add(r0, "GET", "/stuck", &h, 1);
+    csilk_server_t* server = csilk_server_new(r0);
+    assert(server != NULL);
+
+    /* Acquire a reader lease on r0 and deliberately withhold release */
+    csilk_rcu_token_t tok;
+    csilk_router_t*   held = csilk_server_router_acquire(server, &tok);
+    assert(held == r0);
+    assert(tok.active == 1);
+
+    /* Swap in a new router so r0 becomes retired while reader still holds tok */
+    csilk_router_t* r1 = csilk_router_new();
+    csilk_router_add(r1, "GET", "/stuck", &h, 1);
+    csilk_server_set_router(server, r1);
+    assert(atomic_load_explicit(&server->reload_mgr.retired_count, memory_order_relaxed) == 1);
+
+    /* Shrink teardown timeout so the test runs in ~20ms instead of 5s */
+    _csilk_rcu_set_teardown_timeout_ms(20);
+    _csilk_reload_mgr_free(server);
+
+    /* Reclamation MUST be skipped while reader slot is still active */
+    assert(atomic_load_explicit(&server->reload_mgr.retired_count, memory_order_relaxed) == 1);
+    assert(atomic_load_explicit(&server->reload_mgr.retired_head, memory_order_acquire) != NULL);
+
+    /* Held router pointer must remain valid and safe to access */
+    assert(csilk_router_match(held, "GET", "/stuck") != NULL);
+
+    /* Release the leaked token, then verify second teardown cleanly reclaims r0 */
+    csilk_server_router_release(server, &tok);
+    _csilk_rcu_set_teardown_timeout_ms(0);
+    _csilk_reload_mgr_free(server);
+    assert(atomic_load_explicit(&server->reload_mgr.retired_count, memory_order_relaxed) == 0);
+    assert(atomic_load_explicit(&server->reload_mgr.retired_head, memory_order_acquire) == NULL);
+
+    csilk_server_free(server);
+    csilk_router_free(r1);
+    printf("  -> Passed (teardown timeout preserved pinned router, post-release reclaimed "
+           "cleanly).\n");
+}
+
+/* ------------------------------------------------------------------ */
 /* Main Runner                                                        */
 /* ------------------------------------------------------------------ */
 
@@ -490,7 +540,8 @@ main(void)
     test_reload_and_active_requests();
     test_reload_and_shutdown();
     test_reader_storm();
+    test_rcu_teardown_skips_reclaim_on_stuck_reader();
 
-    printf("\n=== All 6 Formal RCU / EBR Tests Passed 100%% Successfully! ===\n");
+    printf("\n=== All 7 Formal RCU / EBR Tests Passed 100%% Successfully! ===\n");
     return 0;
 }
