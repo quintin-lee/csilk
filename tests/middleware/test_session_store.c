@@ -20,19 +20,28 @@ test_local_store(void)
     csilk_session_store_t* store = csilk_session_store_new_local();
     assert(store != NULL);
 
-    /* get returns -1 (not found) */
+    /* get missing returns -1 */
     char*  data = NULL;
     size_t len = 0;
     int    rc = csilk_session_store_get(store, "sess-123", &data, &len);
     assert(rc == -1);
+    assert(data == NULL);
 
-    /* set succeeds (no-op for local) */
+    /* set + get round-trip */
     rc = csilk_session_store_set(store, "sess-123", "value", 5, 3600);
     assert(rc == 0);
+    rc = csilk_session_store_get(store, "sess-123", &data, &len);
+    assert(rc == 0);
+    assert(len == 5);
+    assert(data != NULL && strcmp(data, "value") == 0);
+    free(data);
+    data = NULL;
 
-    /* del succeeds */
+    /* del + verify removed */
     rc = csilk_session_store_del(store, "sess-123");
     assert(rc == 0);
+    assert(csilk_session_store_get(store, "sess-123", &data, &len) == -1);
+    assert(data == NULL);
 
     /* Null args */
     assert(csilk_session_store_get(NULL, "id", &data, &len) == -1);

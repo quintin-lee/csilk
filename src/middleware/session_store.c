@@ -21,8 +21,23 @@
 #include <hiredis/hiredis.h>
 #endif
 
-/* Forward declaration for MQ backend */
-typedef struct mq_local_table_s mq_local_table_t;
+/* Forward declaration for shared in-process TTL hash table */
+typedef struct mem_session_table_s mem_session_table_t;
+
+enum { MEM_SESSION_BUCKETS = 256 };
+
+typedef struct {
+    char    id[128];
+    char*   data;
+    size_t  len;
+    int64_t expire_at;
+    int     in_use;
+} mem_session_entry_t;
+
+struct mem_session_table_s {
+    csilk_mutex_t       lock;
+    mem_session_entry_t entries[MEM_SESSION_BUCKETS];
+};
 
 /* ===================================================================
  * Internal store structure
@@ -32,33 +47,187 @@ struct csilk_session_store_s {
     csilk_session_store_ops_t ops;
     /* Backend-specific state */
     struct {
+        mem_session_table_t* table;
+    } local;
+    struct {
+        void*                mq; /* csilk_mq_t* */
+        char                 prefix[128];
+        mem_session_table_t* table;
+    } mq;
+    struct {
         void*         redis_ctx; /* redisContext* */
         char          prefix[128];
         csilk_mutex_t lock;      /* Serializes ops: a hiredis redisContext is not thread-safe. */
     } redis;
-    struct {
-        void*             mq;    /* csilk_mq_t* */
-        char              prefix[128];
-        mq_local_table_t* table;
-    } mq;
 };
 
+static mem_session_table_t*
+_mem_table_new(void)
+{
+    mem_session_table_t* table = calloc(1, sizeof(mem_session_table_t));
+    if (!table) {
+        return NULL;
+    }
+    csilk_mutex_init(&table->lock);
+    return table;
+}
+
+static void
+_mem_table_destroy(mem_session_table_t* table)
+{
+    if (!table) {
+        return;
+    }
+    csilk_mutex_destroy(&table->lock);
+    for (int i = 0; i < MEM_SESSION_BUCKETS; i++) {
+        if (table->entries[i].in_use) {
+            free(table->entries[i].data);
+        }
+    }
+    free(table);
+}
+
+static mem_session_entry_t*
+_mem_table_lookup(mem_session_table_t* table, const char* session_id)
+{
+    uint32_t hash = 2166136261u;
+    for (const char* p = session_id; *p; p++) {
+        /* clang-format off */
+        hash = (hash ^ (uint32_t)*(uint8_t*)p) * 16777619u;
+        /* clang-format on */
+    }
+    mem_session_entry_t* slot = &table->entries[hash % MEM_SESSION_BUCKETS];
+    if (slot->in_use && strcmp(slot->id, session_id) == 0) {
+        return slot;
+    }
+    return NULL;
+}
+
+static int
+_mem_table_get(mem_session_table_t* table, const char* session_id, char** out_data, size_t* out_len)
+{
+    if (!table || !session_id) {
+        return -1;
+    }
+
+    csilk_mutex_lock(&table->lock);
+    mem_session_entry_t* slot = _mem_table_lookup(table, session_id);
+    if (slot && slot->in_use) {
+        int64_t now = time(NULL);
+        if (slot->expire_at > 0 && now >= slot->expire_at) {
+            slot->in_use = 0;
+            free(slot->data);
+            slot->data = NULL;
+            csilk_mutex_unlock(&table->lock);
+            if (out_data) {
+                *out_data = NULL;
+            }
+            if (out_len) {
+                *out_len = 0;
+            }
+            return -1;
+        }
+        if (out_data) {
+            size_t slen = slot->len;
+            char*  copy = malloc(slen + 1);
+            if (!copy) {
+                csilk_mutex_unlock(&table->lock);
+                return -1;
+            }
+            if (slen > 0 && slot->data) {
+                memcpy(copy, slot->data, slen);
+            }
+            copy[slen] = '\0';
+            *out_data = copy;
+        }
+        if (out_len) {
+            *out_len = slot->len;
+        }
+        csilk_mutex_unlock(&table->lock);
+        return 0;
+    }
+    csilk_mutex_unlock(&table->lock);
+
+    if (out_data) {
+        *out_data = NULL;
+    }
+    if (out_len) {
+        *out_len = 0;
+    }
+    return -1;
+}
+
+static int
+_mem_table_set(mem_session_table_t* table,
+               const char*          session_id,
+               const char*          data,
+               size_t               len,
+               int32_t              ttl_sec)
+{
+    if (!table || !session_id || !data) {
+        return -1;
+    }
+
+    csilk_mutex_lock(&table->lock);
+
+    uint32_t hash = 2166136261u;
+    for (const char* p = session_id; *p; p++) {
+        /* clang-format off */
+        hash = (hash ^ (uint32_t)*(uint8_t*)p) * 16777619u;
+        /* clang-format on */
+    }
+    mem_session_entry_t* slot = &table->entries[hash % MEM_SESSION_BUCKETS];
+
+    if (slot->in_use && strcmp(slot->id, session_id) != 0) {
+        free(slot->data);
+        slot->data = NULL;
+    }
+
+    strncpy(slot->id, session_id, sizeof(slot->id) - 1);
+    slot->id[sizeof(slot->id) - 1] = '\0';
+    free(slot->data);
+    slot->data = malloc(len + 1);
+    if (!slot->data) {
+        slot->in_use = 0;
+        csilk_mutex_unlock(&table->lock);
+        return -1;
+    }
+    memcpy(slot->data, data, len);
+    slot->data[len] = '\0';
+    slot->len = len;
+    slot->expire_at = (ttl_sec > 0) ? (int64_t)time(NULL) + ttl_sec : 0;
+    slot->in_use = 1;
+
+    csilk_mutex_unlock(&table->lock);
+    return 0;
+}
+
+static int
+_mem_table_del(mem_session_table_t* table, const char* session_id)
+{
+    if (!table || !session_id) {
+        return -1;
+    }
+
+    csilk_mutex_lock(&table->lock);
+    mem_session_entry_t* slot = _mem_table_lookup(table, session_id);
+    if (slot && slot->in_use) {
+        free(slot->data);
+        slot->data = NULL;
+        slot->in_use = 0;
+    }
+    csilk_mutex_unlock(&table->lock);
+    return 0;
+}
+
 /* ===================================================================
- * Local (process) backend — wraps existing sharded hash
+ * Local (process) backend — thread-safe in-process TTL hash table
  * =================================================================== */
 
 static int
 _local_get(csilk_session_store_t* store, const char* session_id, char** out_data, size_t* out_len)
 {
-    /* The local backend uses the in-process sharded hash table from session.c.
-     * This function is a placeholder that returns -1 (not found) since the
-     * actual session data is managed by the session middleware directly.
-     * A full implementation would bridge to the session_buckets array. */
-    (void)store;
-    (void)session_id;
-    (void)out_data;
-    (void)out_len;
-    return -1;
+    return _mem_table_get(store ? store->local.table : NULL, session_id, out_data, out_len);
 }
 
 static int
@@ -68,26 +237,22 @@ _local_set(csilk_session_store_t* store,
            size_t                 len,
            int32_t                ttl_sec)
 {
-    (void)store;
-    (void)session_id;
-    (void)data;
-    (void)len;
-    (void)ttl_sec;
-    return 0;
+    return _mem_table_set(store ? store->local.table : NULL, session_id, data, len, ttl_sec);
 }
 
 static int
 _local_del(csilk_session_store_t* store, const char* session_id)
 {
-    (void)store;
-    (void)session_id;
-    return 0;
+    return _mem_table_del(store ? store->local.table : NULL, session_id);
 }
 
 static void
 _local_destroy(csilk_session_store_t* store)
 {
-    (void)store;
+    if (store) {
+        _mem_table_destroy(store->local.table);
+        store->local.table = NULL;
+    }
 }
 
 csilk_session_store_t*
@@ -95,6 +260,11 @@ csilk_session_store_new_local(void)
 {
     csilk_session_store_t* store = calloc(1, sizeof(csilk_session_store_t));
     if (!store) {
+        return NULL;
+    }
+    store->local.table = _mem_table_new();
+    if (!store->local.table) {
+        free(store);
         return NULL;
     }
 
@@ -391,90 +561,10 @@ csilk_session_store_new_redis(const char* host, int port, const char* prefix)
  * hash table ensures availability when the MQ is unavailable.
  */
 
-#define MQ_LOCAL_BUCKETS 256
-
-typedef struct {
-    char    id[128];
-    char*   data;
-    size_t  len;
-    int64_t expire_at;
-    int     in_use;
-} mq_session_entry_t;
-
-typedef struct mq_local_table_s {
-    csilk_mutex_t      lock;
-    mq_session_entry_t entries[MQ_LOCAL_BUCKETS];
-} mq_local_table_t;
-
-static mq_session_entry_t*
-_mq_slot_lookup(mq_local_table_t* table, const char* session_id)
-{
-    uint32_t hash = 2166136261u;
-    for (const char* p = session_id; *p; p++) {
-        /* clang-format off */
-        hash = (hash ^ (uint32_t)*(uint8_t*)p) * 16777619u;
-        /* clang-format on */
-    }
-    mq_session_entry_t* slot = &table->entries[hash % MQ_LOCAL_BUCKETS];
-    if (slot->in_use && strcmp(slot->id, session_id) == 0) {
-        return slot;
-    }
-    return NULL;
-}
-
 static int
 _mq_get(csilk_session_store_t* store, const char* session_id, char** out_data, size_t* out_len)
 {
-    mq_local_table_t* table = store->mq.table;
-    if (!table || !session_id) {
-        return -1;
-    }
-
-    csilk_mutex_lock(&table->lock);
-    mq_session_entry_t* slot = _mq_slot_lookup(table, session_id);
-    if (slot && slot->in_use) {
-        int64_t now = time(NULL);
-        if (slot->expire_at > 0 && now >= slot->expire_at) {
-            slot->in_use = 0;
-            free(slot->data);
-            slot->data = NULL;
-            csilk_mutex_unlock(&table->lock);
-            if (out_data) {
-                *out_data = NULL;
-            }
-            if (out_len) {
-                *out_len = 0;
-            }
-            return -1;
-        }
-        if (out_data) {
-            size_t slen = slot->len;
-            char*  copy = malloc(slen + 1);
-            if (!copy) {
-                csilk_mutex_unlock(&table->lock);
-                return -1;
-            }
-            if (slen > 0 && slot->data) {
-                memcpy(copy, slot->data, slen);
-            }
-            copy[slen] = '\0';
-            *out_data = copy;
-        }
-        if (out_len) {
-            *out_len = slot->len;
-        }
-        csilk_mutex_unlock(&table->lock);
-        return 0;
-    }
-    csilk_mutex_unlock(&table->lock);
-
-    if (out_data) {
-        *out_data = NULL;
-    }
-    if (out_len) {
-        *out_len = 0;
-    }
-    return -1;
+    return _mem_table_get(store ? store->mq.table : NULL, session_id, out_data, out_len);
 }
 
 static int
@@ -484,79 +574,25 @@ _mq_set(csilk_session_store_t* store,
         size_t                 len,
         int32_t                ttl_sec)
 {
-    mq_local_table_t* table = store->mq.table;
-    if (!table || !session_id || !data) {
-        return -1;
+    int rc = _mem_table_set(store ? store->mq.table : NULL, session_id, data, len, ttl_sec);
+    if (rc == 0 && store) {
+        (void)store->mq.mq;
     }
-
-    csilk_mutex_lock(&table->lock);
-
-    uint32_t hash = 2166136261u;
-    for (const char* p = session_id; *p; p++) {
-        /* clang-format off */
-        hash = (hash ^ (uint32_t)*(uint8_t*)p) * 16777619u;
-        /* clang-format on */
-    }
-    mq_session_entry_t* slot = &table->entries[hash % MQ_LOCAL_BUCKETS];
-
-    if (slot->in_use && strcmp(slot->id, session_id) != 0) {
-        free(slot->data);
-        slot->data = NULL;
-    }
-
-    strncpy(slot->id, session_id, sizeof(slot->id) - 1);
-    slot->id[sizeof(slot->id) - 1] = '\0';
-    free(slot->data);
-    slot->data = malloc(len + 1);
-    if (!slot->data) {
-        slot->in_use = 0;
-        csilk_mutex_unlock(&table->lock);
-        return -1;
-    }
-    memcpy(slot->data, data, len);
-    slot->data[len] = '\0';
-    slot->len = len;
-    slot->expire_at = (ttl_sec > 0) ? (int64_t)time(NULL) + ttl_sec : 0;
-    slot->in_use = 1;
-
-    csilk_mutex_unlock(&table->lock);
-
-    /* Publish to MQ for cross-node replication */
-    (void)store->mq.mq;
-
-    return 0;
+    return rc;
 }
 
 static int
 _mq_del(csilk_session_store_t* store, const char* session_id)
 {
-    mq_local_table_t* table = store->mq.table;
-    if (!table || !session_id) {
-        return -1;
-    }
-
-    csilk_mutex_lock(&table->lock);
-    mq_session_entry_t* slot = _mq_slot_lookup(table, session_id);
-    if (slot && slot->in_use) {
-        free(slot->data);
-        slot->data = NULL;
-        slot->in_use = 0;
-    }
-    csilk_mutex_unlock(&table->lock);
-    return 0;
+    return _mem_table_del(store ? store->mq.table : NULL, session_id);
 }
 
 static void
 _mq_destroy(csilk_session_store_t* store)
 {
-    if (store->mq.table) {
-        csilk_mutex_destroy(&store->mq.table->lock);
-        for (int i = 0; i < MQ_LOCAL_BUCKETS; i++) {
-            if (store->mq.table->entries[i].in_use) {
-                free(store->mq.table->entries[i].data);
-            }
-        }
-        free(store->mq.table);
+    if (store) {
+        _mem_table_destroy(store->mq.table);
+        store->mq.table = NULL;
     }
 }
 
@@ -575,12 +611,11 @@ csilk_session_store_new_mq(void* mq, const char* prefix)
     snprintf(store->mq.prefix, sizeof(store->mq.prefix), "%s", prefix);
     store->mq.mq = mq;
 
-    store->mq.table = calloc(1, sizeof(mq_local_table_t));
+    store->mq.table = _mem_table_new();
     if (!store->mq.table) {
         free(store);
         return NULL;
     }
-    csilk_mutex_init(&store->mq.table->lock);
 
     store->ops = (csilk_session_store_ops_t){
         .get = _mq_get,
