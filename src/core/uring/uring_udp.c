@@ -175,9 +175,17 @@ csilk_io_udp_recv_start(csilk_io_udp_t* handle, csilk_io_udp_recv_cb cb)
 
     csilk_io_loop_t* loop = handle->loop ? handle->loop : csilk_io_default_loop();
     if (!loop) {
+        handle->cb = NULL;
         return -1;
     }
     handle->loop = loop;
+
+    handle->generation++;
+    handle->recv_started = 1;
+    if (!(handle->flags & CSILK_IO_HANDLE_ACTIVE)) {
+        handle->flags |= CSILK_IO_HANDLE_ACTIVE;
+        loop->active_handles++;
+    }
 
     /* Ensure the shared provided-buffer ring is set up on this loop.
      * All UDP handles share buf_group 0; the kernel writes each datagram
@@ -189,6 +197,7 @@ csilk_io_udp_recv_start(csilk_io_udp_t* handle, csilk_io_udp_recv_cb cb)
         int rc = csilk_io_timer_start(&handle->recv_timer, _udp_recv_timer_cb, 1, 1);
         if (rc != 0) {
             handle->cb = NULL;
+            handle->recv_started = 0;
             return rc;
         }
     } else {
@@ -237,17 +246,12 @@ csilk_io_udp_recv_start(csilk_io_udp_t* handle, csilk_io_udp_recv_cb cb)
             int rc = csilk_io_timer_start(&handle->recv_timer, _udp_recv_timer_cb, 1, 1);
             if (rc != 0) {
                 handle->cb = NULL;
+                handle->recv_started = 0;
                 return rc;
             }
         }
     }
 
-    handle->recv_started = 1;
-    if (!(handle->flags & CSILK_IO_HANDLE_ACTIVE)) {
-        handle->flags |= CSILK_IO_HANDLE_ACTIVE;
-        loop->active_handles++;
-    }
-    handle->generation++;
     return 0;
 }
 

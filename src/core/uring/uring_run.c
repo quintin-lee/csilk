@@ -184,16 +184,20 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                 if (is_stale_poll((csilk_io_handle_t*)s, gen)) {
                     continue;
                 }
-                /* Re-arm listen poll */
-                struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
-                if (sqe) {
-                    io_uring_prep_poll_add(sqe, s->fd, POLLIN);
-                    io_uring_sqe_set_data64(
-                        sqe, uring_encode_handle_data(URING_OP_POLL_LISTEN, (csilk_io_handle_t*)s));
-                    io_uring_submit(ring);
-                }
                 if (res >= 0 && s->connection_cb) {
                     s->connection_cb(s, 0);
+                }
+                /* Re-arm listen poll only after connection_cb drains the accept
+                 * queue and only if the listener was not closed in the callback. */
+                if (!is_stale_poll((csilk_io_handle_t*)s, gen) && s->fd >= 0) {
+                    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                    if (sqe) {
+                        io_uring_prep_poll_add(sqe, s->fd, POLLIN);
+                        io_uring_sqe_set_data64(
+                            sqe,
+                            uring_encode_handle_data(URING_OP_POLL_LISTEN, (csilk_io_handle_t*)s));
+                        io_uring_submit(ring);
+                    }
                 }
 
                 /* ----------------------------------------------------------------
