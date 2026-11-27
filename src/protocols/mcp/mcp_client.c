@@ -9,7 +9,6 @@
  * @copyright MIT License
  */
 
-#include <curl/curl.h>
 #include <errno.h>
 #include <poll.h>
 #include <signal.h>
@@ -22,30 +21,10 @@
 #include "csilk/drivers/ai.h"
 #include "csilk/drivers/ai/tool_registry.h"
 #include "csilk/protocols/mcp.h"
+#include "drivers/curl_common.h"
 #include "mcp_internal.h"
 
 /* --- Transport helpers (stdio subprocess & HTTP POST/SSE) --- */
-
-typedef struct {
-    char*  data;
-    size_t size;
-} mcp_http_buf_t;
-
-static size_t
-mcp_http_write_cb(void* contents, size_t size, size_t nmemb, void* userp)
-{
-    size_t          realsize = size * nmemb;
-    mcp_http_buf_t* mem = (mcp_http_buf_t*)userp;
-    char*           ptr = realloc(mem->data, mem->size + realsize + 1);
-    if (!ptr) {
-        return 0;
-    }
-    mem->data = ptr;
-    memcpy(&(mem->data[mem->size]), contents, realsize);
-    mem->size += realsize;
-    mem->data[mem->size] = 0;
-    return realsize;
-}
 
 static void
 mcp_msg_free(csilk_mcp_msg_t* m)
@@ -222,36 +201,14 @@ mcp_http_roundtrip(csilk_mcp_client_t* client, const char* req_json, char** out_
         snprintf(post_url, sizeof(post_url), "%s", client->sse_url);
     }
 
-    CURL* curl = curl_easy_init();
-    if (!curl) {
-        return -1;
-    }
-
-    mcp_http_buf_t     chunk = {.data = malloc(1), .size = 0};
-    struct curl_slist* hdrs = NULL;
-    if (!chunk.data) {
-        curl_easy_cleanup(curl);
-        return -1;
-    }
-    chunk.data[0] = '\0';
-    hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
-
-    curl_easy_setopt(curl, CURLOPT_URL, post_url);
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, req_json);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hdrs);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, mcp_http_write_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&chunk);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 3000L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 10000L);
-
-    CURLcode res = curl_easy_perform(curl);
-    long     http_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+    csilk_curl_buf_t   chunk = {0};
+    struct curl_slist* hdrs = curl_slist_append(NULL, "Content-Type: application/json");
+    long               http_code = 0;
+    int                rc = csilk_curl_request_json(
+        "POST", post_url, hdrs, req_json, 3000L, 10000L, &chunk, &http_code, NULL, 0);
     curl_slist_free_all(hdrs);
-    curl_easy_cleanup(curl);
 
-    if (res != CURLE_OK || http_code < 200 || http_code >= 300 || chunk.size == 0) {
+    if (rc != 0 || http_code < 200 || http_code >= 300 || chunk.len == 0) {
         free(chunk.data);
         return -1;
     }
@@ -269,11 +226,6 @@ mcp_ws_roundtrip(csilk_mcp_client_t* client, const char* req_json, char** out_bo
     }
 
 #ifdef CURLWS_TEXT
-    CURL* curl = curl_easy_init();
-    if (!curl) {
-        return -1;
-    }
-
     char target_url[320];
     if (strncmp(url, "ws://", 5) == 0) {
         snprintf(target_url, sizeof(target_url), "http://%s", url + 5);
@@ -283,10 +235,18 @@ mcp_ws_roundtrip(csilk_mcp_client_t* client, const char* req_json, char** out_bo
         snprintf(target_url, sizeof(target_url), "%s", url);
     }
 
+    if (!csilk_curl_url_allowed(target_url)) {
+        return -1;
+    }
+
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        return -1;
+    }
+
     curl_easy_setopt(curl, CURLOPT_URL, target_url);
     curl_easy_setopt(curl, CURLOPT_CONNECT_ONLY, 2L);
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 3000L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 5000L);
+    csilk_curl_apply_safe_defaults(curl, 3000L, 5000L);
 
     CURLcode res = curl_easy_perform(curl);
     if (res == CURLE_OK) {

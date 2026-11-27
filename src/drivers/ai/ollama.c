@@ -12,7 +12,6 @@
  * @copyright MIT License
  */
 
-#include <curl/curl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -20,6 +19,7 @@
 #include "csilk/core/json/json.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/csilk.h"
+#include "drivers/curl_common.h"
 
 /** @brief Per-instance state for the Ollama driver. */
 typedef struct {
@@ -66,36 +66,6 @@ ollama_free(void* state_ptr)
     }
     free(state->base_url);
     free(state);
-}
-
-/** @brief Accumulates a complete HTTP response body in memory. */
-struct curl_response {
-    char*  body; /**< Heap-allocated body buffer (grown on each write callback). */
-    size_t size; /**< Current length of data in body (excluding NUL terminator). */
-};
-
-/**
- * @brief libcurl write callback that appends data to a growing buffer.
- * @return Number of bytes "consumed" (must equal realsize for the transfer
- *         to continue), or 0 to abort the transfer on OOM.
- */
-static size_t
-write_cb(void* contents, size_t size, size_t nmemb, void* userp)
-{
-    size_t                realsize = size * nmemb;
-    struct curl_response* res = (struct curl_response*)userp;
-
-    char* ptr = realloc(res->body, res->size + realsize + 1);
-    if (!ptr) {
-        return 0;
-    }
-
-    res->body = ptr;
-    memcpy(&(res->body[res->size]), contents, realsize);
-    res->size += realsize;
-    res->body[res->size] = 0;
-
-    return realsize;
 }
 
 /* Accumulator for streaming NDJSON lines from Ollama */
@@ -327,10 +297,9 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
         return -1;
     }
 
-    /* Validate base_url scheme to prevent SSRF (CWE-918) */
-    if (strncmp(state->base_url, "http://", 7) != 0 &&
-        strncmp(state->base_url, "https://", 8) != 0) {
-        CSILK_LOG_E("AI Ollama: Invalid URL scheme: %.50s...", state->base_url);
+    /* Validate base_url scheme / SSRF policy */
+    if (!csilk_curl_url_allowed(state->base_url)) {
+        CSILK_LOG_E("AI Ollama: Blocked or invalid URL: %.50s...", state->base_url);
         free(json_body);
         curl_easy_cleanup(curl);
         return -1;
@@ -343,7 +312,7 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
-    struct curl_response     cr = {0};
+    csilk_curl_buf_t         cr = {0};
     struct ollama_stream_ctx sctx = {
         .req = req,
         .res = res,
@@ -358,19 +327,16 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ollama_stream_write_cb);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&sctx);
     } else {
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, csilk_curl_write_cb);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
     }
-    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
-    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
-    /* Bounded time-outs so a dead/unreachable Ollama host cannot wedge the
-     * request indefinitely (same guard as the OpenAI driver). */
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10L * 1000L);
+    long total_timeout = 0;
     if (req->timeout_ms > 0) {
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)req->timeout_ms);
+        total_timeout = (long)req->timeout_ms;
     } else if (!req->stream) {
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300L * 1000L);
+        total_timeout = 300L * 1000L;
     }
+    csilk_curl_apply_safe_defaults(curl, 10L * 1000L, total_timeout);
 
     CURLcode rc = curl_easy_perform(curl);
     free(json_body);
@@ -378,7 +344,7 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
 
     if (rc != CURLE_OK) {
         res->error_message = strdup(curl_easy_strerror(rc));
-        free(cr.body);
+        free(cr.data);
         free(sctx.line_buf);
         curl_easy_cleanup(curl);
         return -1;
@@ -391,7 +357,7 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
 
     /* --- Step 3: Parse the Ollama response (non-streaming) --- */
-    csilk_json_t* resp_root = csilk_json_parse(cr.body ? cr.body : "{}");
+    csilk_json_t* resp_root = csilk_json_parse(cr.data ? cr.data : "{}");
     if (resp_root) {
         csilk_json_t* msg = csilk_json_get(resp_root, "message");
         csilk_json_t* content = csilk_json_get(msg, "content");
@@ -409,7 +375,7 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
         csilk_json_free(resp_root);
     }
 
-    free(cr.body);
+    free(cr.data);
     curl_easy_cleanup(curl);
     return (res->content || res->tool_call_count > 0) ? 0 : -1;
 }
@@ -435,16 +401,16 @@ ollama_embeddings(void*                           state_ptr,
         return -1;
     }
 
+    if (!csilk_curl_url_allowed(state->base_url)) {
+        res->error_message = strdup("Blocked or invalid Ollama URL");
+        return -1;
+    }
+
     res->values = NULL;
     res->count = 0;
     res->dimension = 0;
 
     for (size_t i = 0; i < count; i++) {
-        CURL* curl = curl_easy_init();
-        if (!curl) {
-            return -1;
-        }
-
         csilk_json_t* root = csilk_json_object();
         csilk_json_add_string(root, "model", model);
         csilk_json_add_string(root, "prompt", input[i]);
@@ -457,35 +423,34 @@ ollama_embeddings(void*                           state_ptr,
         struct curl_slist* headers = NULL;
         headers = curl_slist_append(headers, "Content-Type: application/json");
 
-        struct curl_response cr = {0};
-        curl_easy_setopt(curl, CURLOPT_URL, url);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
-        curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
-        curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
-        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10L * 1000L);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300L * 1000L);
-
-        CURLcode rc = curl_easy_perform(curl);
+        csilk_curl_buf_t cr = {0};
+        long             http_code = 0;
+        char             err[256] = {0};
+        int              rc = csilk_curl_request_json("POST",
+                                         url,
+                                         headers,
+                                         json_body,
+                                         10L * 1000L,
+                                         300L * 1000L,
+                                         &cr,
+                                         &http_code,
+                                         err,
+                                         sizeof(err));
         free(json_body);
         curl_slist_free_all(headers);
 
-        if (rc != CURLE_OK) {
-            char err[256];
-            snprintf(err, sizeof(err), "Ollama CURL error: %s", curl_easy_strerror(rc));
-            res->error_message = strdup(err);
-            free(cr.body);
-            curl_easy_cleanup(curl);
+        if (rc != 0) {
+            char msg[300];
+            snprintf(msg, sizeof(msg), "Ollama CURL error: %s", err[0] ? err : "request failed");
+            res->error_message = strdup(msg);
+            free(cr.data);
             return -1;
         }
 
-        csilk_json_t* resp = csilk_json_parse(cr.body);
-        free(cr.body);
+        csilk_json_t* resp = csilk_json_parse(cr.data);
+        free(cr.data);
         if (!resp) {
             res->error_message = strdup("JSON parse error");
-            curl_easy_cleanup(curl);
             return -1;
         }
 
@@ -500,7 +465,6 @@ ollama_embeddings(void*                           state_ptr,
                  * values are sized for res->dimension, filling with a larger dim
                  * would overflow the allocation. */
                 csilk_json_free(resp);
-                curl_easy_cleanup(curl);
                 res->error_message = strdup("embedding dimension mismatch");
                 return -1;
             }
@@ -508,7 +472,6 @@ ollama_embeddings(void*                           state_ptr,
             float* new_values = realloc(res->values, sizeof(float) * new_count * res->dimension);
             if (!new_values) {
                 csilk_json_free(resp);
-                curl_easy_cleanup(curl);
                 return -1;
             }
             res->values = new_values;
@@ -520,7 +483,6 @@ ollama_embeddings(void*                           state_ptr,
         }
 
         csilk_json_free(resp);
-        curl_easy_cleanup(curl);
     }
 
     return 0;

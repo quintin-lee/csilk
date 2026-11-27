@@ -5,7 +5,7 @@
  */
 
 #include "csilk/drivers/vector.h"
-#include <curl/curl.h>
+#include "drivers/curl_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,29 +16,6 @@ typedef struct {
     char* endpoint;
     char* api_key;
 } qdrant_state_t;
-
-struct curl_response {
-    char*  body;
-    size_t size;
-};
-
-/** @brief libcurl write callback that appends body data to a growing buffer.
- * @return Number of bytes consumed, or 0 to abort the transfer on OOM. */
-static size_t
-write_cb_simple(void* contents, size_t size, size_t nmemb, void* userp)
-{
-    size_t                realsize = size * nmemb;
-    struct curl_response* res = (struct curl_response*)userp;
-    char*                 ptr = realloc(res->body, res->size + realsize + 1);
-    if (!ptr) {
-        return 0;
-    }
-    res->body = ptr;
-    memcpy(&(res->body[res->size]), contents, realsize);
-    res->size += realsize;
-    res->body[res->size] = 0;
-    return realsize;
-}
 
 /**
  * @brief Initialise a Qdrant driver state from an endpoint and API key.
@@ -109,8 +86,7 @@ qdrant_upsert(void*                       state_ptr,
               size_t                      count)
 {
     qdrant_state_t* state = (qdrant_state_t*)state_ptr;
-    CURL*           curl = curl_easy_init();
-    if (!curl) {
+    if (!state || !state->endpoint) {
         return -1;
     }
 
@@ -132,6 +108,9 @@ qdrant_upsert(void*                       state_ptr,
 
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
+    if (!json_body) {
+        return -1;
+    }
 
     char url[512];
     snprintf(url, sizeof(url), "%s/collections/%s/points", state->endpoint, collection);
@@ -144,32 +123,15 @@ qdrant_upsert(void*                       state_ptr,
         headers = curl_slist_append(headers, auth_hdr);
     }
 
-    struct curl_response cr = {0};
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "PUT");
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb_simple);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
-
-    CURLcode rc = curl_easy_perform(curl);
+    csilk_curl_buf_t cr = {0};
+    long             http_code = 0;
+    int              rc = csilk_curl_request_json(
+        "PUT", url, headers, json_body, 10000L, 30000L, &cr, &http_code, NULL, 0);
     free(json_body);
     curl_slist_free_all(headers);
+    free(cr.data);
 
-    int ret = 0;
-    if (rc != CURLE_OK) {
-        ret = -1;
-    } else {
-        long http_code = 0;
-        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-        if (http_code >= 400) {
-            ret = -1;
-        }
-    }
-
-    free(cr.body);
-    curl_easy_cleanup(curl);
-    return ret;
+    return (rc == 0 && http_code < 400) ? 0 : -1;
 }
 
 /**
@@ -196,8 +158,7 @@ qdrant_search(void*                           state_ptr,
               csilk_vector_search_response_t* res)
 {
     qdrant_state_t* state = (qdrant_state_t*)state_ptr;
-    CURL*           curl = curl_easy_init();
-    if (!curl) {
+    if (!state || !state->endpoint) {
         return -1;
     }
 
@@ -211,6 +172,9 @@ qdrant_search(void*                           state_ptr,
 
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
+    if (!json_body) {
+        return -1;
+    }
 
     char url[512];
     snprintf(url, sizeof(url), "%s/collections/%s/points/search", state->endpoint, collection);
@@ -223,37 +187,28 @@ qdrant_search(void*                           state_ptr,
         headers = curl_slist_append(headers, auth_hdr);
     }
 
-    struct curl_response cr = {0};
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb_simple);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
-
-    CURLcode rc = curl_easy_perform(curl);
+    csilk_curl_buf_t cr = {0};
+    long             http_code = 0;
+    char             err_buf[256] = {0};
+    int              rc = csilk_curl_request_json(
+        "POST", url, headers, json_body, 10000L, 30000L, &cr, &http_code, err_buf, sizeof(err_buf));
     free(json_body);
     curl_slist_free_all(headers);
 
-    if (rc != CURLE_OK) {
-        res->error_message = strdup(curl_easy_strerror(rc));
-        free(cr.body);
-        curl_easy_cleanup(curl);
+    if (rc != 0) {
+        res->error_message = strdup(err_buf[0] ? err_buf : "CURL error");
+        free(cr.data);
         return -1;
     }
 
-    long http_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (http_code >= 400) {
-        res->error_message = cr.body ? strdup(cr.body) : strdup("HTTP error");
-        free(cr.body);
-        curl_easy_cleanup(curl);
+        res->error_message = cr.data ? strdup(cr.data) : strdup("HTTP error");
+        free(cr.data);
         return -1;
     }
 
-    csilk_json_t* resp = csilk_json_parse(cr.body);
-    free(cr.body);
-    curl_easy_cleanup(curl);
+    csilk_json_t* resp = csilk_json_parse(cr.data);
+    free(cr.data);
 
     if (!resp) {
         res->error_message = strdup("JSON parse error");

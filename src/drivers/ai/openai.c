@@ -18,8 +18,8 @@
 
 #include "csilk/drivers/ai.h"
 #include "csilk/csilk.h"
+#include "drivers/curl_common.h"
 
-#include <curl/curl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -76,12 +76,6 @@ openai_free(void* state_ptr)
     free(state);
 }
 
-/** @brief Accumulates a complete HTTP response body (used for embeddings). */
-struct curl_response {
-    char*  body; /**< Heap-allocated body buffer. */
-    size_t size; /**< Current length of data in body. */
-};
-
 /**
  * @brief Per-request context passed to the streaming write callback.
  * Holds both the request (for on_chunk callback) and response (to accumulate
@@ -95,30 +89,6 @@ struct curl_context {
     char*                          line_buf; /**< Partial SSE line buffer (streaming path). */
     size_t                         line_size; /**< Current length of buffered SSE data. */
 };
-
-/**
- * @brief libcurl write callback for simple (non-streaming) response
- *        accumulation.  Appends data to a growing buffer.
- * @return Number of bytes consumed, or 0 to abort on OOM.
- */
-static size_t
-write_cb_simple(void* contents, size_t size, size_t nmemb, void* userp)
-{
-    size_t                realsize = size * nmemb;
-    struct curl_response* res = (struct curl_response*)userp;
-
-    char* ptr = realloc(res->body, res->size + realsize + 1);
-    if (!ptr) {
-        return 0;
-    }
-
-    res->body = ptr;
-    memcpy(&(res->body[res->size]), contents, realsize);
-    res->size += realsize;
-    res->body[res->size] = 0;
-
-    return realsize;
-}
 
 /**
  * @brief Process a single SSE line from the streaming response.
@@ -563,11 +533,11 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
         return -1;
     }
 
-    /* Validate base_url scheme to prevent SSRF (CWE-918) */
-    if (strncmp(state->base_url, "http://", 7) != 0 &&
-        strncmp(state->base_url, "https://", 8) != 0) {
-        CSILK_LOG_E("AI OpenAI: Invalid URL scheme: %.50s...", state->base_url);
+    /* Validate base_url scheme / SSRF policy before allocating curl handle */
+    if (!csilk_curl_url_allowed(state->base_url)) {
+        CSILK_LOG_E("AI OpenAI: Blocked or invalid URL: %.50s...", state->base_url);
         free(json_body);
+        curl_easy_cleanup(curl);
         return -1;
     }
 
@@ -590,23 +560,16 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&ctx);
-    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
-    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 
-    /* Bounded time-outs: even when the caller leaves timeout_ms at 0, cap the
-     * connect phase and (for non-streaming) the whole transfer. Without these,
-     * a half-open server (e.g. a slow test mock that accepted but never
-     * responds) would block curl_easy_perform() indefinitely. Streaming
-     * responses are excluded from the total cap so long LLM streams are
-     * unaffected. */
+    /* Bounded time-outs: streaming responses are excluded from the total cap
+     * so long LLM streams are unaffected. */
+    long total_timeout = 0;
     if (req->timeout_ms > 0) {
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)req->timeout_ms);
+        total_timeout = (long)req->timeout_ms;
     } else if (!req->stream) {
-        /* Generous default: a slow-but-reachable backend should still fit; the
-         * goal is only to bound the "no data at all" case. */
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300L * 1000L);
+        total_timeout = 300L * 1000L;
     }
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10L * 1000L);
+    csilk_curl_apply_safe_defaults(curl, 10L * 1000L, total_timeout);
 
     /* --- Step 3: Execute --- */
     CURLcode rc = curl_easy_perform(curl);
@@ -774,10 +737,9 @@ openai_embeddings(void*                           state_ptr,
         return -1;
     }
 
-    /* Validate base_url scheme to prevent SSRF (CWE-918) */
-    if (strncmp(state->base_url, "http://", 7) != 0 &&
-        strncmp(state->base_url, "https://", 8) != 0) {
-        CSILK_LOG_E("AI OpenAI: Invalid URL scheme: %.50s...", state->base_url);
+    /* Validate base_url scheme / SSRF policy */
+    if (!csilk_curl_url_allowed(state->base_url)) {
+        CSILK_LOG_E("AI OpenAI: Blocked or invalid URL: %.50s...", state->base_url);
         free(json_body);
         curl_easy_cleanup(curl);
         return -1;
@@ -793,17 +755,13 @@ openai_embeddings(void*                           state_ptr,
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, auth_hdr);
 
-    struct curl_response cr = {0};
+    csilk_curl_buf_t cr = {0};
     curl_easy_setopt(curl, CURLOPT_URL, url);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb_simple);
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, csilk_curl_write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
-    curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
-    curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
-    /* Same bounded-connect guard as chat(): never hang on a dead endpoint. */
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 10L * 1000L);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 300L * 1000L);
+    csilk_curl_apply_safe_defaults(curl, 10L * 1000L, 300L * 1000L);
 
     CURLcode rc = curl_easy_perform(curl);
     free(json_body);
@@ -813,14 +771,14 @@ openai_embeddings(void*                           state_ptr,
         char err[256];
         snprintf(err, sizeof(err), "CURL error: %s", curl_easy_strerror(rc));
         res->error_message = strdup(err);
-        free(cr.body);
+        free(cr.data);
         curl_easy_cleanup(curl);
         return -1;
     }
 
     /* --- Parse the response and extract vectors --- */
-    csilk_json_t* resp = csilk_json_parse(cr.body);
-    free(cr.body);
+    csilk_json_t* resp = csilk_json_parse(cr.data);
+    free(cr.data);
     if (!resp) {
         res->error_message = strdup("JSON parse error");
         curl_easy_cleanup(curl);
