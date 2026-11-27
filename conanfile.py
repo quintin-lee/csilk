@@ -5,7 +5,7 @@ import os
 
 class CsilkConan(ConanFile):
     name = "csilk"
-    version = "0.9.0"
+    version = "1.2.0"
     license = "MIT"
     author = "quintin-lee"
     url = "https://github.com/quintin-lee/csilk"
@@ -16,11 +16,17 @@ class CsilkConan(ConanFile):
         "shared": [True, False],
         "fPIC": [True, False],
         "with_uring": [True, False],
+        "with_full": [True, False],
+        "with_db": [True, False],
+        "with_ai": [True, False],
     }
     default_options = {
         "shared": False,
         "fPIC": True,
         "with_uring": False,
+        "with_full": False,
+        "with_db": False,
+        "with_ai": False,
     }
 
     def config_options(self):
@@ -30,21 +36,29 @@ class CsilkConan(ConanFile):
             self.options.with_uring = False
 
     def requirements(self):
-        self.requires("libuv/1.48.0")
+        if not self.options.with_uring:
+            self.requires("libuv/1.48.0")
         self.requires("openssl/3.3.1")
         self.requires("zlib/1.3.1")
-        self.requires("libcurl/8.8.0")
         self.requires("libyaml/0.2.5")
-        self.requires("sqlite3/3.46.0")
+        if self.options.with_full or self.options.with_ai:
+            self.requires("libcurl/8.8.0")
+        if self.options.with_full or self.options.with_db:
+            self.requires("sqlite3/3.46.0")
 
     def layout(self):
         cmake_layout(self)
 
     def generate(self):
         tc = CMakeToolchain(self)
-        tc.variables["CSILK_BUILD_SHARED"] = self.options.shared
-        tc.variables["BUILD_TESTING"] = False
-        tc.variables["BUILD_EXAMPLES"] = False
+        tc.variables["CSILK_BUILD_SHARED"] = bool(self.options.shared)
+        tc.variables["CSILK_BUILD_TESTS"] = False
+        tc.variables["CSILK_BUILD_EXAMPLES"] = False
+        tc.variables["CSILK_BUILD_FULL"] = bool(self.options.with_full)
+        if self.options.with_db:
+            tc.variables["CSILK_ENABLE_DB"] = True
+        if self.options.with_ai:
+            tc.variables["CSILK_ENABLE_AI"] = True
         if self.options.with_uring:
             tc.variables["CSILK_USE_URING"] = True
         tc.generate()

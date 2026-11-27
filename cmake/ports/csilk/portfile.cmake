@@ -8,34 +8,62 @@ vcpkg_from_github(
 
 set(OPTIONS)
 
-if(VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic")
+if(VCPKG_LIBRARY_LINKAGE STREQUAL "dynamic" OR "shared" IN_LIST FEATURES)
     list(APPEND OPTIONS -DCSILK_BUILD_SHARED=ON)
+else()
+    list(APPEND OPTIONS -DCSILK_BUILD_SHARED=OFF)
 endif()
 
-# Handle optional database drivers via features
-if("mysql" IN_LIST FEATURES)
-    list(APPEND OPTIONS -DHAS_MYSQL=ON)
+if("full" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_BUILD_FULL=ON)
+else()
+    list(APPEND OPTIONS -DCSILK_BUILD_FULL=OFF)
 endif()
-if("postgresql" IN_LIST FEATURES)
-    list(APPEND OPTIONS -DHAS_POSTGRES=ON)
+
+# Handle optional domain modules and database drivers via features
+if("db" IN_LIST FEATURES
+   OR "mysql" IN_LIST FEATURES
+   OR "postgresql" IN_LIST FEATURES
+   OR "mongodb" IN_LIST FEATURES
+   OR "redis" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_DB=ON)
 endif()
-if("mongodb" IN_LIST FEATURES)
-    list(APPEND OPTIONS -DHAS_MONGODB=ON)
+if("ai" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_AI=ON)
 endif()
-if("redis" IN_LIST FEATURES)
-    list(APPEND OPTIONS -DHAS_REDIS=ON)
+if("vector" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_VECTOR=ON)
+endif()
+if("mcp" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_MCP=ON)
+endif()
+if("workflow" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_WORKFLOW=ON)
+endif()
+if("mq" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_MQ=ON)
+endif()
+if("grpc" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_GRPC=ON)
+endif()
+if("wasm" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_WASM=ON)
+endif()
+if("perm" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_PERM=ON)
+endif()
+if("observability" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_OBSERVABILITY=ON)
+endif()
+if("csv" IN_LIST FEATURES)
+    list(APPEND OPTIONS -DCSILK_ENABLE_CSV=ON)
 endif()
 
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS ${OPTIONS}
-        -DBUILD_TESTING=OFF
-        -DBUILD_EXAMPLES=OFF
-    MAYBE_UNUSED_VARIABLES
-        HAS_MYSQL
-        HAS_POSTGRES
-        HAS_MONGODB
-        HAS_REDIS
+        -DCSILK_BUILD_TESTS=OFF
+        -DCSILK_BUILD_EXAMPLES=OFF
 )
 
 vcpkg_cmake_install()

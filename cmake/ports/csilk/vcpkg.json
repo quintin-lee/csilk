@@ -6,13 +6,11 @@
   "license": "MIT",
   "dependencies": [
     "yyjson",
-    "curl",
     "libuv",
     "libyaml",
     "llhttp",
     "nghttp2",
     "openssl",
-    "sqlite3",
     "zlib",
     {
       "name": "vcpkg-cmake",
@@ -24,21 +22,88 @@
     }
   ],
   "features": {
+    "full": {
+      "description": "Enable all optional domain modules (DB, MQ, AI, Vector, MCP, Workflow, gRPC, WASM, Bypass, Perm, Observability, CSV)",
+      "dependencies": [
+        "curl",
+        "sqlite3"
+      ]
+    },
+    "db": {
+      "description": "Database drivers, migrations, MVCC cache, and connection pools (SQLite3)",
+      "dependencies": [
+        "sqlite3"
+      ]
+    },
+    "ai": {
+      "description": "LLM client drivers, AI trace, and tool registry (libcurl)",
+      "dependencies": [
+        "curl"
+      ]
+    },
+    "vector": {
+      "description": "Embedded HNSW and Milvus/Qdrant vector drivers (libcurl)",
+      "dependencies": [
+        "curl"
+      ]
+    },
+    "mcp": {
+      "description": "Model Context Protocol server/client/stdio pool (libcurl)",
+      "dependencies": [
+        "curl"
+      ]
+    },
+    "workflow": {
+      "description": "AI workflow DAG engine, DSL, grid, and skill sandbox (libcurl)",
+      "dependencies": [
+        "curl"
+      ]
+    },
+    "mq": {
+      "description": "Message queue, PubSub, WAL, and Raft consensus"
+    },
+    "grpc": {
+      "description": "gRPC wire codec and HTTP/JSON transcoding gateway"
+    },
+    "wasm": {
+      "description": "WASM plugin module"
+    },
+    "perm": {
+      "description": "RBAC permission module"
+    },
+    "observability": {
+      "description": "OTLP tracing, CPU flamegraph profiler, and Admin/APM dashboard"
+    },
+    "csv": {
+      "description": "RFC 4180 CSV parser/serializer utility"
+    },
     "mysql": {
-      "description": "MySQL database driver",
-      "dependencies": ["libmysqlclient"]
+      "description": "MySQL database driver (enables DB module)",
+      "dependencies": [
+        "libmysqlclient",
+        "sqlite3"
+      ]
     },
     "postgresql": {
-      "description": "PostgreSQL database driver",
-      "dependencies": ["libpq"]
+      "description": "PostgreSQL database driver (enables DB module)",
+      "dependencies": [
+        "libpq",
+        "sqlite3"
+      ]
     },
     "mongodb": {
-      "description": "MongoDB database driver",
-      "dependencies": ["mongo-c-driver"]
+      "description": "MongoDB database driver (enables DB module)",
+      "dependencies": [
+        "mongo-c-driver",
+        "sqlite3"
+      ]
     },
     "redis": {
-      "description": "Redis database driver",
-      "dependencies": ["hiredis"]
+      "description": "Redis database driver (enables DB module)",
+      "dependencies": [
+        "hiredis",
+        "sqlite3"
+      ]
     },
     "shared": {
       "description": "Build shared library in addition to static"

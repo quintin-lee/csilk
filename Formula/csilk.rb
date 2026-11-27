@@ -1,26 +1,38 @@
 class Csilk < Formula
   desc "Lightweight HTTP web framework written in C23 for high-concurrency microservices"
   homepage "https://github.com/quintin-lee/csilk"
-  url "https://github.com/quintin-lee/csilk/archive/refs/tags/v0.9.0.tar.gz"
+  url "https://github.com/quintin-lee/csilk/archive/refs/tags/v1.2.0.tar.gz"
   license "MIT"
   head "https://github.com/quintin-lee/csilk.git", branch: "master"
 
+  option "with-full", "Build all optional domain modules (requires curl and sqlite)"
+  option "with-db", "Build database module (requires sqlite)"
+  option "with-ai", "Build AI module (requires curl)"
+
   depends_on "cmake" => :build
   depends_on "pkg-config" => :build
-  depends_on "curl"
   depends_on "libuv"
   depends_on "libyaml"
   depends_on "openssl@3"
-  depends_on "sqlite"
   depends_on "zlib"
+  depends_on "curl" => :optional
+  depends_on "sqlite" => :optional
 
   def install
     args = %w[
       -DCMAKE_BUILD_TYPE=Release
       -DCSILK_BUILD_SHARED=ON
-      -DBUILD_TESTING=OFF
-      -DBUILD_EXAMPLES=OFF
+      -DCSILK_BUILD_TESTS=OFF
+      -DCSILK_BUILD_EXAMPLES=OFF
     ]
+
+    if build.with? "full"
+      args << "-DCSILK_BUILD_FULL=ON"
+    else
+      args << "-DCSILK_BUILD_FULL=OFF"
+      args << "-DCSILK_ENABLE_DB=ON" if build.with?("db") || build.with?("sqlite")
+      args << "-DCSILK_ENABLE_AI=ON" if build.with?("ai") || build.with?("curl")
+    end
 
     system "cmake", "-S", ".", "-B", "build", *args, *std_cmake_args
     system "cmake", "--build", "build"
