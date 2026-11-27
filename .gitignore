@@ -33,8 +33,8 @@ coverage.xml
 # Test/example binaries & runtime DB/WAL artifacts produced in project root
 /test_*
 /example_*
-*.db
-*.wal
+/*.db
+/*.wal
 test_distributed_wals/
 test_wals/
 test_interactive_wals/
