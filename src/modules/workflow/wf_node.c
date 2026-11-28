@@ -9,6 +9,7 @@
 #include "workflow_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
+#include "core/internal/obs_registry.h"
 
 /* Forward declarations for cross-module calls */
 extern void _wf_wal_log_event(csilk_wf_ctx_t*       ctx,
@@ -417,7 +418,12 @@ execute_node(csilk_wf_ctx_t* ctx, csilk_wf_node_t* node, csilk_data_t* input)
         }
         char* json = csilk_json_serialize(task, NULL);
 
-        csilk_mq_publish(ctx->wf->mq, "csilk.wf.tasks", json, strlen(json));
+        const csilk_mq_runtime_ops_t* mq_ops = _csilk_get_mq_runtime_ops();
+        if (mq_ops && mq_ops->publish_raw) {
+            mq_ops->publish_raw(ctx->wf->mq, "csilk.wf.tasks", json, strlen(json));
+        } else {
+            csilk_mq_publish(ctx->wf->mq, "csilk.wf.tasks", json, strlen(json));
+        }
         _wf_wal_log_event(ctx, WF_EV_PAUSE, node->id, input);
         _wf_broadcast(ctx->wf, "node_remote_queued", node->id, json);
 

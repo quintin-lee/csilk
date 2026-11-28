@@ -98,6 +98,9 @@ struct csilk_wf_s {
     size_t                     active_context_capacity;
     csilk_mutex_t              ctx_mutex;
     csilk_wf_grid_t*           grid;
+    /* Callback set by csilk_wf_enable_distributed() to unregister on free without
+     * coupling wf_graph.c directly to wf_distributed.c. */
+    void (*dist_unregister_fn)(csilk_wf_t* wf);
     /* Number of after_worker_cb completion blocks in flight on the loop
      * thread. csilk_wf_free() waits for this to reach 0 before destroying
      * the workflow, otherwise a completion triggered by a user callback
@@ -170,6 +173,20 @@ CSILK_INTERNAL void        _wf_distributed_unregister(csilk_wf_t* wf);
 struct csilk_wf_manager_s;
 CSILK_INTERNAL void        _wf_cluster_unbind_mgr(struct csilk_wf_manager_s* mgr);
 CSILK_INTERNAL void        _wf_register_debug_route(void);
+enum { CSILK_WF_PTR_REG_CAP = 32 };
+
+typedef struct {
+    void*  items[CSILK_WF_PTR_REG_CAP];
+    size_t count;
+} wf_ptr_registry_t;
+
+CSILK_INTERNAL void   _wf_ptr_registry_add(wf_ptr_registry_t* reg, void* item);
+CSILK_INTERNAL void   _wf_ptr_registry_remove(wf_ptr_registry_t* reg, const void* item);
+CSILK_INTERNAL size_t _wf_ptr_registry_snapshot(wf_ptr_registry_t* reg,
+                                                void**             out_items,
+                                                size_t             cap,
+                                                void (*on_take)(void* item));
+
 CSILK_INTERNAL csilk_wf_t* _csilk_wf_parse_json_doc(const char* json_str,
                                                     const char* default_name,
                                                     char*       err_buf,

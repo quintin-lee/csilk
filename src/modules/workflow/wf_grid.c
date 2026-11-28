@@ -45,16 +45,7 @@ struct csilk_wf_grid_s {
     bool                  raft_synced;
 };
 
-static csilk_wf_grid_t* g_registered_grids[CSILK_WF_GRID_MAX_PEERS];
-static size_t           g_registered_grid_count = 0;
-static csilk_mutex_t    g_grid_reg_mutex;
-static csilk_once_t     g_grid_reg_once = CSILK_ONCE_INIT;
-
-static void
-_grid_reg_init(void)
-{
-    csilk_mutex_init(&g_grid_reg_mutex);
-}
+static wf_ptr_registry_t g_grid_reg = {0};
 
 static uint64_t
 _get_monotonic_ms(void)
@@ -209,12 +200,7 @@ csilk_wf_grid_new(const char* node_id, csilk_raft_node_t* raft, csilk_mq_t* mq)
     csilk_mutex_init(&grid->mutex);
 
     /* Register to global peer directory */
-    csilk_once(&g_grid_reg_once, _grid_reg_init);
-    csilk_mutex_lock(&g_grid_reg_mutex);
-    if (g_registered_grid_count < CSILK_WF_GRID_MAX_PEERS) {
-        g_registered_grids[g_registered_grid_count++] = grid;
-    }
-    csilk_mutex_unlock(&g_grid_reg_mutex);
+    _wf_ptr_registry_add(&g_grid_reg, grid);
 
     return grid;
 }
@@ -231,19 +217,7 @@ csilk_wf_grid_free(csilk_wf_grid_t* grid)
     }
 
     /* Unregister from peer directory */
-    csilk_once(&g_grid_reg_once, _grid_reg_init);
-    csilk_mutex_lock(&g_grid_reg_mutex);
-    for (size_t i = 0; i < g_registered_grid_count;) {
-        if (g_registered_grids[i] == grid) {
-            for (size_t j = i; j + 1 < g_registered_grid_count; j++) {
-                g_registered_grids[j] = g_registered_grids[j + 1];
-            }
-            g_registered_grid_count--;
-        } else {
-            i++;
-        }
-    }
-    csilk_mutex_unlock(&g_grid_reg_mutex);
+    _wf_ptr_registry_remove(&g_grid_reg, grid);
 
     csilk_mutex_lock(&grid->mutex);
     for (size_t i = 0; i < CSILK_WF_GRID_DEQUE_CAP; i++) {
@@ -400,14 +374,15 @@ csilk_wf_grid_steal_and_execute(csilk_wf_grid_t* grid, char* out_task_id, size_t
         return -1;
     }
 
-    csilk_once(&g_grid_reg_once, _grid_reg_init);
-    csilk_mutex_lock(&g_grid_reg_mutex);
+    void*  snap_raw[CSILK_WF_PTR_REG_CAP];
+    size_t snap_count =
+        _wf_ptr_registry_snapshot(&g_grid_reg, snap_raw, CSILK_WF_PTR_REG_CAP, NULL);
 
     csilk_wf_grid_t* richest_peer = NULL;
     size_t           max_tasks = 0;
 
-    for (size_t i = 0; i < g_registered_grid_count; i++) {
-        csilk_wf_grid_t* peer = g_registered_grids[i];
+    for (size_t i = 0; i < snap_count; i++) {
+        csilk_wf_grid_t* peer = (csilk_wf_grid_t*)snap_raw[i];
         if (peer && peer != grid) {
             size_t c = csilk_wf_grid_task_count(peer);
             if (c > max_tasks) {
@@ -416,8 +391,6 @@ csilk_wf_grid_steal_and_execute(csilk_wf_grid_t* grid, char* out_task_id, size_t
             }
         }
     }
-
-    csilk_mutex_unlock(&g_grid_reg_mutex);
 
     if (!richest_peer || max_tasks == 0) {
         return -1; /* No tasks available across cluster */

@@ -12,16 +12,86 @@
 /* Forward declaration -- defined in wf_graph.c */
 csilk_wf_node_t* csilk_wf_get_node(csilk_wf_t* wf, const char* id);
 
-/* --- Registry for Distributed Workflows --- */
-static csilk_wf_t*   g_distributed_wfs[32];
-static size_t        g_distributed_wf_count = 0;
-static csilk_mutex_t g_dist_mutex;
-static csilk_once_t  g_dist_once = CSILK_ONCE_INIT;
+/* --- Shared Workflow Pointer Registry & Distributed Registry --- */
+static wf_ptr_registry_t g_distributed_reg = {0};
+static csilk_mutex_t     g_wf_reg_mutex;
+static csilk_once_t      g_wf_reg_once = CSILK_ONCE_INIT;
 
 static void
-dist_sync_init(void)
+wf_reg_sync_init(void)
 {
-    csilk_mutex_init(&g_dist_mutex);
+    csilk_mutex_init(&g_wf_reg_mutex);
+}
+
+CSILK_INTERNAL void
+_wf_ptr_registry_add(wf_ptr_registry_t* reg, void* item)
+{
+    if (!reg || !item) {
+        return;
+    }
+    csilk_once(&g_wf_reg_once, wf_reg_sync_init);
+    csilk_mutex_lock(&g_wf_reg_mutex);
+    for (size_t i = 0; i < reg->count; i++) {
+        if (reg->items[i] == item) {
+            csilk_mutex_unlock(&g_wf_reg_mutex);
+            return;
+        }
+    }
+    if (reg->count < CSILK_WF_PTR_REG_CAP) {
+        reg->items[reg->count++] = item;
+    }
+    csilk_mutex_unlock(&g_wf_reg_mutex);
+}
+
+CSILK_INTERNAL void
+_wf_ptr_registry_remove(wf_ptr_registry_t* reg, const void* item)
+{
+    if (!reg || !item) {
+        return;
+    }
+    csilk_once(&g_wf_reg_once, wf_reg_sync_init);
+    csilk_mutex_lock(&g_wf_reg_mutex);
+    for (size_t i = 0; i < reg->count;) {
+        if (reg->items[i] == item) {
+            for (size_t j = i; j + 1 < reg->count; j++) {
+                reg->items[j] = reg->items[j + 1];
+            }
+            reg->count--;
+        } else {
+            i++;
+        }
+    }
+    csilk_mutex_unlock(&g_wf_reg_mutex);
+}
+
+CSILK_INTERNAL size_t
+_wf_ptr_registry_snapshot(wf_ptr_registry_t* reg,
+                          void**             out_items,
+                          size_t             cap,
+                          void (*on_take)(void* item))
+{
+    if (!reg || !out_items || cap == 0) {
+        return 0;
+    }
+    csilk_once(&g_wf_reg_once, wf_reg_sync_init);
+    csilk_mutex_lock(&g_wf_reg_mutex);
+    size_t n = 0;
+    for (size_t i = 0; i < reg->count && n < cap; i++) {
+        out_items[n] = reg->items[i];
+        if (on_take && out_items[n]) {
+            on_take(out_items[n]);
+        }
+        n++;
+    }
+    csilk_mutex_unlock(&g_wf_reg_mutex);
+    return n;
+}
+
+static void
+wf_pending_ref(void* item)
+{
+    csilk_wf_t* wf = (csilk_wf_t*)item;
+    atomic_fetch_add(&wf->pending_completions, 1);
 }
 
 CSILK_INTERNAL int
@@ -49,22 +119,7 @@ _wf_is_safe_exec_id(const char* exec_id)
 CSILK_INTERNAL void
 _wf_distributed_unregister(csilk_wf_t* wf)
 {
-    if (!wf) {
-        return;
-    }
-    csilk_once(&g_dist_once, dist_sync_init);
-    csilk_mutex_lock(&g_dist_mutex);
-    for (size_t i = 0; i < g_distributed_wf_count;) {
-        if (g_distributed_wfs[i] == wf) {
-            for (size_t j = i; j + 1 < g_distributed_wf_count; j++) {
-                g_distributed_wfs[j] = g_distributed_wfs[j + 1];
-            }
-            g_distributed_wf_count--;
-        } else {
-            i++;
-        }
-    }
-    csilk_mutex_unlock(&g_dist_mutex);
+    _wf_ptr_registry_remove(&g_distributed_reg, wf);
 }
 
 static void
@@ -97,17 +152,10 @@ on_remote_result(csilk_mq_ctx_t* m_ctx)
         const char* output_str = csilk_json_string_value(j_output);
 
         if (_wf_is_safe_exec_id(exec_id)) {
-            csilk_wf_t* snap[32];
-            size_t      snap_count = 0;
-
-            csilk_once(&g_dist_once, dist_sync_init);
-            csilk_mutex_lock(&g_dist_mutex);
-            for (size_t i = 0; i < g_distributed_wf_count && snap_count < 32; i++) {
-                snap[snap_count] = g_distributed_wfs[i];
-                atomic_fetch_add(&snap[snap_count]->pending_completions, 1);
-                snap_count++;
-            }
-            csilk_mutex_unlock(&g_dist_mutex);
+            void*  snap_raw[CSILK_WF_PTR_REG_CAP];
+            size_t snap_count = _wf_ptr_registry_snapshot(
+                &g_distributed_reg, snap_raw, CSILK_WF_PTR_REG_CAP, wf_pending_ref);
+            csilk_wf_t** snap = (csilk_wf_t**)snap_raw;
 
             for (size_t i = 0; i < snap_count; i++) {
                 csilk_wf_t* wf = snap[i];
@@ -171,19 +219,8 @@ csilk_wf_enable_distributed(csilk_wf_t* wf, csilk_mq_t* mq)
         return;
     }
     wf->mq = mq;
-    csilk_once(&g_dist_once, dist_sync_init);
-    csilk_mutex_lock(&g_dist_mutex);
-    int exists = 0;
-    for (size_t i = 0; i < g_distributed_wf_count; i++) {
-        if (g_distributed_wfs[i] == wf) {
-            exists = 1;
-            break;
-        }
-    }
-    if (!exists && g_distributed_wf_count < 32) {
-        g_distributed_wfs[g_distributed_wf_count++] = wf;
-    }
-    csilk_mutex_unlock(&g_dist_mutex);
+    wf->dist_unregister_fn = _wf_distributed_unregister;
+    _wf_ptr_registry_add(&g_distributed_reg, wf);
     csilk_mq_subscribe(mq, "csilk.wf.results", on_remote_result);
     CSILK_LOG_I("Workflow: enabled distributed execution on message queue topic "
                 "'csilk.wf.results' for workflow '%s'",

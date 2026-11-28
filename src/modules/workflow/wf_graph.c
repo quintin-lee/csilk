@@ -204,26 +204,6 @@ node_free(csilk_wf_node_t* node)
     free(node);
 }
 
-static void
-ai_config_free(void* ptr)
-{
-    csilk_ai_config_t* c = (csilk_ai_config_t*)ptr;
-    free((void*)c->model);
-    free((void*)c->system_msg);
-    free((void*)c->prompt);
-    free(c);
-}
-
-static void
-vector_search_config_free(void* ptr)
-{
-    csilk_vector_search_config_t* c = (csilk_vector_search_config_t*)ptr;
-    free((void*)c->embedding_model);
-    free((void*)c->collection);
-    free((void*)c->input_template);
-    free(c);
-}
-
 /**
  * @brief Deallocates all resources occupied by a workflow structure.
  *
@@ -239,7 +219,9 @@ csilk_wf_free(csilk_wf_t* wf)
         return;
     }
     CSILK_LOG_D("Workflow: destroying workflow instance '%s'", wf->name);
-    _wf_distributed_unregister(wf);
+    if (wf->dist_unregister_fn) {
+        wf->dist_unregister_fn(wf);
+    }
     /* Wait for any after_worker_cb completion block still running on the
      * loop thread: its tail (unregister_active_ctx, trace free, cleanup)
      * touches wf->ctx_mutex and the active-context registry, so destroying
