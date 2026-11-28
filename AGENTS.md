@@ -97,21 +97,21 @@ Use these rules whenever performing work in this repository. They ensure correct
 
 - **Zero-bloat Web Core**: `CSILK_BUILD_FULL` defaults to `OFF`. Core targets (`base`, `json`, `crypto`, `reflection`, `runtime`, `tls`, `http2`, `http`, `protocols`, `middleware`, `app`) must build standalone with zero `SQLite3` or `libcurl` linkage (`ldd build_core/libcsilk.so | grep -qiE "sqlite|curl"` must return non-zero).
 - **Strict downward dependency**: Web Core files (`src/core/`, `src/app/`, `src/middleware/`, `src/protocols/`) must not call optional-module symbols (`db`, `mq`, `ai`, `vector`, `mcp`, `workflow`, `grpc`, `wasm`, `bypass`, `perm`, `http3`) unconditionally — guard callers cleanly behind `#ifdef CSILK_HAS_<MODULE>` or register hooks/callbacks at runtime.
-- **Extensible server teardown**: per-server optional or stateful subsystems (`session`, `ws_room`, `otlp_trace`, `h3`, `mq`, etc.) must register a `csilk_server_teardown_fn` via `_csilk_server_register_teardown()` (executed LIFO on shutdown, max 16 slots in `srv_internal.h`) instead of hardcoding subsystem teardown calls in `server_lifecycle.c`.
-- **Single option model**: the 8 legacy `src/plugins/*` wrappers were retired in favor of CMake optional module options (`CSILK_ENABLE_*` in `cmake/options.cmake`) with transitive dependency enforcement (`WAMR -> WASM`, `MCP -> AI`, `WORKFLOW -> AI + MQ + WASM`).
+- **Extensible server teardown & extensions**: per-server optional or stateful subsystems (`session`, `ws_room`, `otlp_trace`, `mcp`, `h3`, `mq`, etc.) must use `_csilk_server_set_ext()` / `_csilk_server_ensure_ext()` / `_csilk_server_register_teardown()` (executed LIFO on shutdown, max 16 slots in `srv_internal.h`) instead of hardcoding subsystem fields or teardown calls in `server_lifecycle.c`.
+- **Single option model**: the 8 legacy `src/plugins/*` wrappers were retired in favor of CMake optional module options (`CSILK_ENABLE_*` in `cmake/options.cmake`, including standalone `CSILK_ENABLE_CSV` → `csilk_csv`) with transitive dependency enforcement (`WAMR -> WASM`, `MCP -> AI`, `WORKFLOW -> AI + MQ + WASM`).
 
-### ABI & Public API Governance (SOVERSION 2)
+### ABI & Public API Governance (SOVERSION 3)
 
 - **Export whitelist**: `cmake/libcsilk.map` restricts dynamic exports strictly to `csilk_*` (`global: csilk_*; local: *;`). Never invent non-`csilk_` public symbols; internal cross-TU symbols must use `_csilk_` and be kept `static` whenever single-TU.
 - **Opaque handle encapsulation**: `include/csilk/` headers expose opaque pointer typedefs (`csilk_*_t`); concrete `struct csilk_*_s` layouts live in `src/` and internal headers under `src/core/internal/` must never leak into public headers.
-- **ABI baseline gate**: `bash ./scripts/check_abi_compatibility.sh build_full/libcsilk.so` checks exports against `cmake/abi_baseline_symbols.txt` (`SOVERSION 2`). Never remove or break existing baseline symbols within a major `SOVERSION`; intentionally adding/removing exported API in Full mode requires regenerating `cmake/abi_baseline_symbols.txt`.
+- **ABI baseline gate**: `bash ./scripts/check_abi_compatibility.sh build_full/libcsilk.so` checks exports against `cmake/abi_baseline_symbols.txt` (`SOVERSION 3`). Never remove or break existing baseline symbols within a major `SOVERSION`; intentionally adding/removing exported API in Full mode requires regenerating `cmake/abi_baseline_symbols.txt`.
 - **Python struct layout parity**: any edit to public structs mirrored by `ctypes` in `python/csilk/` must also update `tests/core/test_python_abi.c` and pass `test_abi_layout.py` with `CSILK_REQUIRE_ABI_PROBE=1`.
 
 ### Honest Implementation & Fail-Closed Discipline
 
-- **No fake drivers or stub toggles**: simulated `dpdk_pmd`, fake eBPF `xdp_waf`, simulated `llama.c`, dead `quic_vtable`, dead `csilk_h3_listener_*`, `af_xdp` simulation rings (`sim_fr_*`/`sim_cr_*`), `wasm` simulated execution/fuel stubs, fake WASI stdout stubs, and `CSILK_ENABLE_EXPERIMENTAL_STUBS` have been removed. Every public driver/middleware entrypoint must represent real functionality (`session_store` local backend uses a real TTL in-memory hash table) or explicit capability absence.
+- **No fake drivers or stub toggles**: simulated `dpdk_pmd`, fake eBPF `xdp_waf`, simulated `llama.c`, dead `quic_vtable`, dead `csilk_h3_listener_*`, `af_xdp` simulation rings (`sim_fr_*`/`sim_cr_*`), `wasm` simulated execution/fuel stubs, fake WASI stdout stubs, and `CSILK_ENABLE_EXPERIMENTAL_STUBS` have been removed. Every public driver/middleware entrypoint must represent real functionality (`session_store` local backend uses a real TTL in-memory hash table; `io_uring` `csilk_io_fs_event_*` uses Linux `inotify`) or explicit capability absence.
 - **Fail closed on absent runtimes**: optional native integrations (e.g., `HAS_WAMR` in `wasm_vm.c`/`wasm_plugin.c`/`wasm_wasi.c`, `CSILK_HAS_NGTCP2`/`nghttp3` in HTTP/3 transport, Linux `AF_XDP` in `af_xdp.c`, optional DB drivers) must set `errno = ENOTSUP` (or OS socket errno) and return `-1` / `nullptr` when unconfigured or unavailable.
-- **No parallel duplicate subsystems**: place shared WAL file I/O helpers in `src/modules/common/wal_common.h`/`.c` (reused by `workflow_wal.c`), keep both fixed and sliding rate-limiters in `src/middleware/ratelimit.c`, unify `session_store.c` local/MQ in-memory tables, unify `include/csilk/csilk.h` (with `CSILK_HAS_*` guards and `include/csilk.h` forwarding), and keep dynamic WAF rules/filtering (`csilk_waf_filter_*`) unified in `src/middleware/waf.c`.
+- **No parallel duplicate subsystems**: place shared WAL file I/O helpers in `src/modules/common/wal_common.h`/`.c` (reused by `workflow_wal.c`), outbound `libcurl` init/streaming helpers in `src/modules/common/curl_common.h`, keep both fixed and sliding rate-limiters in `src/middleware/ratelimit.c`, unify `session_store.c` local/MQ in-memory tables, unify `include/csilk/csilk.h` (with `CSILK_HAS_*` guards; legacy `include/csilk.h` forwarding removed in `SOVERSION 3`), and keep dynamic WAF rules/filtering (`csilk_waf_filter_*`) unified in `src/middleware/waf.c`.
 
 ### Per-Server Isolation, Security & Hot-Path Constraints
 
@@ -197,34 +197,28 @@ Router uses a segment-prefix trie. Swaps are serialized under `server->config_mu
 
 ### Key module dependency graph
 
-Web Core (4 layered physical libraries `base`, `runtime`, `http`, `app` + 8 compatibility aliases for 11 logical modules, always built with `-DCSILK_BUILD_FULL=OFF`, zero SQLite3/libcurl dependencies) forms the base layer; optional domain modules (`CSILK_ENABLE_*` / `-DCSILK_BUILD_FULL=ON`) depend strictly downward without Web Core up-references (optional integrations register via runtime registries in `obs_registry.h`). Arrows point from dependent → dependency (`A ──→ B` = A links against B):
+Web Core (4 layered physical libraries `base`, `runtime`, `http`, `app`, always built with `-DCSILK_BUILD_FULL=OFF`, zero SQLite3/libcurl dependencies; legacy compat aliases removed in `SOVERSION 3`) forms the base layer; optional domain modules (`CSILK_ENABLE_*` / `-DCSILK_BUILD_FULL=ON`) depend strictly downward without Web Core up-references (optional integrations and routes register via runtime registries in `obs_registry.h`). Arrows point from dependent → dependency (`A ──→ B` = A links against B):
 ```
-# Web Core (always built — 4 physical layer libraries + 8 compat aliases)
-app           ──→ { http, protocols, middleware, reflection }
-middleware    ──→ { http, runtime, json, tls, zlib, openssl, threads }
-protocols     ──→ { http, http2, runtime, json, reflection }
-http          ──→ { runtime, json, tls, http2, zlib, openssl, llhttp }
-http2         ──→ { runtime, tls, nghttp2 }
-tls           ──→ { runtime, openssl }
-runtime       ──→ { base, crypto, json, reflection, openssl, threads, {libuv|liburing}, yaml, m }
-reflection    ──→ { base, json }
-crypto        ──→ { base, openssl, threads }
-json          ──→ yyjson
-base          ──→ { threads, {libuv|liburing}, m }
+# Web Core (always built — 4 physical layer libraries)
+app           ──→ { http, runtime, base }
+http          ──→ { runtime, base, llhttp, nghttp2, openssl, zlib }
+runtime       ──→ { base, openssl, yaml, {libuv|liburing}, threads, m }
+base          ──→ { yyjson, openssl, threads, {libuv|liburing}, m }
 
 # Optional Domain Modules (CSILK_ENABLE_* = OFF by default, ON via -DCSILK_BUILD_FULL=ON)
-observability ──→ { app, middleware, http, runtime, json, threads }
-workflow      ──→ { app, http, runtime, json, ai, mq, wasm, yaml, m }
-mcp           ──→ { protocols, http, runtime, json, ai, curl }
-grpc          ──→ { middleware, http, runtime, json }
-h3            ──→ { runtime, http, tls, ngtcp2, nghttp3, openssl }
-db            ──→ { runtime, json, sqlite3, optional mysql/pq/hiredis/mongoc }
-ai            ──→ { http, runtime, json, curl }
-vector        ──→ { runtime, json, curl, m }
-permission    ──→ { runtime, json }
-mq            ──→ { http, runtime }
-wasm          ──→ { app, runtime, optional vmlib }
-bypass        ──→ runtime
+observability ──→ { app, http, runtime, base, threads }
+workflow      ──→ { http, runtime, base, ai, mq, wasm, yaml, m }  # registers routes via obs_registry
+mcp           ──→ { http, runtime, base, ai, curl }
+grpc          ──→ { http, runtime, base }
+h3            ──→ { runtime, http, base, ngtcp2, nghttp3, openssl }
+db            ──→ { runtime, base, sqlite3, optional mysql/pq/hiredis/mongoc }
+ai            ──→ { http, runtime, base, curl }
+vector        ──→ { runtime, base, curl, m }
+csv           ──→ { base }
+permission    ──→ { runtime, base }
+mq            ──→ { http, runtime, base }
+wasm          ──→ { app, runtime, base, optional vmlib }
+bypass        ──→ { runtime, base }
 umbrella      ──→ { Web Core + all enabled CSILK_ENABLE_* modules }
 ```
 
@@ -366,7 +360,7 @@ cmake --build build_full --target check-format             # dry-run; fails on m
 cmake --build build_full --target format                   # apply clang-format in-place
 cmake --build build_full --target tidy                     # clang-tidy (WarningsAsErrors)
 bash ./scripts/check_sync_primitives.sh                    # ban raw pthread_* in src/
-bash ./scripts/check_abi_compatibility.sh build_full/libcsilk.so  # SOVERSION 2 symbol gate
+bash ./scripts/check_abi_compatibility.sh build_full/libcsilk.so  # SOVERSION 3 symbol gate
 ./scripts/check_version_sync.sh                            # CMake version ↔ git tag
 python3 scripts/check_mermaid.py .                         # validate Mermaid blocks
 ```
@@ -465,7 +459,7 @@ csilk_get(app, "/api/echo", echo_handler);
 | `src/modules/vector/vector_hnsw.c` | HNSW skip-graph index with AVX2 SIMD distance kernels |
 | `src/reflection/reflect.c` | Reflection marshal/unmarshal for struct↔JSON binding |
 | `cmake/libcsilk.map` | Linker version script enforcing pure `csilk_*` symbol exports |
-| `cmake/abi_baseline_symbols.txt` | Full-build exported symbol baseline (`SOVERSION 2`) |
+| `cmake/abi_baseline_symbols.txt` | Full-build exported symbol baseline (`SOVERSION 3`) |
 | `scripts/check_abi_compatibility.sh` | Automated ABI export whitelist & baseline checker |
 | `scripts/check_sync_primitives.sh` | Enforces `csilk/core/sync.h` usage (bans raw `pthread_*` in `src/`) |
 | `scripts/check_version_sync.sh` | Verifies CMake version matches git tag; `--expected <ver>` for release validation |
@@ -490,7 +484,7 @@ csilk_get(app, "/api/echo", echo_handler);
 - **Optional module dependencies**: `libsqlite3-dev` (`CSILK_ENABLE_DB`), `libcurl4-openssl-dev` (≥ 7.80.0, `CSILK_ENABLE_{AI,VECTOR,MCP}`), plus optional `libpq-dev`, `libmysqlclient-dev`, `hiredis`, `libmongoc` per DB driver.
 - **Auto-fetched** via FetchContent: `yyjson`, plus `liburing` (when `CSILK_USE_URING=ON`) and fallback `llhttp`/`nghttp2`/`ngtcp2`/`nghttp3`/`wamr` when not found on system.
 - **Compiler**: Clang 19+ is default; GCC 13+ for coverage jobs. Apple Clang and MSVC are rejected.
-- **Shared libs**: `.so` on Linux (`SOVERSION 2`), `.dylib` on macOS. Always built alongside `.a` when `CSILK_BUILD_SHARED=ON`.
+- **Shared libs**: `.so` on Linux (`SOVERSION 3`), `.dylib` on macOS. Always built alongside `.a` when `CSILK_BUILD_SHARED=ON`.
 - **pkg-config**: `pkg-config --cflags --libs csilk` works after install (reflecting enabled modules).
 
 ## Testing & QA
@@ -512,7 +506,7 @@ Built with `-DCSILK_BUILD_FULL=ON -DUSE_COVERAGE=ON -DENABLE_OOM_TEST=OFF` under
 ### CI matrix (`.github/workflows/ci.yml`)
 
 - **test**: ubuntu-24.04 + macos × Debug + Release (`-DCSILK_BUILD_FULL=ON`); ASAN on Linux Debug; Python bindings on Release/Linux Debug.
-- **lint**: `check-format`, `check_version_sync.sh`, `check_sync_primitives.sh`, `check_abi_compatibility.sh` (SOVERSION 2), `check_mermaid.py`, `tidy`.
+- **lint**: `check-format`, `check_version_sync.sh`, `check_sync_primitives.sh`, `check_abi_compatibility.sh` (SOVERSION 3), `check_mermaid.py`, `tidy`.
 - **fuzz**: clang + ASAN + libFuzzer (`-DCSILK_BUILD_FULL=ON`); all 11 harnesses with corpus replay.
 - **arm64**: cross-compile via `aarch64-linux-gnu-gcc` (`-DCSILK_BUILD_FULL=ON`).
 - **io_uring**: libuv+`UV_USE_IO_URING=1` and native `CSILK_USE_URING=ON` (`-DCSILK_BUILD_FULL=ON`).

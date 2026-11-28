@@ -66,7 +66,7 @@
 
 ### 📐 ABI 稳定性与模块化架构 (v1.2 Web Core + 可选域模块)
 
-- 🔒 **不透明 ABI 与 SOVERSION 2** — Web Core 与可选领域模块解耦，配合 `cmake/libcsilk.map`（`csilk_*` 符号白名单）与自动化 ABI 兼容检查 (`check_abi_compatibility.sh`)。
+- 🔒 **不透明 ABI 与 SOVERSION 3** — Web Core 与可选领域模块解耦，配合 `cmake/libcsilk.map`（`csilk_*` 符号白名单）与自动化 ABI 兼容检查 (`check_abi_compatibility.sh`)。
 - 🧩 **WASM 沙箱插件引擎** — 原生 WebAssembly 插件沙箱 (`csilk_wasm_plugin_*`)，支持 LEB128 段校验、Fuel 预算熔断及零拷贝 Host ABI 接口。
 - 📦 **多语言全局包管理生态** — 提供 `vcpkg` 官方端口 (`cmake/ports/csilk`)、`Conan 2.0+` 配方 (`conanfile.py`)、Homebrew 公式 (`Formula/csilk.rb`) 以及基于 OIDC 的 PyPI 自动发布管线。
 - 📊 **工业级性能基准白皮书** — 官方对比 Nginx / Drogon / Actix-web / Go `net/http` 的极限 QPS、确定性尾部延迟 (P99) 及 100,000 长连接内存底噪 (< 4 MB RSS)，详见 `benchmarks/COMPARATIVE_BENCHMARK_WHITEPAPER.md`。

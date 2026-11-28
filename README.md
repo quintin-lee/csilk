@@ -66,7 +66,7 @@ A lightweight (~150KB static binary, < 2 MB RSS per 10K keep-alive connections) 
 
 ### 📐 ABI Stability & Modularity (v1.2 Web Core + Optional Modules)
 
-- 🔒 **Opaque ABI & SOVERSION 2** — Clean Core vs Optional Module boundaries with `libcsilk.map` (`csilk_*` whitelist) and automated ABI symbol checks (`check_abi_compatibility.sh`).
+- 🔒 **Opaque ABI & SOVERSION 3** — Clean Core vs Optional Module boundaries with `libcsilk.map` (`csilk_*` whitelist) and automated ABI symbol checks (`check_abi_compatibility.sh`).
 - 🧩 **WASM Sandbox Plugin Engine** — Native WebAssembly plugin sandbox (`csilk_wasm_plugin_*`) with LEB128 section validation, fuel-budget circuit breakers, and zero-copy Host ABI access.
 - 📦 **Global Package Management & Distribution** — Verified `vcpkg` ports (`cmake/ports/csilk`), modern `Conan 2.0+` recipes (`conanfile.py`), Homebrew Formula (`Formula/csilk.rb`), and GitHub Actions OIDC Trusted Publishing for PyPI (`wheels.yml`).
 - 📊 **Industrial-Grade Performance Benchmarks** — 100,000 Keep-Alive connections with **~3.8 MB RSS**, P99 latency **< 2ms**, and up to **228K QPS** (see `benchmarks/COMPARATIVE_BENCHMARK_WHITEPAPER.md`).

@@ -66,3 +66,13 @@ src/drivers/db/db_internal.h          — csilk_db_pool_s 驱动句柄与连接�
 - [x] 172 个标准单测与 170 个 io_uring 单测全量通过（100% Passed）。
 - [x] 示例代码已完全迁移至干净的公共 API。
 - [x] CI 矩阵（Ubuntu/macOS/ARM64/ASAN/TSAN/Fuzzing/Clang-tidy）全量绿灯通过。
+
+---
+
+## SOVERSION 3 架构收敛更新
+
+- 将 Web Core 收敛为 4 个物理分层库（`csilk_base`、`csilk_runtime`、`csilk_http`、`csilk_app`），移除历史兼容目标别名以及已废弃的根级转发头文件。
+- 将 CSV 解析与序列化拆分为独立可选模块 `csilk_csv`（`CSILK_ENABLE_CSV`）。
+- 通过 `obs_registry` 路由注册表（`_csilk_obs_register_route`）解除 `csilk_workflow` 对 `csilk_app` 的直接耦合。
+- 将服务端实例级子系统指针统一收敛为 `csilk_server_s` 键控扩展槽（`_csilk_server_get_ext` / `_set_ext` / `_ensure_ext`）。
+- 通过 `scripts/check_abi_compatibility.sh` 强制执行 `SOVERSION 3` 纯 `csilk_*` 导出门禁与基线校验。

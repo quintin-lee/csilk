@@ -95,6 +95,7 @@ csilk_arena_contains
 csilk_arena_flush_free_list
 csilk_arena_free
 csilk_arena_get_stats
+csilk_arena_get_tls_chunk_count
 csilk_arena_init
 csilk_arena_new
 csilk_arena_reset
@@ -416,6 +417,7 @@ csilk_json_string_new
 csilk_json_string_value
 csilk_json_uint_value
 csilk_json_unmarshal
+csilk_json_unmarshal_allowlisted
 csilk_jwt_generate
 csilk_jwt_generate_ex
 csilk_jwt_generate_json
@@ -673,6 +675,7 @@ csilk_session_get_id
 csilk_session_init
 csilk_session_init_server
 csilk_session_set
+csilk_session_set_bind_client
 csilk_session_set_ex
 csilk_session_set_len
 csilk_session_set_max

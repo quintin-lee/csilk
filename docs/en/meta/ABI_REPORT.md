@@ -66,3 +66,13 @@ src/drivers/db/db_internal.h          — csilk_db_pool_s backend connections
 - [x] All 172 unit test suites and 170 io_uring test suites pass 100% against opaque handles.
 - [x] Examples updated to use clean public APIs and opaque handles.
 - [x] Full clang-format and clang-tidy verification in CI matrix.
+
+---
+
+## SOVERSION 3 Consolidation
+
+- Consolidated Web Core into 4 physical layer libraries (`csilk_base`, `csilk_runtime`, `csilk_http`, `csilk_app`) and removed legacy compatibility target aliases and deprecated root `include/csilk.h` forwarding headers.
+- Extracted CSV utilities into the standalone optional `csilk_csv` module (`CSILK_ENABLE_CSV`).
+- Decoupled `csilk_workflow` HTTP route binding from `csilk_app` via `obs_registry` route registration (`_csilk_obs_register_route`).
+- Consolidated per-server subsystem pointers into the keyed extension table on `csilk_server_s` (`_csilk_server_get_ext` / `_set_ext` / `_ensure_ext`).
+- Enforced `SOVERSION 3` symbol exports and baseline verification via `scripts/check_abi_compatibility.sh`.

@@ -221,13 +221,13 @@ This allows bypassing path traversal detection via specific character sequences.
 > (rather than silently returning a shared slot), and the caller applies the configured
 > `csilk_rate_saturation_policy_t` (evict-LRU, fail-open, or fail-closed).
 
-### M2. Session Not Bound to Client Identity
+### M2. Session Not Bound to Client Identity  ✅ **MITIGATED**
 **File**: `src/middleware/session.c`
 **Impact**: Session hijacking via cookie theft
 
-Session cookies are valid from any IP/User-Agent. A stolen session cookie provides full account access.
+> **Status**: Mitigated (opt-in). `csilk_session_set_bind_client(1)` enables per-session SHA-256 binding of client IP + `User-Agent`, verifying with constant-time `CRYPTO_memcmp()` on session resume and rotating mismatched sessions.
 
-**Fix**: Add optional client binding via config flag `CSILK_SESSION_BIND_CLIENT`.
+**Fix**: Enable client binding with `csilk_session_set_bind_client(1)`.
 
 ### M3. Session Value Lifetime Not Managed  ✅ **MITIGATED**
 **File**: `src/middleware/session.c:677-715`
@@ -277,13 +277,13 @@ Invalid `%XX` sequences are passed through unchanged instead of being rejected o
 
 > **Status**: Fixed. YAML integer parsing now uses bounded `strtol()`/`strtoll()` helpers (`parse_int_strtol`, `parse_ll_clamped`, `parse_timeout_ms`), string updates free prior values on duplicate keys, YAML nesting depth is capped at `CONFIG_YAML_MAX_DEPTH` (32), and `csilk_config_validate()` checks `idle_timeout_ms`/`read_timeout_ms`/`write_timeout_ms`/`request_timeout_ms` range (`<= INT_MAX`) plus `ai.base_url` scheme/SSRF safety via `csilk_security_url_is_ssrf_safe()`.
 
-### M8. Mass Assignment via Reflection
-**File**: `src/reflection/reflect_marshal.c`
+### M8. Mass Assignment via Reflection  ✅ **MITIGATED**
+**File**: `src/reflection/reflect_unmarshal.c`
 **Impact**: Privilege escalation via untrusted JSON input
 
-`csilk_json_marshal` serializes all struct fields without allowlist/denylist.
+> **Status**: Mitigated. `csilk_json_unmarshal_allowlisted()` restricts top-level JSON unmarshalling to an explicit field allowlist (`allowed_fields` / `allowed_count`).
 
-**Fix**: Add field-level access control via annotation or explicit allowlist.
+**Fix**: Use `csilk_json_unmarshal_allowlisted()` for untrusted payloads.
 
 ### M9. Hot Reload Temp File Race  ✅ **FIXED**
 **File**: `src/core/config/hot_reload.c:87-146`
@@ -305,25 +305,25 @@ Between `mkstemp()` and `unlink()`, another process could create a file with the
 
 ## LOW — Documentation/Minor Fixes
 
-### L1. `constant_time_compare` Implementation Fragile
-**File**: `src/middleware/jwt.c:62-69, 358`
-```c
-volatile uint8_t diff = 0;  // compiler may still optimize
-```
-Use OpenSSL's `CRYPTO_memcmp()` consistently (replacing `constant_time_compare()`).
+### L1. `constant_time_compare` Implementation Fragile  ✅ **FIXED**
+**File**: `src/middleware/jwt.c:340`
 
-### L2. RSA Private Keys Not Zeroed
-**File**: `src/drivers/cipher/openssl.c`
-Symmetric decryption cleanses plaintext (`OPENSSL_cleanse()` at line 182), while PEM/key material buffers are not consistently wiped before `free()`.
+> **Status**: Fixed. Removed custom `constant_time_compare()`; HS256 JWT verification uses OpenSSL `CRYPTO_memcmp()`.
+
+### L2. RSA Private Keys Not Zeroed  ✅ **FIXED**
+**File**: `src/crypto/cipher_openssl.c:213-295`
+
+> **Status**: Fixed. `cleanse_and_free_bio()` wipes `priv_bio`'s internal `BUF_MEM` buffer with `OPENSSL_cleanse()` before `BIO_free()` across all exit paths of `default_generate_keypair()`.
 
 ### L3. JWT Algorithm Default Case  ✅ **FIXED**
 **File**: `src/middleware/jwt.c:27-39`
 
 > **Status**: Fixed. `jwt_alg_str()` now returns `"unknown algorithm"` in the `default:` case instead of degrading to `"HS256"`.
 
-### L4. HMAC Accepts NULL Key/Data
-**File**: `src/crypto/crypto.c:88-98`
-NULL key → empty string; NULL data → empty string. No validation.
+### L4. HMAC Accepts NULL Key/Data  ✅ **FIXED**
+**File**: `src/crypto/crypto.c:89-105`
+
+> **Status**: Fixed. `csilk_hmac_sha256()` now zeroes `out` and returns early when `key`/`data` is `NULL` with a non-zero length (preventing OOB reads) or `key_len > INT_MAX`, while preserving valid zero-length `(NULL, 0)` behavior.
 
 ### L5. Nonce Predictable After Reboot  ✅ **FIXED** (covered by H3)
 **File**: `src/crypto/crypto.c:289-297`
@@ -357,8 +357,8 @@ NULL key → empty string; NULL data → empty string. No validation.
 | **P0** | ~~C1 (JWT OOB)~~ ✅ Fixed | — | Completed |
 | **P1** | ~~H1, H2, H3, H4, H6, H7~~ ✅ Fixed, ~~H5~~ ✅ Mitigated (prepared statements + doc warning) | — | Completed |
 | **P2** | ~~M1, M4, M5, M6, M9, I1, I2, I3, I7, I10, I11~~ ✅ Fixed, ~~M3~~ ✅ Mitigated | — | Completed |
-| **P3** | ~~M7~~ ✅ Fixed, M2, M8 (session binding, reflection allowlists) | 6h | Next release |
-| **P4** | ~~I5~~ ✅ Fixed, L1, L2, L4, I4, I8 (Hardening, docs) | 12h | Ongoing |
+| **P3** | ~~M7~~ ✅ Fixed, ~~M2, M8~~ ✅ Mitigated (opt-in session client binding & reflection allowlist) | Completed | Completed |
+| **P4** | ~~I5, L1, L2, L4~~ ✅ Fixed, I4, I8 (Hardening, docs) | Ongoing | Ongoing |
 
 ---
 
