@@ -77,6 +77,9 @@ on_write(csilk_io_write_t* req, int status)
     if (req->handle) {
         client = (csilk_client_t*)req->handle->data;
         if (client) {
+            if (client->pending_writes > 0) {
+                client->pending_writes--;
+            }
             csilk_io_timer_stop(&client->write_timer);
         }
     }
@@ -157,6 +160,12 @@ on_write(csilk_io_write_t* req, int status)
     if (client) {
         extern void _csilk_check_and_trigger_drain(csilk_client_t * client);
         _csilk_check_and_trigger_drain(client);
+        if (client->close_after_write && client->pending_writes == 0 &&
+            !csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+            extern void on_close(csilk_io_handle_t * handle);
+            client->close_after_write = 0;
+            csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+        }
         _csilk_client_pending_io_dec(client);
         csilk_client_unref(client);
     }
@@ -209,8 +218,12 @@ csilk_client_write(csilk_client_t* client, const uint8_t* data, size_t len)
     req->data = buf_copy;
     csilk_client_ref(client);
     _csilk_client_pending_io_inc(client);
+    client->pending_writes++;
     int r = csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_write);
     if (r < 0) {
+        if (client->pending_writes > 0) {
+            client->pending_writes--;
+        }
         _csilk_client_pending_io_dec(client);
         csilk_client_unref(client);
         free(buf_copy);
@@ -315,8 +328,12 @@ _csilk_send_data_owned(csilk_ctx_t* c, char* data, size_t len)
     csilk_io_buf_t buf = csilk_io_buf_init(data, (unsigned int)len);
     csilk_client_ref(client);
     _csilk_client_pending_io_inc(client);
+    client->pending_writes++;
     int r = csilk_io_write(req, (csilk_io_stream_t*)&client->handle, &buf, 1, on_write);
     if (r < 0) {
+        if (client->pending_writes > 0) {
+            client->pending_writes--;
+        }
         _csilk_client_pending_io_dec(client);
         csilk_client_unref(client);
         free(data);

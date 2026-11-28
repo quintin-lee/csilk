@@ -178,7 +178,7 @@ jobs:
     - name: Build shared library for ABI gate
       run: cmake --build build --target csilk_shared -j$(nproc)
 
-    - name: Check ABI compatibility gate (SOVERSION 2)
+    - name: Check ABI compatibility gate (SOVERSION 3)
       run: bash ./scripts/check_abi_compatibility.sh build/libcsilk.so
 
     - name: clang-tidy

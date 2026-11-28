@@ -80,13 +80,21 @@ _csilk_handle_post_response(csilk_client_t* client, int keep_alive)
         llhttp_resume(&client->parser);
         csilk_client_read_start(client);
     } else {
-        CSILK_LOG_I("_csilk_handle_post_response: closing handle");
-        extern void on_close(csilk_io_handle_t * handle);
-        if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
-            /* Do not pre-set CSILK_CONN_CLOSING here; on_close() performs the
-             * state transition, hook trigger, list removal, timer stop, and
-             * base ref release atomically once the close callback fires. */
-            csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+        if (client->pending_writes > 0) {
+            /* Defer closing the socket until queued async writes complete
+             * (critical for io_uring where csilk_io_close shuts down the fd
+             * synchronously before in-flight IORING_OP_SEND SQEs finish). */
+            CSILK_LOG_I("_csilk_handle_post_response: deferring close until write done");
+            client->close_after_write = 1;
+        } else {
+            CSILK_LOG_I("_csilk_handle_post_response: closing handle");
+            extern void on_close(csilk_io_handle_t * handle);
+            if (!csilk_io_is_closing((csilk_io_handle_t*)&client->handle)) {
+                /* Do not pre-set CSILK_CONN_CLOSING here; on_close() performs the
+                 * state transition, hook trigger, list removal, timer stop, and
+                 * base ref release atomically once the close callback fires. */
+                csilk_io_close((csilk_io_handle_t*)&client->handle, on_close);
+            }
         }
     }
 }

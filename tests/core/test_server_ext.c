@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <assert.h>
+#include <errno.h>
 #include <netinet/in.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -50,32 +51,82 @@ spa_srv_thread(void* raw)
 }
 
 static int
+spa_pick_port(void)
+{
+    int s = socket(AF_INET, SOCK_STREAM, 0);
+    assert(s >= 0);
+    int opt = 1;
+    setsockopt(s, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    struct sockaddr_in addr = {0};
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    addr.sin_port = 0;
+    assert(bind(s, (struct sockaddr*)&addr, sizeof(addr)) == 0);
+    socklen_t len = sizeof(addr);
+    assert(getsockname(s, (struct sockaddr*)&addr, &len) == 0);
+    int port = (int)ntohs(addr.sin_port);
+    close(s);
+    return port;
+}
+
+static int
 spa_http_exchange(int port, const char* raw_req, char* resp_buf, size_t resp_cap)
 {
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    assert(sock >= 0);
-    struct timeval tv = {.tv_sec = 2, .tv_usec = 0};
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-
+    int                sock = -1;
     struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr("127.0.0.1");
     addr.sin_port = htons((uint16_t)port);
-    assert(connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0);
+
+    for (int attempt = 0; attempt < 25; attempt++) {
+        sock = socket(AF_INET, SOCK_STREAM, 0);
+        assert(sock >= 0);
+        struct timeval tv = {.tv_sec = 2, .tv_usec = 0};
+        setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+        if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) == 0) {
+            break;
+        }
+        close(sock);
+        sock = -1;
+        usleep(10000);
+    }
+    assert(sock >= 0);
 
     size_t req_len = strlen(raw_req);
-    assert(send(sock, raw_req, req_len, 0) == (ssize_t)req_len);
+    size_t sent_total = 0;
+    while (sent_total < req_len) {
+        ssize_t s = send(sock, raw_req + sent_total, req_len - sent_total, 0);
+        if (s < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            assert(0 && "send failed");
+        }
+        sent_total += (size_t)s;
+    }
 
     size_t total = 0;
+    int    last_err = 0;
     while (total + 1 < resp_cap) {
         ssize_t n = recv(sock, resp_buf + total, resp_cap - 1 - total, 0);
-        if (n <= 0) {
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            last_err = errno;
+            break;
+        }
+        if (n == 0) {
             break;
         }
         total += (size_t)n;
     }
     resp_buf[total] = '\0';
+    if (total == 0) {
+        fprintf(
+            stderr, "[spa_http_exchange] port=%d received 0 bytes (errno=%d)\n", port, last_err);
+    }
     close(sock);
     return (int)total;
 }
@@ -121,7 +172,8 @@ test_spa_fallback_functional(void)
         /* Delete disk file so only the in-memory pre-read cache can satisfy GET */
         assert(unlink(index_path) == 0);
 
-        spa_srv_arg_t arg = {.server = srv, .port = 19841, .ready = false};
+        int           port1 = spa_pick_port();
+        spa_srv_arg_t arg = {.server = srv, .port = port1, .ready = false};
         pthread_t     tid;
         assert(pthread_create(&tid, nullptr, spa_srv_thread, &arg) == 0);
         for (int i = 0; i < 100 && !atomic_load_explicit(&arg.ready, memory_order_acquire); i++) {
@@ -131,7 +183,7 @@ test_spa_fallback_functional(void)
 
         char resp[4096];
         spa_http_exchange(
-            19841,
+            port1,
             "GET /client/route HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
             resp,
             sizeof(resp));
@@ -139,7 +191,7 @@ test_spa_fallback_functional(void)
         assert(strstr(resp, "text/html") != nullptr);
         assert(strstr(resp, payload) != nullptr);
 
-        spa_http_exchange(19841,
+        spa_http_exchange(port1,
                           "POST /client/route HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: "
                           "0\r\nConnection: close\r\n\r\n",
                           resp,
@@ -165,7 +217,8 @@ test_spa_fallback_functional(void)
         assert(srv->spa_doc_root != nullptr);
         assert(srv->spa_index_buf == nullptr);
 
-        spa_srv_arg_t arg = {.server = srv, .port = 19842, .ready = false};
+        int           port2 = spa_pick_port();
+        spa_srv_arg_t arg = {.server = srv, .port = port2, .ready = false};
         pthread_t     tid;
         assert(pthread_create(&tid, nullptr, spa_srv_thread, &arg) == 0);
         for (int i = 0; i < 100 && !atomic_load_explicit(&arg.ready, memory_order_acquire); i++) {
@@ -183,7 +236,7 @@ test_spa_fallback_functional(void)
 
         char resp[4096];
         spa_http_exchange(
-            19842,
+            port2,
             "GET /late/route HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
             resp,
             sizeof(resp));

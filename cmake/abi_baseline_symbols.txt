@@ -95,7 +95,6 @@ csilk_arena_contains
 csilk_arena_flush_free_list
 csilk_arena_free
 csilk_arena_get_stats
-csilk_arena_get_tls_chunk_count
 csilk_arena_init
 csilk_arena_new
 csilk_arena_reset

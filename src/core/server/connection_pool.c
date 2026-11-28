@@ -123,6 +123,8 @@ pool_get(worker_pool_t* wp)
         atomic_store_explicit(&client->ctx.conn_closed, 0, memory_order_relaxed);
         client->ctx.file_fd = -1;
         client->primary_write_in_flight = 0;
+        client->close_after_write = 0;
+        client->pending_writes = 0;
     }
     return client;
 }
@@ -163,6 +165,8 @@ reset_hot_state(csilk_client_t* client)
         client->primary_write_req.data = NULL;
         client->primary_write_in_flight = 0;
     }
+    client->close_after_write = 0;
+    client->pending_writes = 0;
     client->pending_write_bytes = 0;
     client->protocol = CSILK_PROTO_HTTP1;
     client->total_header_size = 0;
