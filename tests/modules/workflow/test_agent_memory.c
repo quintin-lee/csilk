@@ -19,7 +19,7 @@
 #include <unistd.h>
 
 #include "csilk/csilk.h"
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/core/sys_io.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/drivers/vector.h"

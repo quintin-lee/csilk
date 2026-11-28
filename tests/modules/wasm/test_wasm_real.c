@@ -11,7 +11,7 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/plugin/wasm_plugin.h"
+#include "csilk/wasm/plugin.h"
 #include "csilk/test/test.h"
 
 /*

@@ -5,7 +5,7 @@
 
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
-#include "csilk/drivers/perm.h"
+#include "csilk/permission/perm.h"
 #include "csilk/test/test.h"
 
 // Mock handler for middleware testing

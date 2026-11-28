@@ -6,8 +6,8 @@
 #include <unistd.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/app/workflow.h"
-#include "csilk/app/workflow_wal.h"
+#include "csilk/workflow/workflow.h"
+#include "csilk/workflow/wal.h"
 
 static _Atomic int g_step_a_ran = 0;
 static _Atomic int g_step_b_ran = 0;

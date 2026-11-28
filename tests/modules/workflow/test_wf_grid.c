@@ -4,7 +4,7 @@
  */
 
 #include "csilk/csilk.h"
-#include "csilk/app/wf_grid.h"
+#include "csilk/workflow/grid.h"
 #include "csilk/messaging/raft.h"
 #include <assert.h>
 #include <stdio.h>

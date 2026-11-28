@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
 #include "modules/workflow/workflow_internal.h" /* _wf_broadcast (CSILK_INTERNAL) */

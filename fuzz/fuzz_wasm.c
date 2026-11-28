@@ -13,8 +13,8 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/plugin/wasm_plugin.h"
-#include "csilk/core/plugin/wasm.h"
+#include "csilk/wasm/plugin.h"
+#include "csilk/wasm/wasm.h"
 
 int
 LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)

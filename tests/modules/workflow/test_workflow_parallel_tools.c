@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/drivers/ai.h"
 
 static int      g_tool_calls = 0;

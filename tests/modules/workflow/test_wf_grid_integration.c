@@ -2,8 +2,8 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/app/workflow.h"
-#include "csilk/app/wf_grid.h"
+#include "csilk/workflow/workflow.h"
+#include "csilk/workflow/grid.h"
 
 int
 main(void)

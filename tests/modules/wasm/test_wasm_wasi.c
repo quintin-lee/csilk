@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/plugin/wasm.h"
+#include "csilk/wasm/wasm.h"
 
 uint32_t csilk_host_get_input(void*       plugin,
                               uint32_t    memory_offset,

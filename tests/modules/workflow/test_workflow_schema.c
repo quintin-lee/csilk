@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 
 static int g_fallback_ran = 0;
 static int g_done = 0;

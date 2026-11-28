@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/core/plugin/wasm.h"
+#include "csilk/wasm/wasm.h"
 
 static void
 test_wasm_vm_parsing_and_exec(void)

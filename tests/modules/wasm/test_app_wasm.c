@@ -3,8 +3,8 @@
 #include <stdlib.h>
 
 #include "csilk/app/app.h"
-#include "csilk/app/workflow.h"
-#include "csilk/core/plugin/wasm_plugin.h"
+#include "csilk/workflow/workflow.h"
+#include "csilk/wasm/plugin.h"
 #include "csilk/csilk.h"
 
 int

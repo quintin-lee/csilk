@@ -5,9 +5,9 @@
 #include <string.h>
 
 #include "csilk/csilk.h"
-#include "csilk/core/plugin/wasm.h"
-#include "csilk/core/plugin/wasm_plugin.h"
-#include "csilk/plugin/wasm_sdk.h"
+#include "csilk/wasm/wasm.h"
+#include "csilk/wasm/plugin.h"
+#include "csilk/wasm/sdk.h"
 
 static void
 test_wasm_fuel_api(void)

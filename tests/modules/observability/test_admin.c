@@ -15,13 +15,13 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "csilk/app/admin.h"
+#include "csilk/observability/admin.h"
 #include "csilk/app/app.h"
 #include "csilk/core/json/json.h"
 #include "csilk/core/sync.h"
 #include "csilk/csilk.h"
 #include "csilk/test/test.h"
-#include "csilk/util/flamegraph.h"
+#include "csilk/observability/flamegraph.h"
 #ifdef CSILK_HAS_DB
 #include "csilk/drivers/db.h"
 #endif

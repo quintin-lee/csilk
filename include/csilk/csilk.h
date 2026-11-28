@@ -35,8 +35,37 @@
 #include "csilk/core/plugin.h"
 #include "csilk/core/service_locator.h"
 #include "csilk/app/app.h"
+#ifdef CSILK_HAS_DB
+#include "csilk/drivers/db.h"
+#endif
+#ifdef CSILK_HAS_AI
+#include "csilk/drivers/ai.h"
+#include "csilk/drivers/ai/tool_registry.h"
+#endif
+#ifdef CSILK_HAS_VECTOR
+#include "csilk/drivers/vector.h"
+#endif
 #ifdef CSILK_HAS_MQ
 #include "csilk/messaging/mq.h"
+#endif
+#ifdef CSILK_HAS_MCP
+#include "csilk/protocols/mcp.h"
+#endif
+#ifdef CSILK_HAS_GRPC
+#include "csilk/protocols/grpc.h"
+#endif
+#ifdef CSILK_HAS_HTTP3
+#include "csilk/protocols/h3.h"
+#endif
+#ifdef CSILK_HAS_PERM
+#include "csilk/permission/perm.h"
+#endif
+#ifdef CSILK_HAS_WASM
+#include "csilk/wasm/wasm.h"
+#include "csilk/wasm/plugin.h"
+#endif
+#ifdef CSILK_HAS_CSV
+#include "csilk/util/csv.h"
 #endif
 #ifdef CSILK_HAS_WORKFLOW
 #include "csilk/workflow/workflow.h"

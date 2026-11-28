@@ -7,7 +7,7 @@
 #include <csilk/core/sys_io.h>
 
 #include "csilk/core/json/json.h"
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/csilk.h"
 
 static int         g_remote_task_received = 0;

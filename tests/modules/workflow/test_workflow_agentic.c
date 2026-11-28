@@ -4,7 +4,7 @@
 #include <string.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 
 static int g_n1_count = 0;
 static int g_done = 0;

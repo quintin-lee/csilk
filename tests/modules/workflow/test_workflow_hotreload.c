@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/app/workflow_dsl.h"
+#include "csilk/workflow/dsl.h"
 
 static void
 test_workflow_manager_register_and_reload(void)

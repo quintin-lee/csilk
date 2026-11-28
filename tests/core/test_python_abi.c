@@ -6,7 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/core/config/config.h"
 #include "csilk/core/ctx/context.h"
 #include "csilk/core/middleware.h"

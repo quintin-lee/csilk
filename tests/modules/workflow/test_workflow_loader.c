@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 
 csilk_data_t*
 t_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)

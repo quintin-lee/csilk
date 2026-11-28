@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 
 // Internal structures for verification
 typedef struct csilk_wf_edge_s {

@@ -5,7 +5,7 @@
 #include <string.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 
 // Internal structures for verification
 struct csilk_wf_ctx_s {

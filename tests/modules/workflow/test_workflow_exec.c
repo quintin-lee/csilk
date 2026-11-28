@@ -4,7 +4,7 @@
 #include <string.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 
 static int   g_steps_completed = 0;
 static char* g_final_result = nullptr;

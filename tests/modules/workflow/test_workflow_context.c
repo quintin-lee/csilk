@@ -4,7 +4,7 @@
 #include <string.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/drivers/ai.h"
 
 static int g_max_msgs_seen = 0;

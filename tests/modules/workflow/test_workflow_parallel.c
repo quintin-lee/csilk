@@ -5,7 +5,7 @@
 #include <unistd.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 
 static int g_n2a_done = 0;
 static int g_n2b_done = 0;

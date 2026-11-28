@@ -4,7 +4,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "csilk/app/workflow_dsl.h"
+#include "csilk/workflow/dsl.h"
 #include "csilk/messaging/raft.h"
 
 static void

@@ -12,7 +12,7 @@
 #include "csilk/test/test.h"
 #include "csilk/messaging/mq.h"
 #include "csilk/drivers/ai.h"
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "modules/mq/mq/mq_internal.h"
 #include "core/ctx/ctx_internal.h"
 

@@ -16,9 +16,9 @@
 #include <time.h>
 #include <unistd.h>
 
-/* csilk/app/workflow.h MUST come BEFORE csilk/csilk.h to avoid
+/* csilk/workflow/workflow.h MUST come BEFORE csilk/csilk.h to avoid
    the duplicate CSILK_WORKFLOW_H guard in the shim csilk/workflow.h */
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/csilk.h"
 #include "csilk/app/app.h"
 

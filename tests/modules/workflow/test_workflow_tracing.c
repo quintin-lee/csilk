@@ -4,7 +4,7 @@
 #include <string.h>
 #include <csilk/core/sys_io.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "modules/workflow/workflow_internal.h"
 
 static int   g_done = 0;

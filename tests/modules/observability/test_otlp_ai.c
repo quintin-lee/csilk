@@ -4,7 +4,7 @@
  */
 
 #include "csilk/csilk.h"
-#include "csilk/middleware/otlp_trace.h"
+#include "csilk/observability/otlp_trace.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/test/test.h"
 

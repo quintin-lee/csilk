@@ -4,8 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/app/workflow_dsl.h"
-#include "csilk/core/plugin/wasm.h"
+#include "csilk/workflow/dsl.h"
+#include "csilk/wasm/wasm.h"
 
 static void
 test_workflow_wasm_node_execution(void)

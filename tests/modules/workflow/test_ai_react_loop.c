@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/drivers/ai/tool_registry.h"
 #include "csilk/drivers/ai.h"
 #include "csilk/core/json/json.h"

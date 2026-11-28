@@ -6,7 +6,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/core/json/json.h"
 #include "csilk/core/router.h"
 #include "csilk/core/server/server.h"

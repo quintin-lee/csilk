@@ -12,7 +12,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "csilk/app/wf_grid.h"
+#include "csilk/workflow/grid.h"
 #include "csilk/csilk.h"
 #include "csilk/messaging/raft.h"
 
