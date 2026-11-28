@@ -79,7 +79,7 @@ csilk_wf_data_new(csilk_wf_ctx_t* ctx, const char* type, void* value)
     return data;
 }
 
-/** @brief Internal: traverse a cJSON tree following a dot-separated path. */
+/** @brief Internal: traverse a csilk_json tree following a dot-separated path. */
 char*
 _csilk_json_get_path(csilk_wf_ctx_t* ctx, csilk_json_t* root, const char* path)
 {

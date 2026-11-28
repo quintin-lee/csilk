@@ -169,6 +169,7 @@ CSILK_INTERNAL int         _wf_is_safe_exec_id(const char* exec_id);
 CSILK_INTERNAL void        _wf_distributed_unregister(csilk_wf_t* wf);
 struct csilk_wf_manager_s;
 CSILK_INTERNAL void        _wf_cluster_unbind_mgr(struct csilk_wf_manager_s* mgr);
+CSILK_INTERNAL void        _wf_register_debug_route(void);
 CSILK_INTERNAL csilk_wf_t* _csilk_wf_parse_json_doc(const char* json_str,
                                                     const char* default_name,
                                                     char*       err_buf,

@@ -14,72 +14,26 @@
 #endif
 
 #ifdef CSILK_HAS_WASM
-/**
- * @brief Workflow node handler that loads and executes a WASM file.
- */
-static csilk_data_t*
-csilk_wasm_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
-{
-    if (!ctx || !user_data) {
-        return NULL;
-    }
-    (void)input;
-    const char*          wasm_filepath = (const char*)user_data;
-    csilk_wasm_plugin_t* plugin = csilk_wasm_plugin_load_file(wasm_filepath, NULL);
-    if (!plugin) {
-        return NULL;
-    }
-
-    char          err_buf[128];
-    char*         output = csilk_wasm_plugin_exec(plugin, "run", "{}", err_buf, sizeof(err_buf));
-    csilk_data_t* res_data = NULL;
-    if (output) {
-        res_data = csilk_wf_alloc(ctx, sizeof(csilk_data_t));
-        if (res_data) {
-            res_data->type = csilk_wf_strdup(ctx, "application/json");
-            res_data->value = csilk_wf_strdup(ctx, output);
-            res_data->free_fn = NULL;
-            res_data->meta = NULL;
-        }
-        free(output);
-    }
-
-    csilk_wasm_plugin_free(plugin);
-    return res_data;
-}
-#endif
-
-/**
- * @brief Register a WASM module as a workflow node.
- */
-int
-csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_filepath)
-{
-#ifdef CSILK_HAS_WASM
-    if (!wf || !node_id || !wasm_filepath) {
-        return -1;
-    }
-
-    csilk_wf_node_t* node =
-        csilk_wf_add(wf, node_id, csilk_wasm_node_handler, strdup(wasm_filepath));
-    if (node) {
-        csilk_wf_node_set_free(node, free);
-    }
-    return node != NULL ? 0 : -1;
-#else
-    (void)wf;
-    (void)node_id;
-    (void)wasm_filepath;
-    errno = ENOTSUP;
-    return -1;
-#endif
-}
-
-#ifdef CSILK_HAS_WASM
 typedef struct {
     csilk_wasm_plugin_t* plugin;
+    char*                filepath;
+    bool                 owns_plugin;
     char                 entry_func[64];
 } csilk_wf_wasm_plugin_node_data_t;
+
+static void
+wf_wasm_node_data_free(void* ptr)
+{
+    csilk_wf_wasm_plugin_node_data_t* nd = (csilk_wf_wasm_plugin_node_data_t*)ptr;
+    if (!nd) {
+        return;
+    }
+    if (nd->owns_plugin && nd->plugin) {
+        csilk_wasm_plugin_free(nd->plugin);
+    }
+    free(nd->filepath);
+    free(nd);
+}
 
 static csilk_data_t*
 csilk_wasm_plugin_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* user_data)
@@ -88,6 +42,13 @@ csilk_wasm_plugin_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* u
         return NULL;
     }
     csilk_wf_wasm_plugin_node_data_t* nd = (csilk_wf_wasm_plugin_node_data_t*)user_data;
+    if (!nd->plugin && nd->filepath) {
+        nd->plugin = csilk_wasm_plugin_load_file(nd->filepath, NULL);
+        nd->owns_plugin = (nd->plugin != NULL);
+    }
+    if (!nd->plugin) {
+        return NULL;
+    }
     const char* json_input = (input && input->value) ? (const char*)input->value : "{}";
     char        err_buf[128] = {0};
     char*       output =
@@ -107,6 +68,44 @@ csilk_wasm_plugin_node_handler(csilk_wf_ctx_t* ctx, csilk_data_t* input, void* u
 }
 #endif
 
+/**
+ * @brief Register a WASM module as a workflow node.
+ */
+int
+csilk_wf_add_wasm_node(csilk_wf_t* wf, const char* node_id, const char* wasm_filepath)
+{
+#ifdef CSILK_HAS_WASM
+    if (!wf || !node_id || !wasm_filepath) {
+        return -1;
+    }
+
+    csilk_wf_wasm_plugin_node_data_t* nd = calloc(1, sizeof(csilk_wf_wasm_plugin_node_data_t));
+    if (!nd) {
+        return -1;
+    }
+    nd->filepath = strdup(wasm_filepath);
+    if (!nd->filepath) {
+        free(nd);
+        return -1;
+    }
+    snprintf(nd->entry_func, sizeof(nd->entry_func), "run");
+
+    csilk_wf_node_t* node = csilk_wf_add(wf, node_id, csilk_wasm_plugin_node_handler, nd);
+    if (!node) {
+        wf_wasm_node_data_free(nd);
+        return -1;
+    }
+    csilk_wf_node_set_free(node, wf_wasm_node_data_free);
+    return 0;
+#else
+    (void)wf;
+    (void)node_id;
+    (void)wasm_filepath;
+    errno = ENOTSUP;
+    return -1;
+#endif
+}
+
 int
 csilk_wf_add_wasm_plugin_node(csilk_wf_t*          wf,
                               const char*          node_id,
@@ -117,7 +116,7 @@ csilk_wf_add_wasm_plugin_node(csilk_wf_t*          wf,
     if (!wf || !node_id || !plugin || !entry_func) {
         return -1;
     }
-    csilk_wf_wasm_plugin_node_data_t* nd = malloc(sizeof(csilk_wf_wasm_plugin_node_data_t));
+    csilk_wf_wasm_plugin_node_data_t* nd = calloc(1, sizeof(csilk_wf_wasm_plugin_node_data_t));
     if (!nd) {
         return -1;
     }
@@ -129,7 +128,7 @@ csilk_wf_add_wasm_plugin_node(csilk_wf_t*          wf,
         free(nd);
         return -1;
     }
-    csilk_wf_node_set_free(node, free);
+    csilk_wf_node_set_free(node, wf_wasm_node_data_free);
     return 0;
 #else
     (void)wf;

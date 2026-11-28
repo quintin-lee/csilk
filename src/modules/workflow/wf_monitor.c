@@ -4,6 +4,7 @@
  */
 
 #include "workflow_internal.h"
+#include "core/internal/srv_internal.h"
 
 /* --- Monitoring --- */
 
@@ -101,7 +102,8 @@ broadcast_monitor_event(csilk_wf_t* wf, const char* event, const char* node_id, 
             continue;
         }
         if (csilk_is_sse(mc)) {
-            int sse_result = csilk_sse_send(mc, event, json);
+            csilk_server_t* srv = csilk_ctx_get_server(mc);
+            int sse_result = (srv && srv->sse_send_cb) ? srv->sse_send_cb(mc, event, json) : -1;
             if (sse_result < 0) {
                 for (size_t j = i; j + 1 < wf->monitor_count; j++) {
                     wf->monitors[j] = wf->monitors[j + 1];

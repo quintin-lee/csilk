@@ -12,7 +12,7 @@
 
 #include "csilk/csilk.h"
 
-/** @brief Traverse a cJSON tree following a dot-separated path, returning a
+/** @brief Traverse a csilk_json tree following a dot-separated path, returning a
  *         stringified leaf value allocated in the context arena. */
 char* _csilk_json_get_path(csilk_wf_ctx_t* ctx, csilk_json_t* root, const char* path);
 

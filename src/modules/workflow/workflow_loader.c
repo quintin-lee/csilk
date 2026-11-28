@@ -505,7 +505,7 @@ parse_yaml_file(const char* path)
 
 /** @brief Load a workflow from a YAML file on disk.
  *
- * Parses the YAML into cJSON via parse_yaml_file(), then delegates
+ * Parses the YAML into csilk_json via parse_yaml_file(), then delegates
  * to csilk_wf_from_json() for workflow construction. This two-step
  * approach avoids duplicated parsing logic.
  *

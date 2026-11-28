@@ -201,6 +201,17 @@ void csilk_app_add_route(csilk_app_t*    app,
                          const char*     path,
                          csilk_handler_t handler);
 
+/** @brief Mount a subsystem route registered in the runtime obs_registry.
+ *
+ * Looks up a named route provider (e.g., "workflow_ui", "workflow_debug")
+ * registered by an enabled optional module and attaches it to @p app.
+ *
+ * @param app           Application handle.
+ * @param route_name    Logical route identifier registered via obs_registry.
+ * @param path_override Optional custom URL path (NULL or "" uses module default).
+ * @return 0 on success, -1 if arguments are invalid or @p route_name is unregistered. */
+int csilk_app_mount_route(csilk_app_t* app, const char* route_name, const char* path_override);
+
 /** @brief Register a route with multiple handlers (middleware + handler).
  * @param app Application handle.
  * @param method HTTP method string.

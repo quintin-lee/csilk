@@ -451,6 +451,7 @@ _CORE_SYMBOL_SPECS = (
     ("csilk_app_new", CsilkAppPtr, [ctypes.c_char_p]),
     ("csilk_app_free", None, [CsilkAppPtr]),
     ("csilk_app_add_route", None, [CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p, CsilkHandler]),
+    ("csilk_app_mount_route", ctypes.c_int, [CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p]),
     ("csilk_app_static", None, [CsilkAppPtr, ctypes.c_char_p, ctypes.c_char_p]),
     ("csilk_app_enable_openapi", None, [CsilkAppPtr, ctypes.c_int]),
     ("csilk_app_set_server_config", None, [CsilkAppPtr, CsilkServerConfig]),
@@ -710,7 +711,8 @@ _OPTIONAL_SYMBOL_GROUPS = {
     ),
     "mcp": (),
     "workflow": (
-        ("csilk_wf_serve_ui", None, [CsilkAppPtr, ctypes.c_char_p]),
+        ("csilk_wf_ui_handler", None, [CsilkCtxPtr]),
+        ("csilk_wf_debug_handler", None, [CsilkCtxPtr]),
         ("csilk_wf_new", ctypes.c_void_p, [ctypes.c_char_p]),
         ("csilk_wf_free", None, [ctypes.c_void_p]),
         ("csilk_wf_add", ctypes.c_void_p, [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p, ctypes.c_void_p]),

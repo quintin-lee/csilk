@@ -37,6 +37,7 @@ struct csilk_wf_manager_s {
 csilk_wf_manager_t*
 csilk_wf_manager_new(void)
 {
+    _wf_register_debug_route();
     csilk_wf_manager_t* mgr = (csilk_wf_manager_t*)calloc(1, sizeof(csilk_wf_manager_t));
     if (!mgr) {
         return NULL;
@@ -194,26 +195,4 @@ csilk_wf_manager_get(csilk_wf_manager_t* mgr, const char* name)
     }
     csilk_mutex_unlock(&mgr->mutex);
     return result;
-}
-
-extern int csilk_wf_manager_enable_debug_server_impl(csilk_wf_manager_t* mgr,
-                                                     csilk_app_t*        app,
-                                                     const char*         route_path);
-
-/**
- * @brief Enables the workflow debug server route for the manager.
- *
- * Thin wrapper that forwards to csilk_wf_manager_enable_debug_server_impl().
- *
- * @param mgr        The workflow manager (may be NULL).
- * @param app        The csilk application to register the route on (may be NULL).
- * @param route_path Optional custom route path (may be NULL).
- * @return 0 on success, or -1 on failure.
- */
-int
-csilk_wf_manager_enable_debug_server(csilk_wf_manager_t* mgr,
-                                     csilk_app_t*        app,
-                                     const char*         route_path)
-{
-    return csilk_wf_manager_enable_debug_server_impl(mgr, app, route_path);
 }

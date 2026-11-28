@@ -274,8 +274,9 @@ class Workflow:
     def serve_ui(app, path="/workflow/ui"):
         """Serve the workflow visualisation UI at *path* on the given app."""
         lib = get_bindings()
-        fn = require_symbol(lib, "csilk_wf_serve_ui", "CSILK_ENABLE_WORKFLOW")
-        fn(app._app, path.encode('utf-8'))
+        ui_handler = require_symbol(lib, "csilk_wf_ui_handler", "CSILK_ENABLE_WORKFLOW")
+        if lib.csilk_app_mount_route(app._app, b"workflow_ui", path.encode('utf-8')) != 0:
+            lib.csilk_app_add_route(app._app, b"GET", path.encode('utf-8'), ui_handler)
 
     def add(self, node_id, handler_fn=None):
         """Add a custom handler node to the workflow.

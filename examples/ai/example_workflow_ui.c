@@ -10,7 +10,8 @@
 #include <unistd.h>
 #include <pthread.h>
 
-#include "csilk/app/workflow.h"
+#include "csilk/app/app.h"
+#include "csilk/workflow/workflow.h"
 #include "csilk/csilk.h"
 
 /* Global workflow for the demo handler */
@@ -69,8 +70,8 @@ main()
     csilk_wf_bind(n2, n3);
     csilk_wf_node_set_entry(n1, 1);
 
-    /* 2. Setup Server with UI and Monitor */
-    csilk_wf_serve_ui(app, "/ui");
+    /* 2. Setup Server with UI and Monitor (via obs_registry) */
+    csilk_app_mount_route(app, "workflow_ui", "/ui");
 
     // Manual WS route for monitoring
     csilk_app_get(app, "/monitor", monitor_route_handler);

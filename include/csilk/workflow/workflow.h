@@ -34,7 +34,7 @@
  * @copyright MIT License
  */
 
-#include "csilk/app/app.h"
+#include "csilk/core/types.h"
 #include "csilk/workflow/grid.h"
 #include "csilk/wasm/wasm.h"
 #include "csilk/drivers/ai.h"
@@ -42,11 +42,15 @@
 #include "csilk/drivers/vector.h"
 
 /**
- * @brief Register a default route to serve the workflow dashboard.
- * @param app  Application handle.
- * @param path URL path (e.g., "/admin/workflow").
+ * @brief Generic HTTP handler serving the workflow visualization dashboard.
+ *
+ * Also registered in the runtime obs_registry under "workflow_ui" (GET /workflow/ui)
+ * so applications can mount it via csilk_app_mount_route() or directly with
+ * csilk_app_get().
+ *
+ * @param c Request context.
  */
-void csilk_wf_serve_ui(csilk_app_t* app, const char* path);
+void csilk_wf_ui_handler(csilk_ctx_t* c);
 
 /** @brief Opaque handle for a workflow instance. */
 typedef struct csilk_wf_s csilk_wf_t;

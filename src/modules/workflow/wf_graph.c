@@ -7,15 +7,32 @@
 #include "workflow_internal.h"
 #include "csilk/csilk.h"
 #include "csilk/core/sync.h"
+#include "core/internal/obs_registry.h"
 
 #include <stdatomic.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
-/* --- UI Handler --- */
+static csilk_once_t g_wf_ui_route_once = CSILK_ONCE_INIT;
 
 static void
-serve_ui_handler(csilk_ctx_t* c)
+wf_register_ui_route_once(void)
+{
+    _csilk_obs_register_route("workflow_ui", "GET", "/workflow/ui", csilk_wf_ui_handler);
+}
+
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((constructor)) static void
+wf_ui_route_constructor(void)
+{
+    csilk_once(&g_wf_ui_route_once, wf_register_ui_route_once);
+}
+#endif
+
+/* --- UI Handler --- */
+
+void
+csilk_wf_ui_handler(csilk_ctx_t* c)
 {
     const char* paths[] = {"share/csilk/workflow_ui.html",
                            "../share/csilk/workflow_ui.html",
@@ -120,8 +137,11 @@ serve_ui_handler(csilk_ctx_t* c)
         "      const el = document.createElement('div');\n"
         "      el.className = `p-2 rounded border-l-2 ${type === 'error' ? 'bg-red-900/20 "
         "border-red-500' : 'bg-slate-900 border-blue-500'}`;\n"
-        "      el.innerHTML = `<span class=\"text-slate-500\">[${new "
-        "Date().toLocaleTimeString()}]</span> ${msg}`;\n"
+        "      const span = document.createElement('span');\n"
+        "      span.className = 'text-slate-500';\n"
+        "      span.textContent = `[${new Date().toLocaleTimeString()}] `;\n"
+        "      el.appendChild(span);\n"
+        "      el.appendChild(document.createTextNode(String(msg)));\n"
         "      logContainer.prepend(el);\n"
         "    }\n"
         "    function connect() {\n"
@@ -150,34 +170,10 @@ serve_ui_handler(csilk_ctx_t* c)
     csilk_string(c, 200, g_embedded_workflow_ui_html);
 }
 
-/**
- * @brief Registers a HTTP GET route on the server application to serve the workflow dashboard UI.
- *
- * Checks several local and prefix paths for the workflow_ui.html template file.
- * Returns 404 if the HTML template is not found.
- *
- * @param app  Pointer to the csilk app context.
- * @param path Optional custom URL path route (defaults to "/workflow/ui" if null).
- */
-void
-csilk_wf_serve_ui(csilk_app_t* app, const char* path)
-{
-    csilk_app_get(app, path ? path : "/workflow/ui", serve_ui_handler);
-}
-
-/* --- Lifecycle --- */
-
-/**
- * @brief Creates a new empty workflow configuration engine with the given name.
- *
- * Initializes sync mutexes and sets the execution event loop to csilk_io_default_loop().
- *
- * @param name The descriptive name of the workflow.
- * @return Pointer to the new workflow handle, or NULL on allocation failure.
- */
 csilk_wf_t*
 csilk_wf_new(const char* name)
 {
+    csilk_once(&g_wf_ui_route_once, wf_register_ui_route_once);
     csilk_wf_t* wf = calloc(1, sizeof(csilk_wf_t));
     if (!wf) {
         return NULL;

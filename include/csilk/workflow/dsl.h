@@ -88,15 +88,15 @@ int csilk_wf_manager_reload(csilk_wf_manager_t* mgr, const char* name, csilk_wf_
 csilk_wf_t* csilk_wf_manager_get(csilk_wf_manager_t* mgr, const char* name);
 
 /**
- * @brief Binds WebSocket live step debugging endpoints to a csilk app.
- * @param mgr The manager instance.
- * @param app The csilk application instance.
- * @param route_path Route path for debugging WebSocket (e.g. "/api/v1/workflows/debug").
- * @return 0 on success, non-zero on failure.
+ * @brief Generic HTTP handler for the workflow live debug endpoint.
+ *
+ * Also registered in the runtime obs_registry under "workflow_debug"
+ * (GET /api/v1/workflows/debug) so applications can mount it via
+ * csilk_app_mount_route() or directly with csilk_app_get().
+ *
+ * @param c Request context.
  */
-int csilk_wf_manager_enable_debug_server(csilk_wf_manager_t* mgr,
-                                         csilk_app_t*        app,
-                                         const char*         route_path);
+void csilk_wf_debug_handler(csilk_ctx_t* c);
 
 #ifdef __cplusplus
 }

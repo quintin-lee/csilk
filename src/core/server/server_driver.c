@@ -48,6 +48,8 @@ static obs_admin_monitor_entry_t               g_admin_monitors[CSILK_OBS_MAX_CO
 static size_t                                  g_admin_monitor_count = 0;
 static obs_ready_check_entry_t                 g_ready_checks[CSILK_OBS_MAX_COLLECTORS];
 static size_t                                  g_ready_check_count = 0;
+static csilk_obs_route_entry_t                 g_obs_routes[CSILK_OBS_MAX_ROUTES];
+static size_t                                  g_obs_route_count = 0;
 static _Atomic(const csilk_h3_response_ops_t*) g_h3_response_ops = nullptr;
 static _Atomic(const csilk_mq_runtime_ops_t*)  g_mq_runtime_ops = nullptr;
 
@@ -343,4 +345,82 @@ CSILK_INTERNAL const csilk_mq_runtime_ops_t*
 _csilk_get_mq_runtime_ops(void)
 {
     return atomic_load_explicit(&g_mq_runtime_ops, memory_order_acquire);
+}
+
+/* --- Named subsystem HTTP route registry --- */
+
+CSILK_INTERNAL int
+_csilk_obs_register_route(const char*     name,
+                          const char*     method,
+                          const char*     default_path,
+                          csilk_handler_t handler)
+{
+    if (!name || !name[0] || !method || !method[0] || !default_path || !default_path[0] ||
+        !handler) {
+        return -1;
+    }
+    obs_reg_ensure_init();
+    csilk_mutex_lock(&g_obs_reg_mutex);
+    for (size_t i = 0; i < g_obs_route_count; i++) {
+        if (strcmp(g_obs_routes[i].name, name) == 0) {
+            g_obs_routes[i].method = method;
+            g_obs_routes[i].default_path = default_path;
+            g_obs_routes[i].handler = handler;
+            csilk_mutex_unlock(&g_obs_reg_mutex);
+            return 0;
+        }
+    }
+    if (g_obs_route_count >= CSILK_OBS_MAX_ROUTES) {
+        csilk_mutex_unlock(&g_obs_reg_mutex);
+        return -1;
+    }
+    g_obs_routes[g_obs_route_count++] = (csilk_obs_route_entry_t){
+        .name = name,
+        .method = method,
+        .default_path = default_path,
+        .handler = handler,
+    };
+    csilk_mutex_unlock(&g_obs_reg_mutex);
+    return 0;
+}
+
+CSILK_INTERNAL int
+_csilk_obs_get_route(const char* name, csilk_obs_route_entry_t* out_entry)
+{
+    if (!name || !name[0] || !out_entry) {
+        return -1;
+    }
+    obs_reg_ensure_init();
+    csilk_mutex_lock(&g_obs_reg_mutex);
+    for (size_t i = 0; i < g_obs_route_count; i++) {
+        if (strcmp(g_obs_routes[i].name, name) == 0) {
+            *out_entry = g_obs_routes[i];
+            csilk_mutex_unlock(&g_obs_reg_mutex);
+            return 0;
+        }
+    }
+    csilk_mutex_unlock(&g_obs_reg_mutex);
+    return -1;
+}
+
+CSILK_INTERNAL void
+_csilk_obs_foreach_route(csilk_obs_route_visit_fn visitor, void* user_data)
+{
+    if (!visitor) {
+        return;
+    }
+    obs_reg_ensure_init();
+    csilk_obs_route_entry_t snap[CSILK_OBS_MAX_ROUTES];
+    csilk_mutex_lock(&g_obs_reg_mutex);
+    size_t count = g_obs_route_count;
+    if (count > 0) {
+        memcpy(snap, g_obs_routes, count * sizeof(snap[0]));
+    }
+    csilk_mutex_unlock(&g_obs_reg_mutex);
+
+    for (size_t i = 0; i < count; i++) {
+        if (snap[i].name && snap[i].handler) {
+            visitor(&snap[i], user_data);
+        }
+    }
 }

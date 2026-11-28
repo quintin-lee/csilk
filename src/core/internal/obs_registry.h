@@ -22,6 +22,9 @@
 /** @brief Maximum number of optional subsystem collector/admin slots. */
 enum { CSILK_OBS_MAX_COLLECTORS = 8 };
 
+/** @brief Maximum number of named subsystem HTTP route slots. */
+enum { CSILK_OBS_MAX_ROUTES = 16 };
+
 #if defined(__GNUC__) || defined(__clang__)
 #define CSILK_OBS_PRINTF_LIKE(fmt_idx, first_arg)                                                  \
     __attribute__((format(printf, fmt_idx, first_arg)))
@@ -129,5 +132,33 @@ CSILK_INTERNAL void _csilk_register_mq_runtime_ops(const csilk_mq_runtime_ops_t*
  * @brief Retrieve the currently registered MQ runtime operations table (or NULL).
  */
 CSILK_INTERNAL const csilk_mq_runtime_ops_t* _csilk_get_mq_runtime_ops(void);
+
+/**
+ * @brief Named HTTP route entry registered by an optional subsystem.
+ *
+ * Allows optional modules (e.g. workflow) to expose generic csilk_handler_t
+ * endpoints without linking against csilk_app.
+ */
+typedef struct {
+    const char*     name;
+    const char*     method;
+    const char*     default_path;
+    csilk_handler_t handler;
+} csilk_obs_route_entry_t;
+
+/** @brief Visitor callback for iterating registered subsystem routes. */
+typedef void (*csilk_obs_route_visit_fn)(const csilk_obs_route_entry_t* entry, void* user_data);
+
+/** @brief Register (idempotently by @p name) a generic subsystem route handler. */
+CSILK_INTERNAL int _csilk_obs_register_route(const char*     name,
+                                             const char*     method,
+                                             const char*     default_path,
+                                             csilk_handler_t handler);
+
+/** @brief Look up a registered subsystem route entry by @p name (0 on hit, -1 on miss). */
+CSILK_INTERNAL int _csilk_obs_get_route(const char* name, csilk_obs_route_entry_t* out_entry);
+
+/** @brief Iterate all registered subsystem route entries. */
+CSILK_INTERNAL void _csilk_obs_foreach_route(csilk_obs_route_visit_fn visitor, void* user_data);
 
 #endif /* CSILK_OBS_REGISTRY_H */

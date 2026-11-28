@@ -15,6 +15,7 @@
 
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
+#include "core/internal/obs_registry.h"
 #include "core/internal/srv_internal.h"
 #include "app_internal.h"
 
@@ -211,6 +212,23 @@ csilk_app_add_route(csilk_app_t* app, const char* method, const char* path, csil
     }
     csilk_group_add_route(g, method, relative_path, handler);
     CSILK_LOG_I("Route registered: %s %s", method, path);
+}
+
+int
+csilk_app_mount_route(csilk_app_t* app, const char* route_name, const char* path_override)
+{
+    if (!app || !route_name || !route_name[0]) {
+        return -1;
+    }
+    csilk_obs_route_entry_t entry;
+    if (_csilk_obs_get_route(route_name, &entry) != 0 || !entry.handler) {
+        CSILK_LOG_W("Subsystem route '%s' is not registered", route_name);
+        return -1;
+    }
+    const char* target_path =
+        (path_override && path_override[0]) ? path_override : entry.default_path;
+    csilk_app_add_route(app, entry.method, target_path, entry.handler);
+    return 0;
 }
 
 /** @brief Register a route on the root group with a single handler and OpenAPI
