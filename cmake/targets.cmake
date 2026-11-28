@@ -108,7 +108,7 @@ function(csilk_target_setup TARGET VISIBILITY TYPE)
   set_target_properties(${TARGET} PROPERTIES
       PUBLIC_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/include/csilk.h"
       VERSION "${CSILK_VERSION}"
-      SOVERSION "2"
+      SOVERSION "3"
       INTERFACE_COMPILE_FEATURES c_std_23
       POSITION_INDEPENDENT_CODE ON
   )
@@ -144,8 +144,6 @@ function(csilk_object_setup TARGET)
         OpenSSL::SSL
         OpenSSL::Crypto
         ZLIB::ZLIB
-        SQLite3::SQLite3
-        CURL::libcurl
         nghttp2
         csilk::llhttp
         csilk::yaml
@@ -279,31 +277,9 @@ endif()
 if(CSILK_ENABLE_OBSERVABILITY)
   csilk_add_module(csilk_observability CSILK_OBSERVABILITY_SOURCES "csilk-observability")
 endif()
-
-# ── Compatibility targets ────────────────────────────────────────────────
-# Keep fine-grained csilk_* / csilk::* targets as INTERFACE wrappers backed
-# by the 4 layered Web Core libraries so external consumers keep working.
-function(csilk_add_compat_alias NAME LAYER_TARGET)
-  add_library(${NAME} INTERFACE)
-  target_link_libraries(${NAME} INTERFACE ${LAYER_TARGET})
-  string(REPLACE "csilk_" "" _short_name "${NAME}")
-  add_library(csilk::${_short_name} ALIAS ${NAME})
-
-  if(CSILK_BUILD_SHARED)
-    add_library(${NAME}_shared INTERFACE)
-    target_link_libraries(${NAME}_shared INTERFACE ${LAYER_TARGET}_shared)
-    add_library(csilk::${_short_name}_shared ALIAS ${NAME}_shared)
-  endif()
-endfunction()
-
-csilk_add_compat_alias(csilk_json csilk_base)
-csilk_add_compat_alias(csilk_crypto csilk_base)
-csilk_add_compat_alias(csilk_reflection csilk_base)
-csilk_add_compat_alias(csilk_core csilk_runtime)
-csilk_add_compat_alias(csilk_tls csilk_runtime)
-csilk_add_compat_alias(csilk_http2 csilk_http)
-csilk_add_compat_alias(csilk_protocols csilk_http)
-csilk_add_compat_alias(csilk_middleware csilk_app)
+if(CSILK_ENABLE_CSV)
+  csilk_add_module(csilk_csv CSILK_CSV_SOURCES "csilk-csv")
+endif()
 
 # ── Static module dependencies ────────────────────────────────────────────
 if(CSILK_USE_URING)
@@ -419,9 +395,9 @@ if(CSILK_ENABLE_PERM)
 endif()
 if(CSILK_ENABLE_WORKFLOW)
   if(NOT APPLE AND NOT WIN32)
-    csilk_link_module(csilk_workflow csilk_app csilk_http csilk_runtime csilk_base csilk_ai csilk_mq m csilk::yaml)
+    csilk_link_module(csilk_workflow csilk_http csilk_runtime csilk_base csilk_ai csilk_mq m csilk::yaml)
   else()
-    csilk_link_module(csilk_workflow csilk_app csilk_http csilk_runtime csilk_base csilk_ai csilk_mq csilk::yaml)
+    csilk_link_module(csilk_workflow csilk_http csilk_runtime csilk_base csilk_ai csilk_mq csilk::yaml)
   endif()
   if(CSILK_ENABLE_WASM)
     csilk_link_module(csilk_workflow csilk_wasm)
@@ -479,6 +455,9 @@ if(CSILK_ENABLE_WASM)
 endif()
 if(CSILK_ENABLE_OBSERVABILITY)
   list(APPEND CSILK_ENABLED_MODULES csilk_observability)
+endif()
+if(CSILK_ENABLE_CSV)
+  list(APPEND CSILK_ENABLED_MODULES csilk_csv)
 endif()
 if(CSILK_USE_URING AND TARGET uring)
   list(APPEND CSILK_ENABLED_MODULES uring)

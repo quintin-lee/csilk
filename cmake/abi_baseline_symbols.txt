@@ -78,6 +78,7 @@ csilk_app_load_plugins_from_env
 csilk_app_log_file
 csilk_app_log_json
 csilk_app_log_level
+csilk_app_mount_route
 csilk_app_new
 csilk_app_router
 csilk_app_run
@@ -806,6 +807,7 @@ csilk_wf_cluster_replicate_cmd_wait
 csilk_wf_ctx_get_memory
 csilk_wf_ctx_set_memory
 csilk_wf_data_new
+csilk_wf_debug_handler
 csilk_wf_enable_distributed
 csilk_wf_free
 csilk_wf_from_file
@@ -825,8 +827,6 @@ csilk_wf_grid_steal_from_peer
 csilk_wf_grid_sync_raft_topology
 csilk_wf_grid_task_count
 csilk_wf_load_yaml
-csilk_wf_manager_enable_debug_server
-csilk_wf_manager_enable_debug_server_impl
 csilk_wf_manager_free
 csilk_wf_manager_get
 csilk_wf_manager_new
@@ -852,7 +852,6 @@ csilk_wf_resume
 csilk_wf_route
 csilk_wf_run
 csilk_wf_run_traced
-csilk_wf_serve_ui
 csilk_wf_set_budget
 csilk_wf_set_grid
 csilk_wf_set_persistence
@@ -865,6 +864,7 @@ csilk_wf_to_json
 csilk_wf_to_mermaid
 csilk_wf_trace_free
 csilk_wf_trace_to_json
+csilk_wf_ui_handler
 csilk_wf_unregister_monitor
 csilk_ws_broadcast_room
 csilk_ws_close

@@ -6,16 +6,8 @@ include(CMakePackageConfigHelpers)
 set(CSILK_INSTALL_TARGETS
     csilk
     csilk_base
-    csilk_crypto
-    csilk_core
     csilk_runtime
-    csilk_json
     csilk_http
-    csilk_tls
-    csilk_http2
-    csilk_protocols
-    csilk_middleware
-    csilk_reflection
     csilk_app
 )
 foreach(_opt_mod
@@ -30,6 +22,7 @@ foreach(_opt_mod
     csilk_mq
     csilk_workflow
     csilk_observability
+    csilk_csv
 )
   if(TARGET ${_opt_mod})
     list(APPEND CSILK_INSTALL_TARGETS ${_opt_mod})
@@ -64,16 +57,8 @@ if(CSILK_BUILD_SHARED)
     set(CSILK_SHARED_INSTALL_TARGETS
         csilk_shared
         csilk_base_shared
-        csilk_crypto_shared
-        csilk_core_shared
         csilk_runtime_shared
-        csilk_json_shared
         csilk_http_shared
-        csilk_tls_shared
-        csilk_http2_shared
-        csilk_protocols_shared
-        csilk_middleware_shared
-        csilk_reflection_shared
         csilk_app_shared
     )
     foreach(_opt_mod_shared
@@ -88,6 +73,7 @@ if(CSILK_BUILD_SHARED)
         csilk_mq_shared
         csilk_workflow_shared
         csilk_observability_shared
+        csilk_csv_shared
     )
       if(TARGET ${_opt_mod_shared})
         list(APPEND CSILK_SHARED_INSTALL_TARGETS ${_opt_mod_shared})
@@ -149,26 +135,6 @@ else()
 endif()
 if(NOT APPLE AND NOT WIN32)
   string(APPEND CSILK_BASE_PC_LIBS_PRIVATE " -lm -lpthread")
-endif()
-
-# Core (compat alias for runtime)
-set(CSILK_CORE_PC_REQUIRES_PRIVATE "")
-if(CSILK_USE_URING)
-  set(CSILK_CORE_PC_REQUIRES_PRIVATE "liburing")
-else()
-  set(CSILK_CORE_PC_REQUIRES_PRIVATE "libuv")
-endif()
-string(APPEND CSILK_CORE_PC_REQUIRES_PRIVATE " libcrypto yaml-0.1")
-
-set(CSILK_CORE_PC_LIBS_PRIVATE "")
-if(CSILK_USE_URING)
-  string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -luring")
-else()
-  string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -luv")
-endif()
-string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -lcrypto -lyaml")
-if(NOT APPLE AND NOT WIN32)
-  string(APPEND CSILK_CORE_PC_LIBS_PRIVATE " -lm -lpthread")
 endif()
 
 # Runtime (context, router, server, I/O backend + TLS)
@@ -284,6 +250,10 @@ if(NOT APPLE AND NOT WIN32)
   set(CSILK_OBSERVABILITY_PC_LIBS_PRIVATE "-lpthread")
 endif()
 
+# CSV
+set(CSILK_CSV_PC_REQUIRES_PRIVATE "")
+set(CSILK_CSV_PC_LIBS_PRIVATE "")
+
 # Umbrella static closure. Requires lists pull the enabled CSilk archives;
 # Libs.private supplies implementation dependencies for --static consumers.
 set(CSILK_PC_REQUIRES "csilk-app csilk-http csilk-runtime csilk-base")
@@ -345,6 +315,9 @@ endif()
 if(CSILK_ENABLE_OBSERVABILITY)
   string(APPEND CSILK_PC_REQUIRES " csilk-observability")
 endif()
+if(CSILK_ENABLE_CSV)
+  string(APPEND CSILK_PC_REQUIRES " csilk-csv")
+endif()
 if(CSILK_USE_URING)
   string(APPEND CSILK_PC_LIBS_PRIVATE " -luring -lpthread -lm")
 else()
@@ -385,16 +358,8 @@ endforeach()
 
 set(CSILK_PC_FILES
     csilk-base
-    csilk-core
-    csilk-json
-    csilk-crypto
     csilk-runtime
-    csilk-tls
-    csilk-http2
     csilk-http
-    csilk-protocols
-    csilk-middleware
-    csilk-reflection
     csilk-app
     csilk
 )
@@ -430,6 +395,9 @@ if(CSILK_ENABLE_WORKFLOW)
 endif()
 if(CSILK_ENABLE_OBSERVABILITY)
   list(APPEND CSILK_PC_FILES csilk-observability)
+endif()
+if(CSILK_ENABLE_CSV)
+  list(APPEND CSILK_PC_FILES csilk-csv)
 endif()
 
 set(CSILK_GENERATED_PC_FILES "")

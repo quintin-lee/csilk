@@ -50,6 +50,9 @@ endif()
 if(CSILK_ENABLE_OBSERVABILITY)
   list(APPEND _install_targets csilk_observability)
 endif()
+if(CSILK_ENABLE_CSV)
+  list(APPEND _install_targets csilk_csv)
+endif()
 
 if(CSILK_USE_URING)
   list(APPEND _install_targets uring)
@@ -95,6 +98,9 @@ if(CSILK_BUILD_SHARED)
   if(CSILK_ENABLE_OBSERVABILITY)
     list(APPEND _install_targets csilk_observability_shared)
   endif()
+  if(CSILK_ENABLE_CSV)
+    list(APPEND _install_targets csilk_csv_shared)
+  endif()
 endif()
 
 execute_process(
@@ -133,16 +139,8 @@ endif()
 set(_expected_pc_modules
     csilk
     csilk-base
-    csilk-core
-    csilk-json
-    csilk-crypto
-    csilk-reflection
     csilk-runtime
-    csilk-tls
-    csilk-http2
     csilk-http
-    csilk-protocols
-    csilk-middleware
     csilk-app
 )
 set(_optional_pc_flags
@@ -157,6 +155,7 @@ set(_optional_pc_flags
     CSILK_ENABLE_PERM
     CSILK_ENABLE_WORKFLOW
     CSILK_ENABLE_OBSERVABILITY
+    CSILK_ENABLE_CSV
 )
 set(_optional_pc_names
     csilk-h3
@@ -170,6 +169,7 @@ set(_optional_pc_names
     csilk-permission
     csilk-workflow
     csilk-observability
+    csilk-csv
 )
 
 foreach(_mod IN LISTS _expected_pc_modules)
@@ -250,28 +250,6 @@ if(_pkg_config_exe AND NOT CSILK_USE_URING)
   if(NOT _pc_static_res EQUAL 0)
     message(FATAL_ERROR "pkg-config --static --libs csilk failed:\n${_pc_static_out}\n${_pc_static_err}")
   endif()
-  foreach(_compat_pc IN ITEMS
-      csilk-core
-      csilk-json
-      csilk-crypto
-      csilk-reflection
-      csilk-tls
-      csilk-http2
-      csilk-protocols
-      csilk-middleware)
-    execute_process(
-        COMMAND "${CMAKE_COMMAND}" -E env "PKG_CONFIG_PATH=${_pc_dir}" "${_pkg_config_exe}" --static --libs "${_compat_pc}"
-        RESULT_VARIABLE _compat_pc_res
-        OUTPUT_VARIABLE _compat_pc_out
-        ERROR_VARIABLE _compat_pc_err
-    )
-    if(NOT _compat_pc_res EQUAL 0)
-      message(FATAL_ERROR "pkg-config --static --libs ${_compat_pc} failed:\n${_compat_pc_out}\n${_compat_pc_err}")
-    endif()
-    if(_compat_pc_out MATCHES "-lcsilk-(core|json|crypto|reflection|tls|http2|protocols|middleware)([ \t\r\n]|$)")
-      message(FATAL_ERROR "${_compat_pc}.pc must not emit removed archive flags:\n${_compat_pc_out}")
-    endif()
-  endforeach()
 endif()
 
 file(WRITE "${_consumer}/CMakeLists.txt" [=[
@@ -309,30 +287,14 @@ endforeach()
 set(_required_targets
     csilk::csilk
     csilk::base
-    csilk::core
-    csilk::crypto
     csilk::runtime
-    csilk::json
-    csilk::tls
-    csilk::http2
     csilk::http
-    csilk::protocols
-    csilk::middleware
-    csilk::reflection
     csilk::app)
 if(CSILK_BUILD_SHARED)
   list(APPEND _required_targets
       csilk::base_shared
-      csilk::core_shared
-      csilk::crypto_shared
       csilk::runtime_shared
-      csilk::json_shared
-      csilk::tls_shared
-      csilk::http2_shared
       csilk::http_shared
-      csilk::protocols_shared
-      csilk::middleware_shared
-      csilk::reflection_shared
       csilk::app_shared
       csilk::shared)
 endif()
@@ -348,7 +310,8 @@ set(_optional_flags
     CSILK_ENABLE_MCP
     CSILK_ENABLE_GRPC
     CSILK_ENABLE_WASM
-    CSILK_ENABLE_OBSERVABILITY)
+    CSILK_ENABLE_OBSERVABILITY
+    CSILK_ENABLE_CSV)
 set(_optional_aliases
     permission
     db
@@ -360,7 +323,8 @@ set(_optional_aliases
     mcp
     grpc
     wasm
-    observability)
+    observability
+    csv)
 
 foreach(_flag _alias IN ZIP_LISTS _optional_flags _optional_aliases)
   if(${_flag})

@@ -60,9 +60,7 @@ set(CSILK_RUNTIME_SOURCES
     src/core/plugin/loader.c
 )
 
-if(CSILK_ENABLE_CSV)
-    list(APPEND CSILK_RUNTIME_SOURCES src/modules/csv/csv.c)
-endif()
+set(CSILK_CORE_SOURCES)
 
 if(CSILK_USE_URING)
     list(APPEND CSILK_RUNTIME_SOURCES
@@ -220,6 +218,11 @@ set(CSILK_OBSERVABILITY_SOURCES
     src/modules/observability/admin.c
 )
 
+# ── CSV Module (RFC 4180 CSV parser/serializer, optional) ────────────────
+set(CSILK_CSV_SOURCES
+    src/modules/csv/csv.c
+)
+
 # ── AI Module (LLM client drivers) ───────────────────────────────────────
 set(CSILK_AI_SOURCES
     src/modules/ai/ai.c
@@ -318,4 +321,7 @@ if(CSILK_ENABLE_WASM)
 endif()
 if(CSILK_ENABLE_OBSERVABILITY)
   list(APPEND CSILK_SOURCES ${CSILK_OBSERVABILITY_SOURCES})
+endif()
+if(CSILK_ENABLE_CSV)
+  list(APPEND CSILK_SOURCES ${CSILK_CSV_SOURCES})
 endif()
