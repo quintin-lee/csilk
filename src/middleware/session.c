@@ -179,29 +179,32 @@ session_store_ensure(void)
     return store;
 }
 
+static void*
+_session_store_create(void* arg)
+{
+    (void)arg;
+    session_store_t* store = calloc(1, sizeof(session_store_t));
+    if (!store) {
+        CSILK_LOG_E("Session: failed to allocate per-server session store");
+        return NULL;
+    }
+    session_store_initialize(store);
+    return store;
+}
+
 /**
  * @brief Lazily obtain the per-server session store, allocating and
  * initializing it on first use. The store is owned by the server and freed
  * by _csilk_session_store_free() at server teardown.
  *
- * @param server  The owning server (must have a non-NULL session_store slot).
+ * @param server  The owning server.
  * @return The per-server session store (never NULL on success).
  */
 static session_store_t*
 session_store_ensure_server(csilk_server_t* server)
 {
-    session_store_t* store = (session_store_t*)server->session_store;
-    if (!store) {
-        store = calloc(1, sizeof(session_store_t));
-        if (!store) {
-            CSILK_LOG_E("Session: failed to allocate per-server session store");
-            return NULL;
-        }
-        session_store_initialize(store);
-        server->session_store = store;
-        _csilk_server_register_teardown(server, _csilk_session_store_free);
-    }
-    return store;
+    return (session_store_t*)_csilk_server_ensure_ext(
+        server, "session_store", _session_store_create, NULL, _csilk_session_store_free);
 }
 
 /**
@@ -338,7 +341,7 @@ _session_ctx_release(void* ptr)
 static void
 _csilk_session_store_free(csilk_server_t* server)
 {
-    session_store_t* store = (session_store_t*)server->session_store;
+    session_store_t* store = (session_store_t*)_csilk_server_get_ext(server, "session_store");
     if (!store) {
         return;
     }
@@ -351,9 +354,10 @@ _csilk_session_store_free(csilk_server_t* server)
             session_unref(session); /* Drop store membership ref */
             session = next;
         }
+        csilk_mutex_destroy(&store->buckets[i].mutex);
     }
     free(store);
-    server->session_store = NULL;
+    _csilk_server_set_ext(server, "session_store", NULL, NULL);
 }
 
 static csilk_session_t*

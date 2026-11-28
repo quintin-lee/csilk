@@ -44,7 +44,7 @@ _csilk_mcp_server_for_ctx(csilk_ctx_t* c)
     }
     csilk_server_t* srv = csilk_ctx_get_server(c);
     if (srv) {
-        csilk_mcp_server_t* mcp = (csilk_mcp_server_t*)srv->mcp_server;
+        csilk_mcp_server_t* mcp = (csilk_mcp_server_t*)_csilk_server_get_ext(srv, "mcp");
         if (mcp) {
             return mcp;
         }
@@ -755,7 +755,7 @@ csilk_mcp_server_bind_ws(csilk_mcp_server_t* server, csilk_app_t* app, const cha
         return -1;
     }
     if (csilk_app_server(app)) {
-        csilk_app_server(app)->mcp_server = server;
+        _csilk_server_set_ext(csilk_app_server(app), "mcp", server, NULL);
     }
     const char* path = (ws_path && ws_path[0] != '\0') ? ws_path : "/mcp/ws";
     csilk_app_add_route(app, "GET", path, mcp_ws_handler);
@@ -790,7 +790,7 @@ csilk_mcp_server_bind_app(csilk_mcp_server_t* server, csilk_app_t* app, const ch
      * server, which exists after csilk_app_new(). */
     csilk_server_t* http_srv = csilk_app_server(app);
     if (http_srv) {
-        http_srv->mcp_server = server;
+        _csilk_server_set_ext(http_srv, "mcp", server, NULL);
     }
 
     const char* pfx = route_prefix ? route_prefix : "/mcp";

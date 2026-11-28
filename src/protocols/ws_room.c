@@ -5,10 +5,10 @@
  * Implements a high-concurrency room broadcasting system for WebSockets using COW
  * snapshots to avoid lock holding during network writes.
  *
- * The room manager is allocated on the csilk_server_t instance (ws_room_mgr
- * field) and freed by csilk_server_free(). This eliminates the previous
- * process-wide global + atexit pattern, giving each server its own
- * independent room state.
+ * The room manager is stored on the csilk_server_t instance via the keyed
+ * per-server extension table ("ws_room") and freed by csilk_server_free().
+ * This eliminates the previous process-wide global + atexit pattern, giving
+ * each server its own independent room state.
  *
  * @copyright MIT License
  */
@@ -99,23 +99,26 @@ ws_room_manager_free(ws_room_manager_t* mgr)
 }
 
 /** @brief Lazy-init the room manager on the server instance. */
+static void*
+_ws_room_mgr_create(void* arg)
+{
+    (void)arg;
+    ws_room_manager_t* mgr = calloc(1, sizeof(ws_room_manager_t));
+    if (!mgr) {
+        return NULL;
+    }
+    csilk_mutex_init(&mgr->mutex);
+    return mgr;
+}
+
 static ws_room_manager_t*
 ws_room_manager_get(csilk_server_t* server)
 {
     if (!server) {
         return NULL;
     }
-    ws_room_manager_t* mgr = (ws_room_manager_t*)server->ws_room_mgr;
-    if (!mgr) {
-        mgr = calloc(1, sizeof(ws_room_manager_t));
-        if (!mgr) {
-            return NULL;
-        }
-        csilk_mutex_init(&mgr->mutex);
-        server->ws_room_mgr = mgr;
-        _csilk_server_register_teardown(server, _csilk_ws_room_mgr_free);
-    }
-    return mgr;
+    return (ws_room_manager_t*)_csilk_server_ensure_ext(
+        server, "ws_room", _ws_room_mgr_create, NULL, _csilk_ws_room_mgr_free);
 }
 
 /** @brief Get the room manager for the server owning @p c. */
@@ -229,7 +232,8 @@ ws_room_membership_cleanup(void* data)
         return;
     }
     csilk_server_t*    server = csilk_ctx_get_server(mem->c);
-    ws_room_manager_t* mgr = server ? (ws_room_manager_t*)server->ws_room_mgr : NULL;
+    ws_room_manager_t* mgr =
+        server ? (ws_room_manager_t*)_csilk_server_get_ext(server, "ws_room") : NULL;
     if (mgr) {
         csilk_mutex_lock(&mgr->mutex);
         for (int i = 0; i < mem->count; i++) {
@@ -366,14 +370,15 @@ ws_room_deliver_from_broker(csilk_server_t* server,
                             const uint8_t*  payload,
                             size_t          len)
 {
-    ws_room_manager_t* mgr = server ? (ws_room_manager_t*)server->ws_room_mgr : NULL;
+    ws_room_manager_t* mgr =
+        server ? (ws_room_manager_t*)_csilk_server_get_ext(server, "ws_room") : NULL;
     ws_room_deliver(mgr, room_name, payload, len);
 }
 
 /**
  * @brief Free the WebSocket room manager owned by a server instance.
  *
- * Registered via _csilk_server_register_teardown() to tear down per-server room state.
+ * Registered via _csilk_server_ensure_ext() to tear down per-server room state.
  */
 static void
 _csilk_ws_room_mgr_free(csilk_server_t* server)
@@ -381,8 +386,9 @@ _csilk_ws_room_mgr_free(csilk_server_t* server)
     if (!server) {
         return;
     }
-    ws_room_manager_free((ws_room_manager_t*)server->ws_room_mgr);
-    server->ws_room_mgr = NULL;
+    ws_room_manager_t* mgr = (ws_room_manager_t*)_csilk_server_get_ext(server, "ws_room");
+    ws_room_manager_free(mgr);
+    _csilk_server_set_ext(server, "ws_room", NULL, NULL);
 }
 
 /**

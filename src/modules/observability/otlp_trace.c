@@ -119,29 +119,33 @@ _otlp_state_ensure(void)
  * registration remains process-level (see _otlp_init_once_cb); this only
  * allocates an independent span ring buffer + sidecar table for the server.
  */
+static void*
+_otlp_state_create(void* arg)
+{
+    (void)arg;
+    otlp_state_t* st = calloc(1, sizeof(otlp_state_t));
+    if (!st) {
+        return NULL;
+    }
+    st->cap = OTLP_SPAN_BUF_CAP;
+    st->spans = calloc(st->cap, sizeof(csilk_otlp_span_t));
+    if (!st->spans) {
+        free(st);
+        return NULL;
+    }
+    atomic_init(&st->sample_rate, OTLP_SAMPLE_RATE_DEFAULT);
+    atomic_init(&st->total_spans, 0);
+    csilk_once_init(&st->init_once);
+    csilk_mutex_init(&st->buffer_mutex);
+    csilk_mutex_init(&st->sidecar_mutex);
+    return st;
+}
+
 static otlp_state_t*
 _otlp_state_ensure_server(csilk_server_t* server)
 {
-    otlp_state_t* st = (otlp_state_t*)server->otlp_state;
-    if (!st) {
-        st = calloc(1, sizeof(otlp_state_t));
-        if (!st) {
-            return NULL;
-        }
-        st->cap = OTLP_SPAN_BUF_CAP;
-        atomic_init(&st->sample_rate, OTLP_SAMPLE_RATE_DEFAULT);
-        atomic_init(&st->total_spans, 0);
-        csilk_once_init(&st->init_once);
-        server->otlp_state = st;
-        _csilk_server_register_teardown(server, _csilk_otlp_state_free);
-    }
-    /* Initialize this server's buffers (buffer/sidecar only; hooks stay global). */
-    csilk_mutex_init(&st->buffer_mutex);
-    csilk_mutex_init(&st->sidecar_mutex);
-    size_t cap = st->cap > 0 ? st->cap : OTLP_SPAN_BUF_CAP;
-    st->spans = calloc(cap, sizeof(csilk_otlp_span_t));
-    st->cap = cap;
-    return st;
+    return (otlp_state_t*)_csilk_server_ensure_ext(
+        server, "otlp", _otlp_state_create, NULL, _csilk_otlp_state_free);
 }
 
 /**
@@ -170,7 +174,7 @@ _otlp_state_for_ctx(csilk_ctx_t* c)
 static void
 _csilk_otlp_state_free(csilk_server_t* server)
 {
-    otlp_state_t* st = (otlp_state_t*)server->otlp_state;
+    otlp_state_t* st = (otlp_state_t*)_csilk_server_get_ext(server, "otlp");
     if (!st) {
         return;
     }
@@ -182,8 +186,10 @@ _csilk_otlp_state_free(csilk_server_t* server)
             csilk_json_free(st->sidecar_table[i].attributes);
         }
     }
+    csilk_mutex_destroy(&st->buffer_mutex);
+    csilk_mutex_destroy(&st->sidecar_mutex);
     free(st);
-    server->otlp_state = NULL;
+    _csilk_server_set_ext(server, "otlp", NULL, NULL);
 }
 
 static void
@@ -713,9 +719,10 @@ csilk_otlp_tracer_set_sample_rate(int rate)
 void
 csilk_otlp_tracer_set_buffer_size(size_t cap)
 {
-    if (cap > 0 && !atomic_load_explicit(&g_otlp_state->total_spans, memory_order_acquire)) {
+    if (cap > 0 && g_otlp_state &&
+        !atomic_load_explicit(&g_otlp_state->total_spans, memory_order_acquire)) {
         otlp_state_t* st = g_otlp_state;
-        if (st && !st->spans) {
+        if (!st->spans) {
             st->cap = cap;
         }
         CSILK_LOG_D("OTLP: span buffer capacity set to %zu", cap);

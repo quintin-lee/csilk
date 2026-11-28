@@ -253,6 +253,18 @@ typedef struct {
     void (*conn_close)(csilk_client_t* client);
 } csilk_h3_state_t;
 
+/** @brief Maximum keyed subsystem extension slots on csilk_server_t. */
+enum { CSILK_SERVER_MAX_EXTS = 16 };
+
+/** @brief Factory callback for lazy thread-safe per-server extension initialization. */
+typedef void* (*csilk_server_ext_create_fn)(void* arg);
+
+/** @brief Keyed per-server subsystem extension slot. */
+typedef struct {
+    const char* key;
+    void*       value;
+} csilk_server_ext_t;
+
 /**
  * @brief Main Server structure — represents the core HTTP server instance.
  *
@@ -294,13 +306,11 @@ struct csilk_server_s {
     _Atomic(csilk_hook_array_t*) hooks[CSILK_HOOK_COUNT]; /**< Registered immutable hook arrays. */
     csilk_mutex_t                hook_mutex;   /**< Protects hook registration/removal CoW. */
     csilk_mutex_t                config_mutex; /**< Protects runtime config updates. */
-    csilk_h3_state_t* h3_state; /**< Consolidated HTTP/3/QUIC state (NULL unless H3 enabled). */
-    void*             app; /**< Back-reference to owning csilk_app_t (NULL for bare servers). */
-    void* ws_room_mgr;   /**< WebSocket room manager (ws_room_manager_t, NULL until first join). */
-    void* session_store; /**< Per-server session store (session_store_t*, NULL until first use). */
-    void* otlp_state;    /**< Per-server OTLP tracer state (otlp_state_t*, NULL until first use). */
-    void* mcp_server;    /**< Per-server MCP server (csilk_mcp_server_t*, NULL unless bind_app). */
-    csilk_server_teardown_fn teardown_cbs[16]; /**< Subsystem teardown callbacks (LIFO). */
+    csilk_h3_state_t*  h3_state; /**< Consolidated HTTP/3/QUIC state (NULL unless H3 enabled). */
+    void*              app; /**< Back-reference to owning csilk_app_t (NULL for bare servers). */
+    csilk_server_ext_t exts[CSILK_SERVER_MAX_EXTS]; /**< Keyed per-server extensions. */
+    size_t             ext_count;
+    csilk_server_teardown_fn teardown_cbs[CSILK_SERVER_MAX_EXTS]; /**< Teardown callbacks (LIFO). */
     size_t                   teardown_cb_count;
     void (*ws_parse_cb)(csilk_ctx_t* c, const uint8_t* data, size_t len);
     void (*ws_close_cb)(csilk_ctx_t* c, uint16_t code, const char* reason);
@@ -460,6 +470,34 @@ CSILK_INTERNAL void _csilk_rcu_set_teardown_timeout_ms(uint32_t timeout_ms);
 /** @brief Register a subsystem teardown callback on @p server (deduplicated, LIFO). */
 CSILK_INTERNAL void _csilk_server_register_teardown(csilk_server_t*          server,
                                                     csilk_server_teardown_fn cb);
+
+/** @brief Retrieve a keyed per-server subsystem extension pointer (NULL if absent). */
+CSILK_INTERNAL void* _csilk_server_get_ext(csilk_server_t* server, const char* key);
+
+/**
+ * @brief Store or clear a keyed per-server subsystem extension pointer.
+ *
+ * When @p teardown is non-NULL and @p value is non-NULL, registers @p teardown
+ * on @p server (deduplicated, LIFO).
+ *
+ * @return 0 on success, -1 on invalid args or full extension table.
+ */
+CSILK_INTERNAL int _csilk_server_set_ext(csilk_server_t*          server,
+                                         const char*              key,
+                                         void*                    value,
+                                         csilk_server_teardown_fn teardown);
+
+/**
+ * @brief Get or lazily create a keyed per-server subsystem extension under lock.
+ *
+ * Checks for an existing non-NULL extension under @c config_mutex; if missing,
+ * calls @p create_fn(@p create_arg), records the slot, and registers @p teardown.
+ */
+CSILK_INTERNAL void* _csilk_server_ensure_ext(csilk_server_t*            server,
+                                              const char*                key,
+                                              csilk_server_ext_create_fn create_fn,
+                                              void*                      create_arg,
+                                              csilk_server_teardown_fn   teardown);
 
 /** @brief Pump an event loop nowait up to the bounded teardown drain limit. */
 CSILK_INTERNAL void _csilk_server_drain_loop(csilk_io_loop_t* loop);

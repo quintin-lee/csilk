@@ -96,16 +96,14 @@ _csilk_server_drain_loop(csilk_io_loop_t* loop)
     _server_free_drain_loop(loop);
 }
 
-CSILK_INTERNAL void
-_csilk_server_register_teardown(csilk_server_t* server, csilk_server_teardown_fn cb)
+static void
+_server_register_teardown_locked(csilk_server_t* server, csilk_server_teardown_fn cb)
 {
-    if (!server || !cb) {
+    if (!cb) {
         return;
     }
-    csilk_mutex_lock(&server->config_mutex);
     for (size_t i = 0; i < server->teardown_cb_count; i++) {
         if (server->teardown_cbs[i] == cb) {
-            csilk_mutex_unlock(&server->config_mutex);
             return;
         }
     }
@@ -113,7 +111,110 @@ _csilk_server_register_teardown(csilk_server_t* server, csilk_server_teardown_fn
         sizeof(server->teardown_cbs) / sizeof(server->teardown_cbs[0])) {
         server->teardown_cbs[server->teardown_cb_count++] = cb;
     }
+}
+
+static csilk_server_ext_t*
+_server_find_ext_locked(csilk_server_t* server, const char* key)
+{
+    for (size_t i = 0; i < server->ext_count; i++) {
+        if (server->exts[i].key && strcmp(server->exts[i].key, key) == 0) {
+            return &server->exts[i];
+        }
+    }
+    return NULL;
+}
+
+CSILK_INTERNAL void
+_csilk_server_register_teardown(csilk_server_t* server, csilk_server_teardown_fn cb)
+{
+    if (!server || !cb) {
+        return;
+    }
+    csilk_mutex_lock(&server->config_mutex);
+    _server_register_teardown_locked(server, cb);
     csilk_mutex_unlock(&server->config_mutex);
+}
+
+CSILK_INTERNAL void*
+_csilk_server_get_ext(csilk_server_t* server, const char* key)
+{
+    if (!server || !key || key[0] == '\0') {
+        return NULL;
+    }
+    csilk_mutex_lock(&server->config_mutex);
+    csilk_server_ext_t* slot = _server_find_ext_locked(server, key);
+    void*               val = slot ? slot->value : NULL;
+    csilk_mutex_unlock(&server->config_mutex);
+    return val;
+}
+
+CSILK_INTERNAL int
+_csilk_server_set_ext(csilk_server_t*          server,
+                      const char*              key,
+                      void*                    value,
+                      csilk_server_teardown_fn teardown)
+{
+    if (!server || !key || key[0] == '\0') {
+        return -1;
+    }
+    csilk_mutex_lock(&server->config_mutex);
+    csilk_server_ext_t* slot = _server_find_ext_locked(server, key);
+    if (!slot) {
+        if (!value) {
+            csilk_mutex_unlock(&server->config_mutex);
+            return 0;
+        }
+        if (server->ext_count >= CSILK_SERVER_MAX_EXTS) {
+            csilk_mutex_unlock(&server->config_mutex);
+            return -1;
+        }
+        slot = &server->exts[server->ext_count++];
+        slot->key = key;
+    }
+    slot->value = value;
+    if (value && teardown) {
+        _server_register_teardown_locked(server, teardown);
+    }
+    csilk_mutex_unlock(&server->config_mutex);
+    return 0;
+}
+
+CSILK_INTERNAL void*
+_csilk_server_ensure_ext(csilk_server_t*            server,
+                         const char*                key,
+                         csilk_server_ext_create_fn create_fn,
+                         void*                      create_arg,
+                         csilk_server_teardown_fn   teardown)
+{
+    if (!server || !key || key[0] == '\0' || !create_fn) {
+        return NULL;
+    }
+    csilk_mutex_lock(&server->config_mutex);
+    csilk_server_ext_t* slot = _server_find_ext_locked(server, key);
+    if (slot && slot->value) {
+        void* existing = slot->value;
+        csilk_mutex_unlock(&server->config_mutex);
+        return existing;
+    }
+    if (!slot && server->ext_count >= CSILK_SERVER_MAX_EXTS) {
+        csilk_mutex_unlock(&server->config_mutex);
+        return NULL;
+    }
+    void* created = create_fn(create_arg);
+    if (!created) {
+        csilk_mutex_unlock(&server->config_mutex);
+        return NULL;
+    }
+    if (!slot) {
+        slot = &server->exts[server->ext_count++];
+        slot->key = key;
+    }
+    slot->value = created;
+    if (teardown) {
+        _server_register_teardown_locked(server, teardown);
+    }
+    csilk_mutex_unlock(&server->config_mutex);
+    return created;
 }
 
 /* --- Centralized Atomic Initializers --- */

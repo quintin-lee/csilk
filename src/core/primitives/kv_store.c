@@ -9,12 +9,20 @@
  * @copyright MIT License
  */
 
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "../ctx/ctx_internal.h"
 #include "csilk/core/internal.h"
+
+typedef void* (*csilk_trace_start_fn_t)(const char* name, const char* parent_span_id, void* scope);
+typedef void (*csilk_trace_end_fn_t)(void* span, int status_code, void* scope);
+
+/* --- Cross-module lightweight trace hooks --- */
+static _Atomic(csilk_trace_start_fn_t) g_trace_start_hook = NULL;
+static _Atomic(csilk_trace_end_fn_t)   g_trace_end_hook = NULL;
 
 /** @brief Store a value in the context's key-value storage with an optional destructor.
  *
@@ -227,17 +235,13 @@ csilk_incr(csilk_ctx_t* c, const char* key, int ttl_sec)
     return csilk_incr_with_ttl(c, key, ttl_sec, NULL);
 }
 
-/* --- Cross-module lightweight trace hooks --- */
-static csilk_tracer_hooks_t g_tracer_hooks = {0};
-
 void
 csilk_tracer_set_hooks(const csilk_tracer_hooks_t* hooks)
 {
-    if (hooks) {
-        g_tracer_hooks = *hooks;
-    } else {
-        memset(&g_tracer_hooks, 0, sizeof(g_tracer_hooks));
-    }
+    csilk_trace_start_fn_t start_fn = hooks ? hooks->start_span : NULL;
+    csilk_trace_end_fn_t   end_fn = hooks ? hooks->end_span : NULL;
+    atomic_store_explicit(&g_trace_start_hook, start_fn, memory_order_release);
+    atomic_store_explicit(&g_trace_end_hook, end_fn, memory_order_release);
 }
 
 void*
@@ -255,8 +259,10 @@ csilk_trace_span_end(void* span, int status_code)
 void*
 csilk_trace_span_start_scoped(const char* name, const char* parent_span_id, void* scope)
 {
-    if (g_tracer_hooks.start_span) {
-        return g_tracer_hooks.start_span(name, parent_span_id, scope);
+    csilk_trace_start_fn_t start_fn =
+        atomic_load_explicit(&g_trace_start_hook, memory_order_acquire);
+    if (start_fn) {
+        return start_fn(name, parent_span_id, scope);
     }
     return NULL;
 }
@@ -264,7 +270,8 @@ csilk_trace_span_start_scoped(const char* name, const char* parent_span_id, void
 void
 csilk_trace_span_end_scoped(void* span, int status_code, void* scope)
 {
-    if (span && g_tracer_hooks.end_span) {
-        g_tracer_hooks.end_span(span, status_code, scope);
+    csilk_trace_end_fn_t end_fn = atomic_load_explicit(&g_trace_end_hook, memory_order_acquire);
+    if (span && end_fn) {
+        end_fn(span, status_code, scope);
     }
 }
