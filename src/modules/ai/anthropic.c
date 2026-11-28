@@ -49,11 +49,7 @@ anthropic_init(const char* api_key, const char* base_url)
     state->api_key = strdup(api_key);
     state->base_url = strdup(base_url ? base_url : ANTHROPIC_DEFAULT_BASE_URL);
 
-    static int curl_init = 0;
-    if (!curl_init) {
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-        curl_init = 1;
-    }
+    csilk_curl_global_init_once();
     return state;
 }
 
@@ -81,9 +77,6 @@ typedef struct {
 struct anthropic_stream_ctx {
     const csilk_ai_chat_request_t* req;
     csilk_ai_chat_response_t*      res;
-    char*                          line_buf;
-    size_t                         line_size;
-    size_t                         line_cap;
     streamed_tool_t*               tools;
     size_t                         tool_count;
     size_t                         tool_capacity;
@@ -214,41 +207,17 @@ parse_sse_event(struct anthropic_stream_ctx* ctx, const char* json_str)
     csilk_json_free(js);
 }
 
-static size_t
-stream_write_cb(void* contents, size_t size, size_t nmemb, void* userp)
+static void
+anthropic_stream_line_cb(const char* line, void* user_data)
 {
-    size_t                       realsize = size * nmemb;
-    struct anthropic_stream_ctx* ctx = (struct anthropic_stream_ctx*)userp;
-    const char*                  data = (const char*)contents;
-
-    for (size_t i = 0; i < realsize; i++) {
-        char c = data[i];
-        if (c == '\n' || c == '\r') {
-            if (ctx->line_size > 0) {
-                ctx->line_buf[ctx->line_size] = '\0';
-                if (strncmp(ctx->line_buf, "data: ", 6) == 0) {
-                    const char* payload = ctx->line_buf + 6;
-                    while (*payload == ' ') {
-                        payload++;
-                    }
-                    parse_sse_event(ctx, payload);
-                }
-                ctx->line_size = 0;
-            }
-        } else {
-            if (ctx->line_size + 2 > ctx->line_cap) {
-                size_t ncap = ctx->line_cap == 0 ? 256 : ctx->line_cap * 2;
-                char*  nb = realloc(ctx->line_buf, ncap);
-                if (!nb) {
-                    return 0;
-                }
-                ctx->line_buf = nb;
-                ctx->line_cap = ncap;
-            }
-            ctx->line_buf[ctx->line_size++] = c;
+    struct anthropic_stream_ctx* ctx = (struct anthropic_stream_ctx*)user_data;
+    if (strncmp(line, "data: ", 6) == 0) {
+        const char* payload = line + 6;
+        while (*payload == ' ') {
+            payload++;
         }
+        parse_sse_event(ctx, payload);
     }
-    return realsize;
 }
 
 static int
@@ -397,18 +366,6 @@ anthropic_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_cha
         return -1;
     }
 
-    if (!csilk_curl_url_allowed(url)) {
-        free(json_body);
-        res->error_message = strdup("Blocked or invalid Anthropic URL");
-        return -1;
-    }
-
-    CURL* curl = curl_easy_init();
-    if (!curl) {
-        free(json_body);
-        return -1;
-    }
-
     struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
     char key_hdr[256];
@@ -417,55 +374,64 @@ anthropic_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_cha
     headers = curl_slist_append(headers, "anthropic-version: " ANTHROPIC_API_VERSION);
     headers = curl_slist_append(headers, "anthropic-beta: " ANTHROPIC_BETA_FEATURES);
 
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     long total_timeout = 0;
     if (req->timeout_ms > 0) {
         total_timeout = (long)req->timeout_ms;
     } else if (!req->stream) {
         total_timeout = 300000L;
     }
-    csilk_curl_apply_safe_defaults(curl, 10000L, total_timeout);
 
     csilk_curl_buf_t            resp_buf = {0};
     struct anthropic_stream_ctx sctx = {
         .req = req,
         .res = res,
-        .line_buf = NULL,
-        .line_size = 0,
         .tools = NULL,
         .tool_count = 0,
         .tool_capacity = 0,
     };
-
+    csilk_curl_line_stream_t stream = {
+        .on_line = anthropic_stream_line_cb,
+        .user_data = &sctx,
+    };
+    long http_code = 0;
+    char curl_err[256] = {0};
+    int  perf_rc;
     if (req->stream) {
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, stream_write_cb);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &sctx);
+        perf_rc = csilk_curl_post_stream(url,
+                                         headers,
+                                         json_body,
+                                         10000L,
+                                         total_timeout,
+                                         &stream,
+                                         &http_code,
+                                         curl_err,
+                                         sizeof(curl_err));
+        csilk_curl_line_stream_free(&stream);
     } else {
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, csilk_curl_write_cb);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp_buf);
+        perf_rc = csilk_curl_request_json("POST",
+                                          url,
+                                          headers,
+                                          json_body,
+                                          10000L,
+                                          total_timeout,
+                                          &resp_buf,
+                                          &http_code,
+                                          curl_err,
+                                          sizeof(curl_err));
     }
-
-    CURLcode rc = curl_easy_perform(curl);
-    long     http_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
 
     free(json_body);
     curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
 
-    if (rc != CURLE_OK) {
+    if (perf_rc != 0) {
         free(resp_buf.data);
-        free(sctx.line_buf);
         for (size_t i = 0; i < sctx.tool_count; i++) {
             free(sctx.tools[i].id);
             free(sctx.tools[i].name);
             free(sctx.tools[i].args_buf);
         }
         free(sctx.tools);
-        res->error_message = strdup(curl_easy_strerror(rc));
+        res->error_message = strdup(curl_err[0] ? curl_err : "CURL error");
         return -1;
     }
 
@@ -473,7 +439,6 @@ anthropic_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_cha
         const char* err = (req->stream || !resp_buf.data) ? "HTTP error" : resp_buf.data;
         res->error_message = strdup(err);
         free(resp_buf.data);
-        free(sctx.line_buf);
         for (size_t i = 0; i < sctx.tool_count; i++) {
             free(sctx.tools[i].id);
             free(sctx.tools[i].name);
@@ -485,7 +450,6 @@ anthropic_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_cha
 
     if (req->stream) {
         free(resp_buf.data);
-        free(sctx.line_buf);
         if (sctx.tool_count > 0) {
             res->tool_calls = calloc(sctx.tool_count, sizeof(csilk_ai_tool_call_t));
             if (res->tool_calls) {

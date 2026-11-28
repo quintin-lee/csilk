@@ -51,12 +51,8 @@ openai_init(const char* api_key, const char* base_url)
     state->api_key = strdup(api_key);
     state->base_url = strdup(base_url ? base_url : "https://api.openai.com/v1");
 
-    /* One-shot libcurl global init (idempotent across driver instances) */
-    static int curl_init = 0;
-    if (!curl_init) {
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-        curl_init = 1;
-    }
+    /* Thread-safe one-shot libcurl global init */
+    csilk_curl_global_init_once();
 
     return state;
 }
@@ -84,10 +80,6 @@ openai_free(void* state_ptr)
 struct curl_context {
     const csilk_ai_chat_request_t* req;
     csilk_ai_chat_response_t*      res;
-    char*                          body;     /**< Accumulated response body (non-streaming path). */
-    size_t                         size;     /**< Current length of accumulated body. */
-    char*                          line_buf; /**< Partial SSE line buffer (streaming path). */
-    size_t                         line_size; /**< Current length of buffered SSE data. */
 };
 
 /**
@@ -103,8 +95,9 @@ struct curl_context {
  *   3. Reassembles streamed tool calls dynamically across chunks.
  */
 static void
-process_stream_line(struct curl_context* ctx, const char* line)
+openai_stream_line_cb(const char* line, void* user_data)
 {
+    struct curl_context* ctx = (struct curl_context*)user_data;
     /* Skip leading whitespace */
     while (*line == ' ' || *line == '\t') {
         line++;
@@ -319,93 +312,22 @@ process_stream_line(struct curl_context* ctx, const char* line)
  *
  * @return Number of bytes consumed, or 0 to abort on OOM.
  */
-static size_t
-write_cb(void* contents, size_t size, size_t nmemb, void* userp)
-{
-    size_t               realsize = size * nmemb;
-    struct curl_context* ctx = (struct curl_context*)userp;
-
-    if (ctx->req->stream) {
-        /* --- Streaming path: SSE line reassembly --- */
-        char* ptr = realloc(ctx->line_buf, ctx->line_size + realsize + 1);
-        if (!ptr) {
-            return 0;
-        }
-        ctx->line_buf = ptr;
-        memcpy(ctx->line_buf + ctx->line_size, contents, realsize);
-        ctx->line_size += realsize;
-        ctx->line_buf[ctx->line_size] = '\0';
-
-        /* Extract and process all complete lines */
-        char* line_start = ctx->line_buf;
-        char* newline;
-        while ((newline = strchr(line_start, '\n')) != NULL) {
-            *newline = '\0'; /* null-terminate the line */
-            if (newline > line_start && *(newline - 1) == '\r') {
-                *(newline - 1) = '\0';
-            }
-            process_stream_line(ctx, line_start);
-            line_start = newline + 1; /* advance past the newline */
-        }
-
-        /* Keep any remaining partial line for the next write callback */
-        size_t processed = (size_t)(line_start - ctx->line_buf);
-        size_t remaining = ctx->line_size - processed;
-        if (remaining > 0) {
-            memmove(ctx->line_buf, line_start, remaining);
-        }
-        ctx->line_size = remaining;
-        ctx->line_buf[ctx->line_size] = '\0';
-    } else {
-        /* --- Non-streaming path: simple accumulation --- */
-        char* ptr = realloc(ctx->body, ctx->size + realsize + 1);
-        if (!ptr) {
-            return 0;
-        }
-        ctx->body = ptr;
-        memcpy(&(ctx->body[ctx->size]), contents, realsize);
-        ctx->size += realsize;
-        ctx->body[ctx->size] = 0;
-    }
-
-    return realsize;
-}
-
-/**
- * @brief Execute a chat completion against the OpenAI /chat/completions
- * endpoint.
- *
- * Flow:
- *   1. Serialise the request into JSON (messages, sampling params, tools,
- *      stop sequences, stream flag).
- *   2. POST to <base_url>/chat/completions with Bearer auth header.
- *   3. On transport or HTTP error, populate res->error_message and return -1.
- *   4a. Streaming path: content is accumulated incrementally in write_cb /
- *       process_stream_line; here we just check whether content was captured.
- *   4b. Non-streaming path: parse the full JSON response, extracting content,
- *       tool_calls (id, name, arguments), and usage statistics.
- *
- * Tool calls are extracted from "message"."tool_calls" in the first choice.
- */
 static int
 openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_response_t* res)
 {
     openai_state_t* state = (openai_state_t*)state_ptr;
-    CURL*           curl = curl_easy_init();
-    if (!curl) {
+    if (!state || !req || !res) {
         return -1;
     }
 
     /* --- Step 1: Build JSON request body --- */
     csilk_json_t* root = csilk_json_object();
     if (!root) {
-        curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to allocate AI request JSON");
         return -1;
     }
     if (!csilk_json_add_string(root, "model", req->model ? req->model : "gpt-3.5-turbo")) {
         csilk_json_free(root);
-        curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to populate AI request JSON");
         return -1;
     }
@@ -413,7 +335,6 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     csilk_json_t* msgs = csilk_json_array();
     if (!msgs) {
         csilk_json_free(root);
-        curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to allocate AI messages JSON");
         return -1;
     }
@@ -528,16 +449,7 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
     if (!json_body) {
-        curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to serialize AI request JSON");
-        return -1;
-    }
-
-    /* Validate base_url scheme / SSRF policy before allocating curl handle */
-    if (!csilk_curl_url_allowed(state->base_url)) {
-        CSILK_LOG_E("AI OpenAI: Blocked or invalid URL: %.50s...", state->base_url);
-        free(json_body);
-        curl_easy_cleanup(curl);
         return -1;
     }
 
@@ -551,16 +463,6 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, auth_hdr);
 
-    struct curl_context ctx = {0};
-    ctx.req = req;
-    ctx.res = res;
-
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&ctx);
-
     /* Bounded time-outs: streaming responses are excluded from the total cap
      * so long LLM streams are unaffected. */
     long total_timeout = 0;
@@ -569,43 +471,65 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     } else if (!req->stream) {
         total_timeout = 300L * 1000L;
     }
-    csilk_curl_apply_safe_defaults(curl, 10L * 1000L, total_timeout);
 
-    /* --- Step 3: Execute --- */
-    CURLcode rc = curl_easy_perform(curl);
+    struct curl_context      ctx = {.req = req, .res = res};
+    csilk_curl_buf_t         resp_buf = {0};
+    csilk_curl_line_stream_t stream = {
+        .on_line = openai_stream_line_cb,
+        .user_data = &ctx,
+    };
+    long http_code = 0;
+    char curl_err[256] = {0};
+    int  perf_rc;
+    if (req->stream) {
+        perf_rc = csilk_curl_post_stream(url,
+                                         headers,
+                                         json_body,
+                                         10L * 1000L,
+                                         total_timeout,
+                                         &stream,
+                                         &http_code,
+                                         curl_err,
+                                         sizeof(curl_err));
+        csilk_curl_line_stream_free(&stream);
+    } else {
+        perf_rc = csilk_curl_request_json("POST",
+                                          url,
+                                          headers,
+                                          json_body,
+                                          10L * 1000L,
+                                          total_timeout,
+                                          &resp_buf,
+                                          &http_code,
+                                          curl_err,
+                                          sizeof(curl_err));
+    }
+
     free(json_body);
     curl_slist_free_all(headers);
-    free(ctx.line_buf);
 
-    /* Transport failure */
-    if (rc != CURLE_OK) {
-        char err_buf[256];
-        snprintf(err_buf, sizeof(err_buf), "CURL error (%d): %s", rc, curl_easy_strerror(rc));
-        res->error_message = strdup(err_buf);
-        free(ctx.body);
-        curl_easy_cleanup(curl);
+    /* Transport or SSRF failure */
+    if (perf_rc != 0) {
+        res->error_message = strdup(curl_err[0] ? curl_err : "CURL error");
+        free(resp_buf.data);
         return -1;
     }
 
     /* HTTP-level failure */
-    long http_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
     if (http_code >= 400) {
         char err_buf[512];
         snprintf(err_buf,
                  sizeof(err_buf),
                  "HTTP error %ld: %s",
                  http_code,
-                 ctx.body ? ctx.body : "(no response body)");
+                 resp_buf.data ? resp_buf.data : "(no response body)");
         res->error_message = strdup(err_buf);
-        free(ctx.body);
-        curl_easy_cleanup(curl);
+        free(resp_buf.data);
         return -1;
     }
 
-    /* --- Step 4a: Streaming path -- content or tool calls already built by write_cb --- */
+    /* --- Step 4a: Streaming path -- content or tool calls already built by stream cb --- */
     if (req->stream) {
-        curl_easy_cleanup(curl);
         if (res->total_tokens == 0 && (res->prompt_tokens > 0 || res->completion_tokens > 0)) {
             res->total_tokens = res->prompt_tokens + res->completion_tokens;
         }
@@ -616,9 +540,9 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
 
     /* --- Step 4b: Non-streaming path -- parse the JSON response --- */
-    csilk_json_t* resp_root = csilk_json_parse(ctx.body);
+    csilk_json_t* resp_root = csilk_json_parse(resp_buf.data);
     if (resp_root) {
-        res->raw_response = ctx.body;
+        res->raw_response = resp_buf.data;
         csilk_json_t* choices = csilk_json_get(resp_root, "choices");
         if (csilk_json_is_array(choices) && csilk_json_array_size(choices) > 0) {
             csilk_json_t* first = csilk_json_array_get(choices, 0);
@@ -685,10 +609,9 @@ openai_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
         }
         csilk_json_free(resp_root);
     } else {
-        free(ctx.body);
+        free(resp_buf.data);
     }
 
-    curl_easy_cleanup(curl);
     return (res->content != NULL || res->reasoning_content != NULL || res->tool_call_count > 0)
                ? 0
                : -1;
@@ -715,8 +638,7 @@ openai_embeddings(void*                           state_ptr,
                   csilk_ai_embeddings_response_t* res)
 {
     openai_state_t* state = (openai_state_t*)state_ptr;
-    CURL*           curl = curl_easy_init();
-    if (!curl) {
+    if (!state || !model || !input || !res) {
         return -1;
     }
 
@@ -732,20 +654,11 @@ openai_embeddings(void*                           state_ptr,
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
     if (!json_body) {
-        curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to serialize AI request JSON");
         return -1;
     }
 
-    /* Validate base_url scheme / SSRF policy */
-    if (!csilk_curl_url_allowed(state->base_url)) {
-        CSILK_LOG_E("AI OpenAI: Blocked or invalid URL: %.50s...", state->base_url);
-        free(json_body);
-        curl_easy_cleanup(curl);
-        return -1;
-    }
-
-    /* --- Prepare the HTTP request --- */
+    /* --- Prepare and perform the HTTP request --- */
     char url[512];
     snprintf(url, sizeof(url), "%s/embeddings", state->base_url);
 
@@ -756,23 +669,24 @@ openai_embeddings(void*                           state_ptr,
     headers = curl_slist_append(headers, auth_hdr);
 
     csilk_curl_buf_t cr = {0};
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, csilk_curl_write_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
-    csilk_curl_apply_safe_defaults(curl, 10L * 1000L, 300L * 1000L);
-
-    CURLcode rc = curl_easy_perform(curl);
+    long             http_code = 0;
+    char             err[256] = {0};
+    int              rc = csilk_curl_request_json("POST",
+                                     url,
+                                     headers,
+                                     json_body,
+                                     10L * 1000L,
+                                     300L * 1000L,
+                                     &cr,
+                                     &http_code,
+                                     err,
+                                     sizeof(err));
     free(json_body);
     curl_slist_free_all(headers);
 
-    if (rc != CURLE_OK) {
-        char err[256];
-        snprintf(err, sizeof(err), "CURL error: %s", curl_easy_strerror(rc));
-        res->error_message = strdup(err);
+    if (rc != 0) {
+        res->error_message = strdup(err[0] ? err : "CURL error");
         free(cr.data);
-        curl_easy_cleanup(curl);
         return -1;
     }
 
@@ -781,7 +695,6 @@ openai_embeddings(void*                           state_ptr,
     free(cr.data);
     if (!resp) {
         res->error_message = strdup("JSON parse error");
-        curl_easy_cleanup(curl);
         return -1;
     }
 
@@ -814,7 +727,6 @@ openai_embeddings(void*                           state_ptr,
     }
 
     csilk_json_free(resp);
-    curl_easy_cleanup(curl);
     return 0;
 }
 

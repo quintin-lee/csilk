@@ -42,11 +42,7 @@ qdrant_init(const char* endpoint, const char* api_key)
         state->api_key = strdup(api_key);
     }
 
-    static int curl_init = 0;
-    if (!curl_init) {
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-        curl_init = 1;
-    }
+    csilk_curl_global_init_once();
     return state;
 }
 

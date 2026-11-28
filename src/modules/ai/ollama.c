@@ -44,12 +44,8 @@ ollama_init(const char* api_key, const char* base_url)
 
     state->base_url = strdup(base_url ? base_url : "http://localhost:11434");
 
-    /* One-shot libcurl global init (idempotent across driver instances) */
-    static int curl_init = 0;
-    if (!curl_init) {
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-        curl_init = 1;
-    }
+    /* Thread-safe one-shot libcurl global init */
+    csilk_curl_global_init_once();
 
     return state;
 }
@@ -72,9 +68,6 @@ ollama_free(void* state_ptr)
 struct ollama_stream_ctx {
     const csilk_ai_chat_request_t* req;
     csilk_ai_chat_response_t*      res;
-    char*                          line_buf;
-    size_t                         line_size;
-    size_t                         line_cap;
 };
 
 static void
@@ -117,9 +110,10 @@ ollama_parse_tool_calls(csilk_json_t* tc_arr, csilk_ai_chat_response_t* res)
 }
 
 static void
-ollama_parse_ndjson_line(struct ollama_stream_ctx* ctx, const char* json_str)
+ollama_stream_line_cb(const char* json_str, void* user_data)
 {
-    csilk_json_t* js = csilk_json_parse(json_str);
+    struct ollama_stream_ctx* ctx = (struct ollama_stream_ctx*)user_data;
+    csilk_json_t*             js = csilk_json_parse(json_str);
     if (!js) {
         return;
     }
@@ -156,73 +150,22 @@ ollama_parse_ndjson_line(struct ollama_stream_ctx* ctx, const char* json_str)
     csilk_json_free(js);
 }
 
-static size_t
-ollama_stream_write_cb(void* contents, size_t size, size_t nmemb, void* userp)
-{
-    size_t                    realsize = size * nmemb;
-    struct ollama_stream_ctx* ctx = (struct ollama_stream_ctx*)userp;
-    const char*               data = (const char*)contents;
-
-    for (size_t i = 0; i < realsize; i++) {
-        char c = data[i];
-        if (c == '\n' || c == '\r') {
-            if (ctx->line_size > 0) {
-                ctx->line_buf[ctx->line_size] = '\0';
-                ollama_parse_ndjson_line(ctx, ctx->line_buf);
-                ctx->line_size = 0;
-            }
-        } else {
-            if (ctx->line_size + 2 > ctx->line_cap) {
-                size_t ncap = ctx->line_cap == 0 ? 256 : ctx->line_cap * 2;
-                char*  nb = realloc(ctx->line_buf, ncap);
-                if (!nb) {
-                    return 0;
-                }
-                ctx->line_buf = nb;
-                ctx->line_cap = ncap;
-            }
-            ctx->line_buf[ctx->line_size++] = c;
-        }
-    }
-    return realsize;
-}
-
-/**
- * @brief Execute a chat completion against the Ollama /api/chat endpoint.
- *
- * Flow:
- *   1. Build a JSON request body with messages array + nested "options".
- *      Ollama differs from OpenAI by placing sampling params under
- *      "options": { "temperature": ..., "top_p": ... } instead of at the root.
- *   2. POST the JSON to <base_url>/api/chat with Content-Type:
- * application/json.
- *   3. On HTTP success, parse the response extracting "message"."content"
- *      for the reply text and "prompt_eval_count" / "eval_count" for token
- *      usage.
- *   4. Returns 0 on success, -1 on transport or parse failure.
- *
- * @note Streaming is not yet implemented (always sends "stream": false).
- * @note No auth headers are set -- Ollama's local server does not require one.
- */
 static int
 ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_response_t* res)
 {
     ollama_state_t* state = (ollama_state_t*)state_ptr;
-    CURL*           curl = curl_easy_init();
-    if (!curl) {
+    if (!state || !req || !res) {
         return -1;
     }
 
     /* --- Step 1: Serialise the request into Ollama's JSON format --- */
     csilk_json_t* root = csilk_json_object();
     if (!root) {
-        curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to allocate AI request JSON");
         return -1;
     }
     if (!csilk_json_add_string(root, "model", req->model ? req->model : "llama3")) {
         csilk_json_free(root);
-        curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to populate AI request JSON");
         return -1;
     }
@@ -230,7 +173,6 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     csilk_json_t* msgs = csilk_json_array();
     if (!msgs) {
         csilk_json_free(root);
-        curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to allocate AI messages JSON");
         return -1;
     }
@@ -292,16 +234,7 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     char* json_body = csilk_json_serialize(root, NULL);
     csilk_json_free(root);
     if (!json_body) {
-        curl_easy_cleanup(curl);
         res->error_message = strdup("Failed to serialize AI request JSON");
-        return -1;
-    }
-
-    /* Validate base_url scheme / SSRF policy */
-    if (!csilk_curl_url_allowed(state->base_url)) {
-        CSILK_LOG_E("AI Ollama: Blocked or invalid URL: %.50s...", state->base_url);
-        free(json_body);
-        curl_easy_cleanup(curl);
         return -1;
     }
 
@@ -312,47 +245,56 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     struct curl_slist* headers = NULL;
     headers = curl_slist_append(headers, "Content-Type: application/json");
 
-    csilk_curl_buf_t         cr = {0};
-    struct ollama_stream_ctx sctx = {
-        .req = req,
-        .res = res,
-        .line_buf = NULL,
-        .line_size = 0,
-    };
-
-    curl_easy_setopt(curl, CURLOPT_URL, url);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_body);
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-    if (req->stream) {
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, ollama_stream_write_cb);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&sctx);
-    } else {
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, csilk_curl_write_cb);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)&cr);
-    }
     long total_timeout = 0;
     if (req->timeout_ms > 0) {
         total_timeout = (long)req->timeout_ms;
     } else if (!req->stream) {
         total_timeout = 300L * 1000L;
     }
-    csilk_curl_apply_safe_defaults(curl, 10L * 1000L, total_timeout);
 
-    CURLcode rc = curl_easy_perform(curl);
+    csilk_curl_buf_t         cr = {0};
+    struct ollama_stream_ctx sctx = {.req = req, .res = res};
+    csilk_curl_line_stream_t stream = {
+        .on_line = ollama_stream_line_cb,
+        .user_data = &sctx,
+    };
+    long http_code = 0;
+    char curl_err[256] = {0};
+    int  perf_rc;
+    if (req->stream) {
+        perf_rc = csilk_curl_post_stream(url,
+                                         headers,
+                                         json_body,
+                                         10L * 1000L,
+                                         total_timeout,
+                                         &stream,
+                                         &http_code,
+                                         curl_err,
+                                         sizeof(curl_err));
+        csilk_curl_line_stream_free(&stream);
+    } else {
+        perf_rc = csilk_curl_request_json("POST",
+                                          url,
+                                          headers,
+                                          json_body,
+                                          10L * 1000L,
+                                          total_timeout,
+                                          &cr,
+                                          &http_code,
+                                          curl_err,
+                                          sizeof(curl_err));
+    }
+
     free(json_body);
     curl_slist_free_all(headers);
 
-    if (rc != CURLE_OK) {
-        res->error_message = strdup(curl_easy_strerror(rc));
+    if (perf_rc != 0) {
+        res->error_message = strdup(curl_err[0] ? curl_err : "CURL error");
         free(cr.data);
-        free(sctx.line_buf);
-        curl_easy_cleanup(curl);
         return -1;
     }
 
     if (req->stream) {
-        free(sctx.line_buf);
-        curl_easy_cleanup(curl);
         return (res->content || res->tool_call_count > 0) ? 0 : -1;
     }
 
@@ -376,7 +318,6 @@ ollama_chat(void* state_ptr, const csilk_ai_chat_request_t* req, csilk_ai_chat_r
     }
 
     free(cr.data);
-    curl_easy_cleanup(curl);
     return (res->content || res->tool_call_count > 0) ? 0 : -1;
 }
 
