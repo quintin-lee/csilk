@@ -197,6 +197,25 @@ char* csilk_json_marshal_arena(csilk_arena_t* arena,
 int csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr);
 
 /**
+ * @brief Deserialise a JSON string into a reflected struct using a field allowlist.
+ *
+ * Restricts top-level unmarshalling to JSON keys present in @p allowed_fields,
+ * preventing mass-assignment updates to privileged struct members.
+ *
+ * @param type_name      Registered type name of the target struct.
+ * @param json_str       NUL-terminated JSON string to parse.
+ * @param[out] ptr       Pointer to the destination struct instance.
+ * @param allowed_fields Array of permitted JSON key names (NULL = skip all).
+ * @param allowed_count  Number of entries in @p allowed_fields.
+ * @return 1 on success, 0 on invalid arguments, unregistered type, or parse error.
+ */
+int csilk_json_unmarshal_allowlisted(const char*        type_name,
+                                     const char*        json_str,
+                                     void*              ptr,
+                                     const char* const* allowed_fields,
+                                     size_t             allowed_count);
+
+/**
  * @brief Recursively free heap-allocated memory of a reflected struct's fields.
  *
  * Traverses the fields of the struct specified by @p type_name at address @p ptr

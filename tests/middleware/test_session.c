@@ -287,6 +287,40 @@ test_session_cleanup_expired_sweep(void)
     printf("test_session_cleanup_expired_sweep passed\n");
 }
 
+static void
+test_session_client_binding(void)
+{
+    printf("Testing optional session client fingerprint binding...\n");
+    csilk_session_set_bind_client(1);
+
+    csilk_ctx_t* c1 = csilk_test_ctx_new();
+    csilk_set_request_header(c1, "User-Agent", "ClientA/1.0");
+    csilk_session_start(c1);
+    const char* sid = csilk_session_get_id(c1);
+    assert(sid != nullptr);
+
+    char cookie_hdr[128];
+    snprintf(cookie_hdr, sizeof(cookie_hdr), "csilk_session=%s", sid);
+
+    csilk_ctx_t* c_same = csilk_test_ctx_new();
+    csilk_set_request_header(c_same, "Cookie", cookie_hdr);
+    csilk_set_request_header(c_same, "User-Agent", "ClientA/1.0");
+    csilk_session_start(c_same);
+    assert(strcmp(sid, csilk_session_get_id(c_same)) == 0);
+
+    csilk_ctx_t* c_diff = csilk_test_ctx_new();
+    csilk_set_request_header(c_diff, "Cookie", cookie_hdr);
+    csilk_set_request_header(c_diff, "User-Agent", "Hijacker/2.0");
+    csilk_session_start(c_diff);
+    assert(strcmp(sid, csilk_session_get_id(c_diff)) != 0);
+
+    csilk_test_ctx_free(c1);
+    csilk_test_ctx_free(c_same);
+    csilk_test_ctx_free(c_diff);
+    csilk_session_set_bind_client(0);
+    printf("test_session_client_binding passed\n");
+}
+
 int
 main()
 {
@@ -301,6 +335,7 @@ main()
     test_session_get_id_api();
     test_session_resume_existing_cookie();
     test_session_cleanup_expired_sweep();
+    test_session_client_binding();
     printf("test_session: ALL PASSED\n");
     return 0;
 }

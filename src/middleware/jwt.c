@@ -52,21 +52,7 @@ jwt_build_header(csilk_jwt_alg_t alg)
     return hdr;
 }
 
-/**
- * @brief Constant-time string comparison to prevent timing attacks.
- *
- * Compares two byte sequences of known lengths without branching on
- * individual byte differences.
- */
-static int
-constant_time_compare(const uint8_t* a, const uint8_t* b, size_t len)
-{
-    volatile uint8_t diff = 0;
-    for (size_t i = 0; i < len; i++) {
-        diff |= (a[i] ^ b[i]);
-    }
-    return (int)(diff != 0);
-}
+/* Signature verification uses OpenSSL CRYPTO_memcmp(). */
 
 /**
  * @brief Internal: Generate a JWT token with a specified algorithm.
@@ -354,8 +340,7 @@ jwt_verify_internal(csilk_ctx_t*               c,
         if (sig_len <= 44) {
             memcpy(sig_actual_b64, sig_ptr, sig_len);
         }
-        sig_ok = (sig_len == 43) &
-                 (constant_time_compare(sig_actual_b64, (const uint8_t*)sig_expected_b64, 44) == 0);
+        sig_ok = (sig_len == 43) && (CRYPTO_memcmp(sig_actual_b64, sig_expected_b64, 44) == 0);
     } else {
         /* RS256/ES256: base64url-decode sig, then verify via cipher driver */
         uint8_t sig_decoded[CSILK_RSA_SIGNATURE_SIZE];

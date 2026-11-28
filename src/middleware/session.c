@@ -23,9 +23,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <openssl/crypto.h>
+
 #include "csilk/core/sync.h"
 #include "csilk/core/internal.h"
 #include "csilk/core/middleware.h"
+#include "csilk/core/server/server.h"
+#include "csilk/crypto/crypto.h"
 #include "core/internal/srv_internal.h"
 
 /** @brief Default session TTL in seconds. */
@@ -68,6 +72,8 @@ typedef struct csilk_session_s {
     struct csilk_session_s* next;        /* next in same bucket */
     _Atomic int             ref_count;
     atomic_bool             removed;
+    bool                    has_client_fp;
+    uint8_t                 client_fp[32];
     csilk_mutex_t           lock;
 } csilk_session_t;
 
@@ -98,6 +104,7 @@ typedef struct {
 
 /** @brief Single global pointer to the lazily-initialized session store. */
 static session_store_t* g_session_store = NULL;
+static _Atomic int      g_session_bind_client = 0;
 
 /**
  * @brief Initialize all bucket mutexes for a session store.
@@ -613,6 +620,29 @@ csilk_session_init_server(csilk_server_t* server)
  *          persistent storage. All sessions are in-memory and are lost on
  *          process restart.
  */
+static void
+session_compute_client_fp(csilk_ctx_t* c, uint8_t out[32])
+{
+    const char*      ip = csilk_get_client_ip(c);
+    const char*      ua = csilk_get_header(c, "User-Agent");
+    csilk_sha256_ctx sha;
+    csilk_sha256_init(&sha);
+    if (ip) {
+        csilk_sha256_update(&sha, (const uint8_t*)ip, strlen(ip));
+    }
+    csilk_sha256_update(&sha, (const uint8_t*)"|", 1);
+    if (ua) {
+        csilk_sha256_update(&sha, (const uint8_t*)ua, strlen(ua));
+    }
+    csilk_sha256_final(&sha, out);
+}
+
+void
+csilk_session_set_bind_client(int enable)
+{
+    atomic_store_explicit(&g_session_bind_client, enable ? 1 : 0, memory_order_release);
+}
+
 void
 csilk_session_start(csilk_ctx_t* c)
 {
@@ -626,6 +656,7 @@ csilk_session_start(csilk_ctx_t* c)
      Otherwise create a fresh session with a new UUID. */
     const char*      sid = csilk_get_cookie(c, SESSION_COOKIE);
     csilk_session_t* session = NULL;
+    bool bind_client = atomic_load_explicit(&g_session_bind_client, memory_order_acquire) != 0;
 
     session_store_t* store = session_store_for_ctx(c);
     if (!store) {
@@ -634,6 +665,17 @@ csilk_session_start(csilk_ctx_t* c)
 
     if (sid) {
         session = find_session_locked(store, sid);
+    }
+
+    if (session && bind_client && session->has_client_fp) {
+        uint8_t req_fp[32];
+        session_compute_client_fp(c, req_fp);
+        if (CRYPTO_memcmp(session->client_fp, req_fp, sizeof(req_fp)) != 0) {
+            CSILK_LOG_W("Session: Client fingerprint mismatch for '%s', rotating", session->id);
+            remove_session_locked(store, session);
+            session_unref(session);
+            session = NULL;
+        }
     }
 
     if (!session) {
@@ -648,6 +690,10 @@ csilk_session_start(csilk_ctx_t* c)
         atomic_init(&session->removed, false);
         generate_session_id(c, session->id);
         session->expires_at = time(NULL) + SESSION_TTL;
+        if (bind_client) {
+            session_compute_client_fp(c, session->client_fp);
+            session->has_client_fp = true;
+        }
 
         add_session_locked(store, session);
 

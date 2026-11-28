@@ -19,6 +19,7 @@
 #include <windows.h>
 #include <wincrypt.h>
 #endif
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -89,6 +90,10 @@ csilk_hmac_sha256(
     const uint8_t* key, size_t key_len, const uint8_t* data, size_t data_len, uint8_t out[32])
 {
     if (!out) {
+        return;
+    }
+    if ((!key && key_len > 0) || (!data && data_len > 0) || key_len > (size_t)INT_MAX) {
+        memset(out, 0, 32);
         return;
     }
     const uint8_t* safe_key = key ? key : (const uint8_t*)"";

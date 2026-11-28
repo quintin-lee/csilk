@@ -268,11 +268,30 @@ test_cyclic_reflection()
     printf("test_cyclic_reflection passed\n");
 }
 
+void
+test_unmarshal_allowlisted()
+{
+    TestUser user = {
+        .id = 42, .name = "Orig", .score = 1.0f, .pos = {0, 0}
+    };
+    const char* json = "{\"id\":999,\"name\":\"Updated\",\"score\":88.5}";
+    const char* allowed[] = {"name", "score"};
+
+    int ok = csilk_json_unmarshal_allowlisted("TestUser", json, &user, allowed, 2);
+    assert(ok == 1);
+    assert(user.id == 42);
+    assert(strcmp(user.name, "Updated") == 0);
+    assert(user.score > 88.0f && user.score < 89.0f);
+
+    printf("test_unmarshal_allowlisted passed\n");
+}
+
 int
 main()
 {
     test_marshal();
     test_unmarshal();
+    test_unmarshal_allowlisted();
     test_context_reflect();
     test_basic_types();
     test_arrays();

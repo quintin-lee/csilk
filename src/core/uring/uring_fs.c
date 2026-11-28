@@ -20,7 +20,11 @@
 #include <unistd.h>
 #ifdef __linux__
 #include <poll.h>
+#include <sys/inotify.h>
 #include <sys/sendfile.h>
+#endif
+#ifdef CSILK_USE_URING
+#include "uring_internal.h"
 #endif
 
 /**
@@ -117,7 +121,13 @@ csilk_io_fs_event_init(csilk_io_loop_t* loop, csilk_io_fs_event_t* handle)
     }
     memset(handle, 0, sizeof(*handle));
     handle->type = CSILK_IO_HANDLE_FS_EVENT;
+#ifdef CSILK_USE_URING
+    handle->loop = loop ? loop : csilk_io_default_loop();
+#else
     handle->loop = loop;
+#endif
+    handle->fd = -1;
+    handle->generation = 1;
     return 0;
 }
 
@@ -128,12 +138,58 @@ csilk_io_fs_event_start(csilk_io_fs_event_t* handle,
                         unsigned int         flags)
 {
     (void)flags;
-    if (!handle || !path) {
+    if (!handle || !path || path[0] == '\0') {
+        errno = EINVAL;
         return -1;
     }
+#if defined(__linux__) && defined(CSILK_USE_URING)
+    if (handle->flags & CSILK_IO_HANDLE_ACTIVE) {
+        csilk_io_fs_event_stop(handle);
+    }
+    int ifd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    if (ifd < 0) {
+        return -1;
+    }
+    uint32_t mask = IN_MODIFY | IN_ATTRIB | IN_CLOSE_WRITE | IN_MOVED_TO | IN_MOVED_FROM |
+                    IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_MOVE_SELF;
+    if (inotify_add_watch(ifd, path, mask) < 0) {
+        int saved_errno = errno;
+        close(ifd);
+        errno = saved_errno;
+        return -1;
+    }
+    char* path_copy = strdup(path);
+    if (!path_copy) {
+        int saved_errno = errno;
+        close(ifd);
+        errno = saved_errno;
+        return -1;
+    }
+
+    csilk_io_loop_t* loop = handle->loop ? handle->loop : csilk_io_default_loop();
+    handle->loop = loop;
+    handle->fd = ifd;
     handle->cb = cb;
-    handle->path = strdup(path);
+    handle->path = path_copy;
+    handle->flags |= CSILK_IO_HANDLE_ACTIVE;
+    handle->generation++;
+
+    if (loop) {
+        loop->active_handles++;
+        struct io_uring_sqe* sqe = uring_get_sqe_or_submit(&loop->ring);
+        if (sqe) {
+            io_uring_prep_poll_add(sqe, ifd, POLLIN);
+            io_uring_sqe_set_data64(
+                sqe, uring_encode_handle_data(URING_OP_FS_EVENT, (csilk_io_handle_t*)handle));
+            io_uring_submit(&loop->ring);
+        }
+    }
     return 0;
+#else
+    (void)cb;
+    errno = ENOTSUP;
+    return -1;
+#endif
 }
 
 int
@@ -142,6 +198,19 @@ csilk_io_fs_event_stop(csilk_io_fs_event_t* handle)
     if (!handle) {
         return -1;
     }
+#ifdef CSILK_USE_URING
+    if (handle->flags & CSILK_IO_HANDLE_ACTIVE) {
+        handle->flags &= ~CSILK_IO_HANDLE_ACTIVE;
+        if (handle->loop && handle->loop->active_handles > 0) {
+            handle->loop->active_handles--;
+        }
+    }
+    handle->generation++;
+    if (handle->fd >= 0) {
+        close(handle->fd);
+        handle->fd = -1;
+    }
+#endif
     if (handle->path) {
         free(handle->path);
         handle->path = NULL;

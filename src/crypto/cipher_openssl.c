@@ -20,6 +20,8 @@
 #include "csilk/drivers/cipher.h"
 
 #include <limits.h>
+#include <openssl/buffer.h>
+#include <openssl/crypto.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -207,6 +209,20 @@ out:
  * small).
  * @note If the output buffers are too small, the function sets *pub_len and
  *       *priv_len to the required sizes and returns -1. */
+static void
+cleanse_and_free_bio(BIO* bio)
+{
+    if (!bio) {
+        return;
+    }
+    BUF_MEM* bptr = NULL;
+    BIO_get_mem_ptr(bio, &bptr);
+    if (bptr && bptr->data && bptr->length > 0) {
+        OPENSSL_cleanse(bptr->data, bptr->length);
+    }
+    BIO_free(bio);
+}
+
 static int
 default_generate_keypair(char* public_key, size_t* pub_len, char* private_key, size_t* priv_len)
 {
@@ -236,18 +252,18 @@ default_generate_keypair(char* public_key, size_t* pub_len, char* private_key, s
     BIO* priv_bio = BIO_new(BIO_s_mem());
     if (!pub_bio || !priv_bio) {
         BIO_free(pub_bio);
-        BIO_free(priv_bio);
+        cleanse_and_free_bio(priv_bio);
         goto out;
     }
 
     if (PEM_write_bio_PUBKEY(pub_bio, pkey) != 1) {
         BIO_free(pub_bio);
-        BIO_free(priv_bio);
+        cleanse_and_free_bio(priv_bio);
         goto out;
     }
     if (PEM_write_bio_PrivateKey(priv_bio, pkey, NULL, NULL, 0, NULL, NULL) != 1) {
         BIO_free(pub_bio);
-        BIO_free(priv_bio);
+        cleanse_and_free_bio(priv_bio);
         goto out;
     }
 
@@ -256,7 +272,7 @@ default_generate_keypair(char* public_key, size_t* pub_len, char* private_key, s
 
     if (pub_key_len + 1 > *pub_len || priv_key_len + 1 > *priv_len) {
         BIO_free(pub_bio);
-        BIO_free(priv_bio);
+        cleanse_and_free_bio(priv_bio);
         *pub_len = pub_key_len + 1;
         *priv_len = priv_key_len + 1;
         goto out;
@@ -270,7 +286,7 @@ default_generate_keypair(char* public_key, size_t* pub_len, char* private_key, s
     private_key[priv_key_len] = '\0';
 
     BIO_free(pub_bio);
-    BIO_free(priv_bio);
+    cleanse_and_free_bio(priv_bio);
     ret = 0;
 
 out:

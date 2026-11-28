@@ -481,6 +481,8 @@ csilk_io_close(csilk_io_handle_t* handle, csilk_io_close_cb cb)
     } else if (handle->type == CSILK_IO_HANDLE_POLL) {
         csilk_io_poll_stop((csilk_io_poll_t*)handle);
         handle->fd = -1;
+    } else if (handle->type == CSILK_IO_HANDLE_FS_EVENT) {
+        csilk_io_fs_event_stop((csilk_io_fs_event_t*)handle);
     } else if (handle->type == CSILK_IO_HANDLE_TCP) {
         if (handle->fd >= 0) {
             shutdown(handle->fd, SHUT_WR);

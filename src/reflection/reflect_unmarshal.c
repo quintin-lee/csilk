@@ -23,6 +23,9 @@ static void cjson_to_struct_internal(const csilk_json_t*       obj,
                                      void*                     struct_ptr,
                                      const csilk_field_desc_t* descs,
                                      size_t                    field_count,
+                                     const char* const*        allowed_fields,
+                                     size_t                    allowed_count,
+                                     bool                      use_allowlist,
                                      int                       depth);
 
 static void
@@ -135,7 +138,7 @@ deserialize_scalar(const csilk_json_t* item, void* addr, const csilk_field_desc_
                 const csilk_reflect_entry_t* entry = csilk_reflect_find(desc->nested_type_name);
                 if (entry) {
                     cjson_to_struct_internal(
-                        item, struct_addr, entry->fields, entry->count, depth + 1);
+                        item, struct_addr, entry->fields, entry->count, NULL, 0, false, depth + 1);
                 }
             }
         }
@@ -154,29 +157,37 @@ deserialize_scalar(const csilk_json_t* item, void* addr, const csilk_field_desc_
  * @param struct_ptr  Pointer to the target struct.
  * @param descs       Array of field descriptors.
  * @param field_count Number of field descriptors. */
+static bool
+field_is_allowed(const char* key, const char* const* allowed_fields, size_t allowed_count)
+{
+    if (!key || !allowed_fields) {
+        return false;
+    }
+    for (size_t i = 0; i < allowed_count; i++) {
+        if (allowed_fields[i] && strcmp(allowed_fields[i], key) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static void
 cjson_to_struct_internal(const csilk_json_t*       obj,
                          void*                     struct_ptr,
                          const csilk_field_desc_t* descs,
                          size_t                    field_count,
+                         const char* const*        allowed_fields,
+                         size_t                    allowed_count,
+                         bool                      use_allowlist,
                          int                       depth)
 {
     if (depth >= 32) {
         return;
     }
-    /*
-   * Walk all field descriptors and match each against a JSON key in the
-   * parsed object.  csilk_json_get() does a string-key
-   * lookup (O(n) in the number of keys for each call).  Keys not present
-   * in the JSON are silently skipped — the struct field retains its
-   * current value (safe for partial updates).
-   *
-   * Array fields: iterate up to min(json_array_length, array_length)
-   * elements to stay within the C buffer's bounds.  Each element is
-   * deserialized at offset field_addr + j * desc->size, matching the
-   * contiguous array layout in memory.
-   */
     for (size_t i = 0; i < field_count; i++) {
+        if (use_allowlist && !field_is_allowed(descs[i].json_key, allowed_fields, allowed_count)) {
+            continue;
+        }
         csilk_json_t* item = csilk_json_get(obj, descs[i].json_key);
         if (!item) {
             continue;
@@ -201,36 +212,23 @@ cjson_to_struct_internal(const csilk_json_t*       obj,
     }
 }
 
-/**
- * @brief Deserialize a JSON string into a registered struct or basic type.
- *
- * For primitive type names, parses the JSON directly into the output pointer
- * without a registry lookup (fast path). For registered structs, parses the
- * JSON and populates fields by name via the field descriptors; missing keys
- * leave the corresponding field unchanged. Pointer strings and nested struct
- * pointers are allocated as needed.
- *
- * @param[in]  type_name Registered struct type name or built-in primitive name.
- * @param[in]  json_str  NUL-terminated JSON document to parse.
- * @param[out] ptr       Pointer to the destination struct/value.
- * @return 1 on success (including when the JSON value was null/skipped), or 0
- *         on NULL arguments, an unregistered type, or a JSON parse failure.
- */
-int
-csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
+static int
+unmarshal_impl(const char*        type_name,
+               const char*        json_str,
+               void*              ptr,
+               const char* const* allowed_fields,
+               size_t             allowed_count,
+               bool               use_allowlist)
 {
     if (!type_name || !json_str || !ptr) {
         return 0;
     }
 
-    /*
-   * Fast path for scalar types: matches the fast path in marshal — parse
-   * the JSON string directly to a single cJSON node and deserialize it
-   * into the output pointer without a registry lookup.  Returns 1 on
-   * success (even if the JSON value was null, which is silently skipped).
-   */
     csilk_field_desc_t basic_desc;
     if (get_basic_type(type_name, &basic_desc)) {
+        if (use_allowlist && allowed_count == 0) {
+            return 1;
+        }
         csilk_json_t* root = csilk_json_parse(json_str);
         if (!root) {
             return 0;
@@ -250,7 +248,24 @@ csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
         return 0;
     }
 
-    cjson_to_struct_internal(root, ptr, entry->fields, entry->count, 0);
+    cjson_to_struct_internal(
+        root, ptr, entry->fields, entry->count, allowed_fields, allowed_count, use_allowlist, 0);
     csilk_json_free(root);
     return 1;
+}
+
+int
+csilk_json_unmarshal(const char* type_name, const char* json_str, void* ptr)
+{
+    return unmarshal_impl(type_name, json_str, ptr, NULL, 0, false);
+}
+
+int
+csilk_json_unmarshal_allowlisted(const char*        type_name,
+                                 const char*        json_str,
+                                 void*              ptr,
+                                 const char* const* allowed_fields,
+                                 size_t             allowed_count)
+{
+    return unmarshal_impl(type_name, json_str, ptr, allowed_fields, allowed_count, true);
 }

@@ -22,6 +22,7 @@
 #include <errno.h>
 #include <poll.h>
 #include <string.h>
+#include <sys/inotify.h>
 #include <sys/signalfd.h>
 
 #include "../internal/srv_internal.h"
@@ -403,6 +404,49 @@ csilk_io_run(csilk_io_loop_t* loop, csilk_io_run_mode mode)
                 if (poll_h->cb) {
                     int status = cqe_res >= 0 ? 0 : cqe_res;
                     poll_h->cb(poll_h, status, events);
+                }
+
+                /* ----------------------------------------------------------------
+                 * URING_OP_FS_EVENT
+                 * Drain inotify events and re-arm poll.
+                 * ---------------------------------------------------------------- */
+            } else if (op == URING_OP_FS_EVENT) {
+                csilk_io_fs_event_t* fs_ev = (csilk_io_fs_event_t*)ptr;
+                if (is_stale_poll((csilk_io_handle_t*)fs_ev, gen)) {
+                    continue;
+                }
+                char    buf[4096] __attribute__((aligned(__alignof__(struct inotify_event))));
+                ssize_t nr = read(fs_ev->fd, buf, sizeof(buf));
+                if ((fs_ev->flags & CSILK_IO_HANDLE_ACTIVE) &&
+                    !(fs_ev->flags & CSILK_IO_HANDLE_CLOSING) && fs_ev->fd >= 0) {
+                    struct io_uring_sqe* sqe = uring_get_sqe_or_submit(ring);
+                    if (sqe) {
+                        io_uring_prep_poll_add(sqe, fs_ev->fd, POLLIN);
+                        io_uring_sqe_set_data64(
+                            sqe,
+                            uring_encode_handle_data(URING_OP_FS_EVENT, (csilk_io_handle_t*)fs_ev));
+                        io_uring_submit(ring);
+                    }
+                }
+                if (nr > 0 && fs_ev->cb) {
+                    ssize_t off = 0;
+                    while (off + (ssize_t)sizeof(struct inotify_event) <= nr) {
+                        const struct inotify_event* ev = (const struct inotify_event*)(buf + off);
+                        int                         ev_flags = 0;
+                        if (ev->mask & (IN_MOVED_FROM | IN_MOVED_TO | IN_DELETE | IN_CREATE |
+                                        IN_DELETE_SELF | IN_MOVE_SELF)) {
+                            ev_flags |= 1;
+                        }
+                        if (ev->mask & (IN_MODIFY | IN_ATTRIB | IN_CLOSE_WRITE)) {
+                            ev_flags |= 2;
+                        }
+                        const char* fname = (ev->len > 0) ? ev->name : fs_ev->path;
+                        fs_ev->cb(fs_ev, fname, ev_flags, 0);
+                        if (is_stale_poll((csilk_io_handle_t*)fs_ev, gen)) {
+                            break;
+                        }
+                        off += (ssize_t)sizeof(struct inotify_event) + (ssize_t)ev->len;
+                    }
                 }
 
                 /* ----------------------------------------------------------------

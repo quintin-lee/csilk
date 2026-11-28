@@ -9,13 +9,27 @@
  */
 
 #include <assert.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "csilk/core/sys_io.h"
 
 #ifdef CSILK_USE_URING
+
+static int g_fs_event_fired = 0;
+
+static void
+on_test_fs_event(csilk_io_fs_event_t* handle, const char* filename, int events, int status)
+{
+    (void)handle;
+    (void)filename;
+    (void)events;
+    (void)status;
+    g_fs_event_fired++;
+}
 
 /* ---- csilk_io_fs_sendfile ---- */
 
@@ -130,17 +144,43 @@ static void
 test_fs_event_start_stop(void)
 {
     printf("Testing csilk_io_fs_event_start / stop lifecycle...\n");
-    csilk_io_fs_event_t handle;
-    memset(&handle, 0, sizeof(handle));
+    csilk_io_loop_t loop;
+    assert(csilk_io_loop_init(&loop) == 0);
 
-    int rc = csilk_io_fs_event_start(&handle, NULL, "/tmp/csilk_test_path", 0);
+    csilk_io_fs_event_t handle;
+    assert(csilk_io_fs_event_init(&loop, &handle) == 0);
+
+    /* Non-existent path must fail closed with ENOENT. */
+    errno = 0;
+    int bad_rc = csilk_io_fs_event_start(
+        &handle, on_test_fs_event, "/tmp/csilk_nonexistent_watch_target_999999", 0);
+    assert(bad_rc == -1);
+
+    char tmp_path[] = "/tmp/csilk_fs_event_XXXXXX";
+    int  tfd = mkstemp(tmp_path);
+    assert(tfd >= 0);
+
+    g_fs_event_fired = 0;
+    int rc = csilk_io_fs_event_start(&handle, on_test_fs_event, tmp_path, 0);
     assert(rc == 0);
     assert(handle.path != NULL);
+    assert(handle.fd >= 0);
+
+    assert(write(tfd, "x", 1) == 1);
+    close(tfd);
+    for (int i = 0; i < 8 && g_fs_event_fired == 0; i++) {
+        csilk_io_run(&loop, CSILK_IO_RUN_NOWAIT);
+    }
+    assert(g_fs_event_fired > 0);
 
     rc = csilk_io_fs_event_stop(&handle);
     assert(rc == 0);
     assert(handle.path == NULL);
     assert(handle.cb == NULL);
+    assert(handle.fd == -1);
+
+    unlink(tmp_path);
+    csilk_io_loop_close(&loop);
     printf("  passed\n");
 }
 

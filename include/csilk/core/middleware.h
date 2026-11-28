@@ -417,6 +417,17 @@ void csilk_session_init_server(csilk_server_t* server);
  *
  * @param c  The request context.
  */
+/**
+ * @brief Enable or disable binding sessions to client IP and User-Agent.
+ *
+ * When enabled, each new session records a SHA-256 fingerprint of the client's
+ * IP and User-Agent; resumed requests with a mismatched fingerprint invalidate
+ * the old session and rotate to a new one.
+ *
+ * @param enable Non-zero to enable client fingerprint binding, 0 to disable.
+ */
+void csilk_session_set_bind_client(int enable);
+
 void csilk_session_start(csilk_ctx_t* c);
 
 /**
