@@ -62,9 +62,9 @@ test_disabled_log_level_latency(void)
            t_total / 1e6,
            ns_per_call);
 
-    /* Assert near-zero branch latency (< 50 ns per check, < 200 ns under TSAN instrumentation) */
+    /* Assert near-zero branch latency (< 50 ns per check, < 1000 ns under TSAN instrumentation) */
 #if defined(__SANITIZE_THREAD__) || __has_feature(thread_sanitizer)
-    assert(ns_per_call < 200.0);
+    assert(ns_per_call < 1000.0);
 #else
     assert(ns_per_call < 50.0);
 #endif

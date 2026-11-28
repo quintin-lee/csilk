@@ -42,13 +42,14 @@ _Atomic(int) g_csilk_log_is_init = 0;
 #define CSILK_LOG_NODE_BUF_SIZE 2048
 #define CSILK_LOG_DEFAULT_QUEUE_CAPACITY 8192
 
+enum { CSILK_LOG_FREE_EMPTY = 0xFFFFFFFFU };
+
 /** @brief Pre-allocated node in the lock-free logging ring/slab. */
 typedef struct csilk_log_node_s {
-    csilk_lfq_node_t lfq_node;           /**< Intrusive node for MPSC queue (must be first). */
-    _Atomic(struct csilk_log_node_s*)
-           next_free;                    /**< Intrusive link for lock-free node pool stack. */
-    size_t len;                          /**< Number of bytes in buf. */
-    char   buf[CSILK_LOG_NODE_BUF_SIZE]; /**< Formatted line. */
+    csilk_lfq_node_t lfq_node;      /**< Intrusive node for MPSC queue (must be first). */
+    _Atomic uint32_t next_free_idx; /**< Slab index link for ABA-safe free pool stack. */
+    size_t           len;           /**< Number of bytes in buf. */
+    char             buf[CSILK_LOG_NODE_BUF_SIZE]; /**< Formatted line. */
 } csilk_log_node_t;
 
 /** @brief Internal asynchronous logger singleton. */
@@ -59,10 +60,11 @@ typedef struct {
     int                initialized;  /**< Local initialization flag. */
 
     /* Lock-free MPSC queue & Node Pool */
-    csilk_lfqueue_t            queue;
-    _Atomic(csilk_log_node_t*) free_stack;
-    csilk_log_node_t*          node_slab;
-    size_t                     slab_capacity;
+    csilk_lfqueue_t queue;
+    _Atomic uint64_t
+        free_head; /**< Tagged head: upper 32 bits = version tag, lower 32 = slab idx. */
+    csilk_log_node_t* node_slab;
+    size_t            slab_capacity;
 
     /* Thread management & synchronization */
     csilk_thread_t    consumer_tid;
@@ -98,30 +100,49 @@ static _Thread_local struct {
     char   text[20]; /**< "YYYY-MM-DD HH:MM:SS" (19 chars + NUL) */
 } tls_time_cache = {0, {0}};
 
-/* --- Lock-Free Node Pool (Treiber Stack) --- */
+/* --- Lock-Free Node Pool (Version-Tagged ABA-Safe Treiber Stack) --- */
+
+static inline uint64_t
+log_pack_free_head(uint32_t tag, uint32_t idx)
+{
+    return ((uint64_t)tag << 32) | (uint64_t)idx;
+}
 
 static inline csilk_log_node_t*
 log_pool_pop(void)
 {
-    csilk_log_node_t* head = atomic_load_explicit(&g_logger.free_stack, memory_order_acquire);
-    while (head) {
-        csilk_log_node_t* next = atomic_load_explicit(&head->next_free, memory_order_acquire);
+    uint64_t head = atomic_load_explicit(&g_logger.free_head, memory_order_acquire);
+    for (;;) {
+        uint32_t idx = (uint32_t)(head & 0xFFFFFFFFULL);
+        if (idx == CSILK_LOG_FREE_EMPTY) {
+            return NULL;
+        }
+        uint32_t          tag = (uint32_t)(head >> 32);
+        csilk_log_node_t* node = &g_logger.node_slab[idx];
+        uint32_t next_idx = atomic_load_explicit(&node->next_free_idx, memory_order_relaxed);
+        uint64_t desired = log_pack_free_head(tag + 1U, next_idx);
         if (atomic_compare_exchange_weak_explicit(
-                &g_logger.free_stack, &head, next, memory_order_acq_rel, memory_order_acquire)) {
-            return head;
+                &g_logger.free_head, &head, desired, memory_order_acq_rel, memory_order_acquire)) {
+            return node;
         }
     }
-    return NULL;
 }
 
 static inline void
 log_pool_push(csilk_log_node_t* node)
 {
-    csilk_log_node_t* head = atomic_load_explicit(&g_logger.free_stack, memory_order_relaxed);
-    do {
-        atomic_store_explicit(&node->next_free, head, memory_order_relaxed);
-    } while (!atomic_compare_exchange_weak_explicit(
-        &g_logger.free_stack, &head, node, memory_order_release, memory_order_relaxed));
+    uint32_t idx = (uint32_t)(node - g_logger.node_slab);
+    uint64_t head = atomic_load_explicit(&g_logger.free_head, memory_order_acquire);
+    for (;;) {
+        uint32_t head_idx = (uint32_t)(head & 0xFFFFFFFFULL);
+        uint32_t tag = (uint32_t)(head >> 32);
+        atomic_store_explicit(&node->next_free_idx, head_idx, memory_order_relaxed);
+        uint64_t desired = log_pack_free_head(tag + 1U, idx);
+        if (atomic_compare_exchange_weak_explicit(
+                &g_logger.free_head, &head, desired, memory_order_release, memory_order_acquire)) {
+            return;
+        }
+    }
 }
 
 /* --- File Rotation (Run exclusively by consumer thread) --- */
@@ -426,8 +447,9 @@ csilk_log_init(csilk_log_config_t config)
 
     /* Initialize MPSC Queue & Node Pool */
     csilk_lfq_init(&g_logger.queue);
-    atomic_init(&g_logger.free_stack, NULL);
+    atomic_init(&g_logger.free_head, log_pack_free_head(0, CSILK_LOG_FREE_EMPTY));
     for (size_t i = 0; i < cap; i++) {
+        atomic_init(&g_logger.node_slab[i].next_free_idx, CSILK_LOG_FREE_EMPTY);
         log_pool_push(&g_logger.node_slab[i]);
     }
 
