@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 #
 # Install the full benchmark toolchain: perf, wrk, FlameGraph.
-# Usage: ./scripts/setup_bench_tools.sh [--ci]
+# Usage: ./scripts/setup_bench_tools.sh [--ci] [--bench-only]
 #
-# --ci: Skip interactive prompts, suitable for CI.
+# --ci:         Skip interactive prompts, suitable for CI.
+# --bench-only: Only verify/install wrk; skip perf and FlameGraph.
 set -euo pipefail
 
 CI_MODE=0
+BENCH_ONLY=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --ci) CI_MODE=1 ;;
-        *) echo "Usage: $0 [--ci]"; exit 1 ;;
+        --bench-only) BENCH_ONLY=1 ;;
+        *) echo "Usage: $0 [--ci] [--bench-only]"; exit 1 ;;
     esac
     shift
 done
@@ -31,6 +34,13 @@ else
         brew install wrk
     fi
     echo "[ok] wrk installed: $(wrk --version 2>&1 | head -1)"
+fi
+
+if [[ "$BENCH_ONLY" -eq 1 ]]; then
+    echo ""
+    echo "=== Setup complete (bench-only) ==="
+    echo "  wrk: $(command -v wrk || echo 'not found')"
+    exit 0
 fi
 
 # ── 2. perf ─────────────────────────────────────────────────────
@@ -57,16 +67,35 @@ fi
 
 # ── 3. FlameGraph (Brendan Gregg's stack visualization scripts) ─
 if [[ -d "$FLAMEGRAPH_DIR" && -f "$FLAMEGRAPH_DIR/flamegraph.pl" ]]; then
-    echo "[ok] FlameGraph: $FLAMEGRAPH_DIR ($(git -C "$FLAMEGRAPH_DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown'))"
+    echo "[ok] FlameGraph: $FLAMEGRAPH_DIR ($(git -C "$FLAMEGRAPH_DIR" rev-parse --short HEAD 2>/dev/null || echo 'tarball'))"
 else
-    echo "[..] Cloning FlameGraph..."
+    echo "[..] Fetching FlameGraph..."
     mkdir -p "$(dirname "$FLAMEGRAPH_DIR")"
-    if [[ -d "$FLAMEGRAPH_DIR" ]]; then
-        git -C "$FLAMEGRAPH_DIR" pull --ff-only 2>/dev/null || true
-    else
-        git clone --depth=1 https://github.com/brendangregg/FlameGraph.git "$FLAMEGRAPH_DIR"
+    fg_ok=0
+    for attempt in 1 2 3; do
+        rm -rf "$FLAMEGRAPH_DIR"
+        if git clone --depth=1 https://github.com/brendangregg/FlameGraph.git "$FLAMEGRAPH_DIR"; then
+            fg_ok=1
+            break
+        fi
+        echo "[warn] git clone attempt ${attempt}/3 failed; retrying..."
+        sleep $((attempt * 3))
+    done
+    if [[ "$fg_ok" -eq 0 ]]; then
+        echo "[..] Falling back to FlameGraph archive tarball..."
+        rm -rf "$FLAMEGRAPH_DIR"
+        mkdir -p "$FLAMEGRAPH_DIR"
+        if curl -fsSL --retry 3 --retry-delay 3 \
+            "https://github.com/brendangregg/FlameGraph/archive/refs/heads/master.tar.gz" \
+            | tar -xz --strip-components=1 -C "$FLAMEGRAPH_DIR"; then
+            fg_ok=1
+        fi
     fi
-    echo "[ok] FlameGraph cloned to $FLAMEGRAPH_DIR"
+    if [[ "$fg_ok" -ne 1 || ! -f "$FLAMEGRAPH_DIR/flamegraph.pl" ]]; then
+        echo "[error] Failed to obtain FlameGraph" >&2
+        exit 1
+    fi
+    echo "[ok] FlameGraph ready at $FLAMEGRAPH_DIR"
 fi
 
 # ── Check kernel.perf_event_paranoid for perf (Linux) ───────────

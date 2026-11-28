@@ -31,8 +31,8 @@ jobs:
 
       - name: Setup benchmark toolchain
         run: |
-          # Only perf + FlameGraph (wrk already installed above)
-          ./scripts/setup_bench_tools.sh --ci
+          # Benchmark job only needs wrk (already installed above); skip perf/FlameGraph
+          ./scripts/setup_bench_tools.sh --ci --bench-only
 
       - name: Configure & Build
         run: |
@@ -107,6 +107,12 @@ jobs:
           packages: >-
             cmake clang libyaml-dev zlib1g-dev libcurl4-openssl-dev
             libpq-dev libsqlite3-dev libuv1-dev wrk
+
+      - name: Cache FlameGraph
+        uses: actions/cache@v5
+        with:
+          path: tools/FlameGraph
+          key: ${{ runner.os }}-flamegraph-v1
 
       - name: Setup benchmark toolchain (perf + FlameGraph)
         run: |
